@@ -1,0 +1,41 @@
+.main {
+    background-color: #EEF6F8;
+    height: calc(100vh - 4.5rem);
+    overflow-y: auto;
+    border-top-left-radius: 1.625rem;
+    width: calc(100vw - 15rem);
+  }
+
+  .deviceCard {
+    border-radius: 1.625rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    border: none;
+    transition: transform 0.2s ease;
+    background: #ffffff;
+    height: 15rem;
+  }
+  
+  .deviceCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  }
+  
+  .deviceIcon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    
+  }
+  
+  .cardTitle {
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: #333;
+  }
+
+  .metricNumber {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #333;
+    margin-top: 0.5rem;
+  }
+  
