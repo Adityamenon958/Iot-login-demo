@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import styles from './LoginPage.module.css';
-import Logo from "../src/assets/Logo.svg";
+import Logo from "../src/assets/DashboardLogo.png";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 
@@ -29,7 +29,7 @@ const LoginPage = () => {
         <Col xs={12} md={6} className={`${styles.leftSection} d-flex justify-content-center align-items-center`}>
           <Card className={`text-center ${styles.iotCard}`}>
             <Card.Body className={`d-flex align-items-center justify-content-center flex-column`}>
-              <img src={Logo} alt="" />
+              <img src={Logo} className={styles.loginlogo} />
               <Card.Title className={styles.iotText}>
                 Your Intelligent IoT Dashboard Gateway
               </Card.Title>
