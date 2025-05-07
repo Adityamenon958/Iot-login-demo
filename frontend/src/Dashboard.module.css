@@ -1,0 +1,17 @@
+.dashboard {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+ 
+  
+  .sidebar {
+    background-color: #ffffff;
+    height: calc(100vh - 4.5rem);
+    
+    max-width: 15rem;
+  }
+  
+  
+  

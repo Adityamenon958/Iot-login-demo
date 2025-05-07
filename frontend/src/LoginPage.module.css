@@ -1,0 +1,97 @@
+.loginContainer {
+    background-color: #f8f9fa;
+  }
+  
+  .leftSection {
+    background-color: #ffffff;
+    padding: 2rem;
+    
+  }
+
+  .loginlogo{
+    width: 25rem;
+    height: 25rem;
+    padding: 0;
+  }
+
+  .rightSection {
+    background-color: #ffffff;
+    padding: 2rem;
+    padding-left: 0rem;
+  }
+  
+  .iotCard {
+    border-radius: 2rem;
+    padding: 2rem;
+    
+    margin: 0rem;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(77, 179, 179, 0.3);
+    
+    border: none;
+  }
+
+  .iotCard2 {
+    border-radius: 2rem;
+    padding: 2rem;
+    margin: 0rem;
+    width: 100%;
+    height: 100%;
+    background-color: #4db3b3;
+    border: none;
+  }
+  
+  .iotText {
+    font-family: 'Poppins', sans-serif;
+    font-size: 2rem;
+    font-weight: 600;
+    color: #444;
+  }
+  
+  .loginPlaceholder {
+    padding: 2rem;
+    text-align: center;
+    background-color: #eefafc;
+    border-radius: 2rem;
+    height: 10rem;
+    width: 20rem;
+  }
+
+  .loginTitle{
+    color: #444;
+  }
+
+  .googleButton{
+    width: 100%;
+    height: 100%;
+  }
+
+
+  .googleButton {
+    background-color: white;
+    color: #444;
+    border: 1px solid #ddd;
+    border-radius: 2rem;
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  }
+  
+  .googleButton:hover {
+    background-color: #f7f7f7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  .googleIcon {
+    width: 20px;
+    height: 20px;
+  }
+  
+  
