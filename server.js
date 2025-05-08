@@ -14,6 +14,9 @@ app.use(express.json());
 // DB connect
 connectDB();
 
+app.use(express.static(path.join(__dirname, "frontend/dist")));
+
+
 // API routes
 app.get('/api/devices', async (req, res) => {
   try {
@@ -75,17 +78,8 @@ app.delete('/api/devices/:id', async (req, res) => {
 });
 
 // ✅ Serve frontend from frontend/dist
-const frontendDistPath = path.join(__dirname, 'frontend', 'dist');
-app.use(express.static(frontendDistPath));
-
-// ✅ Serve index.html for all non-API routes
 app.get('*', (req, res) => {
-  // Skip API and asset requests
-  if (req.path.startsWith('/api')) {
-    res.status(404).json({ message: "API route not found" });
-  } else {
-    res.sendFile(path.join(frontendDistPath + '/index.html'));
-  }
+  res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {

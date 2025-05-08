@@ -30,7 +30,7 @@ node_modules/
 # dist/
 
 # environment variables
-# .env
+.env
 
 # system files
 .DS_Store
