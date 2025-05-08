@@ -77,8 +77,14 @@ app.delete('/api/devices/:id', async (req, res) => {
 });
 
 // Catch-all route to serve index.html
+// Only serve index.html for non-file requests
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  if (req.path.includes('.') || req.path.startsWith('/api')) {
+    // If the request is for a file or API, don't serve index.html
+    res.status(404).end();
+  } else {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  }
 });
 
 app.listen(PORT, () => {
