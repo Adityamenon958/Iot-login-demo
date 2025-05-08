@@ -15,7 +15,7 @@ app.use(express.json());
 connectDB();
 
 // Serve static frontend
-app.use(express.static(path.join(__dirname, 'frontend-build')));
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
 
 // API routes
 app.get('/api/devices', async (req, res) => {
@@ -82,9 +82,9 @@ app.delete('/api/devices/:id', async (req, res) => {
 //   res.sendFile(path.join(__dirname, 'frontend-build', 'index.html'));
 // });
 
-app.use(express.static("./frontend/build"));
+app.use(express.static("./frontend/dist"));
 app.get('*', (req, res) => {
-  res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'server.js'));
+  res.sendFile(path.resolve(__dirname, 'frontend', 'dist', 'index.html'));
 });
 
 
