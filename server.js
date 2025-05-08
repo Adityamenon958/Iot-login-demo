@@ -14,8 +14,6 @@ app.use(express.json());
 // DB connect
 connectDB();
 
-// Serve static frontend
-app.use(express.static(path.join(__dirname)));
 // API routes
 app.get('/api/devices', async (req, res) => {
   try {
@@ -76,14 +74,17 @@ app.delete('/api/devices/:id', async (req, res) => {
   }
 });
 
-// Catch-all route to serve index.html
-// Only serve index.html for non-file requests
+// ✅ Serve frontend from frontend/dist
+const frontendDistPath = path.join(__dirname, 'frontend', 'dist');
+app.use(express.static(frontendDistPath));
+
+// ✅ Serve index.html for all non-API routes
 app.get('*', (req, res) => {
-  if (req.path.includes('.') || req.path.startsWith('/api')) {
-    // If the request is for a file or API, don't serve index.html
-    res.status(404).end();
+  // Skip API and asset requests
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({ message: "API route not found" });
   } else {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
   }
 });
 
