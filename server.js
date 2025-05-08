@@ -15,7 +15,7 @@ app.use(express.json());
 connectDB();
 
 // Serve static frontend
-app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.static(path.join(__dirname)));
 // API routes
 app.get('/api/devices', async (req, res) => {
   try {
@@ -78,7 +78,7 @@ app.delete('/api/devices/:id', async (req, res) => {
 
 // Catch-all route to serve index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
