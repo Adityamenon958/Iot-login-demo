@@ -1,9 +1,9 @@
-require('dotenv').config({ path: './backend/.env' });
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const connectDB = require('./backend/db');
-const Device = require('./backend/models/Device');
+const connectDB = require('./db');
+const Device = require('./models/Device');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,7 +15,7 @@ app.use(express.json());
 connectDB();
 
 // Serve static frontend
-app.use(express.static(path.join(__dirname, 'frontend', 'dist'))); // Keep this as it is
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
 
 // API routes
 app.get('/api/devices', async (req, res) => {
@@ -78,9 +78,16 @@ app.delete('/api/devices/:id', async (req, res) => {
 });
 
 // Catch-all route to serve index.html
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, 'frontend-build', 'index.html'));
+// });
+
+app.use(express.static("./frontend/dist"));
 app.get('*', (req, res) => {
   res.sendFile(path.resolve(__dirname, 'frontend', 'dist', 'index.html'));
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
