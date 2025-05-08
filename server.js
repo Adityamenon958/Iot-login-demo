@@ -78,7 +78,7 @@ app.delete('/api/devices/:id', async (req, res) => {
 
 // Catch-all route to serve index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist/index.html'));
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
