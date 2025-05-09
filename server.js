@@ -1,4 +1,4 @@
-require('dotenv').config({ path: './backend/.env' });
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -13,6 +13,17 @@ app.use(express.json());
 // DB connect
 connectDB();
 
+const allowedOrigins = ['http://localhost:8080', 'https://your-production-frontend.com'];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+}));
 
 
 // API routes
