@@ -14,14 +14,23 @@ const DashboardHome = () => {
   const fetchDevices = async () => {
     try {
       const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/devices`);
-      console.log("Devices API response:", res.data); // Debugging log here
-      setDeviceData(res.data);
+      console.log("Devices API response:", res.data);
+      
+      if (Array.isArray(res.data)) {
+        setDeviceData(res.data);
+      } else {
+        console.error("❌ Unexpected response format. Expected array, got:", res.data);
+        setDeviceData([]); // fallback so UI doesn't crash
+      }
+  
       setLoading(false);
     } catch (err) {
       console.error("Devices API error:", err);
       setLoading(false);
+      setDeviceData([]); // ensure fallback even if error
     }
   };
+  
 
   useEffect(() => {
     // Fetch dashboard card data
