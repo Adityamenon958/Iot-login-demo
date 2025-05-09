@@ -70,7 +70,7 @@ const handleSubmit = async (e) => {
 
 const handleDelete = async (id) => {
   try {
-    await axios.delete(`http://localhost:5000/api/devices/${id}`);
+    await axios.delete(`${import.meta.env.VITE_API_BASE}/api/devices/${id}`);
     alert("Device deleted successfully");
     fetchDevices(); // Refresh data
   } catch (err) {
