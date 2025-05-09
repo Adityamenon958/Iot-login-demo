@@ -14,7 +14,7 @@ const DashboardHome = () => {
   const fetchDevices = async () => {
     try {
       const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/devices`);
-      console.log("Devices API response:", res.data);
+      console.log("Devices API response:", res.data); // Debugging log here
       setDeviceData(res.data);
       setLoading(false);
     } catch (err) {
@@ -22,12 +22,12 @@ const DashboardHome = () => {
       setLoading(false);
     }
   };
-  
 
   useEffect(() => {
     // Fetch dashboard card data
     axios.get(`${import.meta.env.VITE_API_BASE}/api/dashboard`)
       .then(res => {
+        console.log("Dashboard API response:", res.data); // Debugging log here
         setActiveDevices(res.data.activeDevices);
         setInactiveDevices(res.data.inactiveDevices);
         setAlarms(res.data.alarms);
@@ -35,54 +35,49 @@ const DashboardHome = () => {
       .catch(err => {
         console.error("Dashboard API error:", err);
       });
-  
+
     // Fetch device list for table
     fetchDevices();
   }, []);
-  
 
+  const [formData, setFormData] = useState({
+    name: '',
+    location: '',
+    subscription: '',
+  });
 
-const [formData, setFormData] = useState({
-  name: '',
-  location: '',
-  subscription: '',
-});
+  const handleChange = (e) => {
+    console.log("Form data change:", e.target.name, e.target.value); // Log form data change
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-const handleChange = (e) => {
-  setFormData({ ...formData, [e.target.name]: e.target.value });
-};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    console.log("Form submitted with data:", formData); // Log form data on submit
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_BASE}/api/devices`, formData);
+      console.log("Device added ✅", res.data);
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const res = await axios.post(`${import.meta.env.VITE_API_BASE}/api/devices`, formData);
-    console.log("Device added ✅", res.data);
+      // Optional: refresh the device list after adding
+      await fetchDevices(); // If you already have a function for this
 
-    // Optional: refresh the device list after adding
-    await fetchDevices();// If you already have a function for this
+      // Reset form
+      setFormData({ name: '', location: '', subscription: '' });
+    } catch (err) {
+      console.error("Error adding device ❌", err);
+    }
+  };
 
-    // Reset form
-    setFormData({ name: '', location: '', subscription: '' });
-  } catch (err) {
-    console.error("Error adding device ❌", err);
-  }
-};
-
-const handleDelete = async (id) => {
-  try {
-    await axios.delete(`${import.meta.env.VITE_API_BASE}/api/devices/${id}`);
-    alert("Device deleted successfully");
-    fetchDevices(); // Refresh data
-  } catch (err) {
-    console.error("❌ Delete error:", err.response?.data || err.message);
-    alert("Failed to delete device");
-  }
-};
-
-
-
-
-
+  const handleDelete = async (id) => {
+    console.log("Attempting to delete device with ID:", id); // Log device ID on delete
+    try {
+      await axios.delete(`${import.meta.env.VITE_API_BASE}/api/devices/${id}`);
+      console.log("Device deleted successfully");
+      fetchDevices(); // Refresh data
+    } catch (err) {
+      console.error("❌ Delete error:", err.response?.data || err.message);
+    }
+  };
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
@@ -154,13 +149,13 @@ const handleDelete = async (id) => {
                       <Button variant="outline-primary" size="sm">
                         View Logs
                       </Button>
-                      
                     </td>
                     <td>{device.subscription}</td>
-                    <td><Button onClick={() => handleDelete(device._id)}>
-  Delete
-</Button>
-</td>
+                    <td>
+                      <Button onClick={() => handleDelete(device._id)}>
+                        Delete
+                      </Button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -170,45 +165,44 @@ const handleDelete = async (id) => {
       </div>
 
       <form onSubmit={handleSubmit} className="p-3 border rounded shadow-sm mb-4">
-  <h4>Add New Device</h4>
-  <div className="mb-2">
-    <input
-      type="text"
-      name="name"
-      placeholder="Device Name"
-      value={formData.name}
-      onChange={handleChange}
-      className="form-control"
-      required
-    />
-  </div>
-  <div className="mb-2">
-    <input
-      type="text"
-      name="location"
-      placeholder="Location"
-      value={formData.location}
-      onChange={handleChange}
-      className="form-control"
-      required
-    />
-  </div>
-  <div className="mb-3">
-    <select
-      name="subscription"
-      value={formData.subscription}
-      onChange={handleChange}
-      className="form-select"
-      required
-    >
-      <option value="">Select Subscription</option>
-      <option value="Active">Active</option>
-      <option value="Inactive">Inactive</option>
-    </select>
-  </div>
-  <button type="submit" className="btn btn-primary">Add Device</button>
-</form>
-
+        <h4>Add New Device</h4>
+        <div className="mb-2">
+          <input
+            type="text"
+            name="name"
+            placeholder="Device Name"
+            value={formData.name}
+            onChange={handleChange}
+            className="form-control"
+            required
+          />
+        </div>
+        <div className="mb-2">
+          <input
+            type="text"
+            name="location"
+            placeholder="Location"
+            value={formData.location}
+            onChange={handleChange}
+            className="form-control"
+            required
+          />
+        </div>
+        <div className="mb-3">
+          <select
+            name="subscription"
+            value={formData.subscription}
+            onChange={handleChange}
+            className="form-select"
+            required
+          >
+            <option value="">Select Subscription</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+        <button type="submit" className="btn btn-primary">Add Device</button>
+      </form>
     </Col>
   );
 };
