@@ -1,5 +1,5 @@
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,15 +7,26 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Node modules
+node_modules/
+frontend/node_modules/
 
-# Editor directories and files
-.vscode/*
+# Build output
+dist/
+frontend/dist/
+dist-ssr/
+
+# Cache
+.vite/
+
+# Environment variables
+.env
+frontend/.env
+
+# Editor folders/files
+.vscode/
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,15 +34,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# dependencies
-node_modules/
-
-# production build
-# dist/
-
-# environment variables
-.env
-
-# system files
-.DS_Store
-
+# Local environment overrides
+*.local
