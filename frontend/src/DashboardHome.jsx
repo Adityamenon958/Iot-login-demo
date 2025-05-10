@@ -16,8 +16,8 @@ const DashboardHome = () => {
       const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/devices`);
       console.log("Devices API response:", res.data);
       
-      if (Array.isArray(res.data)) {
-        setDeviceData(res.data);
+      if (Array.isArray(res.data.data)) {
+        setDeviceData(res.data.data);
       } else {
         console.error("❌ Unexpected response format. Expected array, got:", res.data);
         setDeviceData([]); // fallback so UI doesn't crash
