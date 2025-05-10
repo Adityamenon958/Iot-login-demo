@@ -13,7 +13,7 @@ const DashboardHome = () => {
 
   const fetchDevices = async () => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/api/devices`);
+      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/devices`);
       console.log("Devices API response:", res.data);
       
       if (Array.isArray(res.data)) {
@@ -80,7 +80,7 @@ const DashboardHome = () => {
   const handleDelete = async (id) => {
     console.log("Attempting to delete device with ID:", id); // Log device ID on delete
     try {
-      await axios.delete(`${import.meta.env.VITE_API_BASE}/api/devices/${id}`);
+      await axios.delete(`https://iot-dashboard-adi.azurewebsites.net/api/devices/${id}`);
       console.log("Device deleted successfully");
       fetchDevices(); // Refresh data
     } catch (err) {
