@@ -81,8 +81,15 @@ app.use(express.static(path.join(__dirname, "frontend/dist")));
 
 
 app.get('*', (req, res) => {
+  // If the request is for an API route and didn't match anything, send 404 JSON
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ message: 'API route not found' });
+  }
+
+  // Otherwise, serve React app
   res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
+
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
