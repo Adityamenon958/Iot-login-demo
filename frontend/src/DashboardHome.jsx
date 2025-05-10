@@ -34,7 +34,7 @@ const DashboardHome = () => {
 
   useEffect(() => {
     // Fetch dashboard card data
-    axios.get(`${import.meta.env.VITE_API_BASE}/api/dashboard`)
+    axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`)
       .then(res => {
         console.log("Dashboard API response:", res.data); // Debugging log here
         setActiveDevices(res.data.activeDevices);
@@ -64,7 +64,7 @@ const DashboardHome = () => {
     e.preventDefault();
     console.log("Form submitted with data:", formData); // Log form data on submit
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_BASE}/api/devices`, formData);
+      const res = await axios.post(`https://iot-dashboard-adi.azurewebsites.net/api/devices`, formData);
       console.log("Device added ✅", res.data);
 
       // Optional: refresh the device list after adding
