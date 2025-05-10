@@ -17,7 +17,7 @@ const DashboardHome = () => {
       console.log("Devices API response:", res.data);
       
       if (Array.isArray(res.data)) {
-        setDeviceData(res.data.data);
+        setDeviceData(res.data);
       } else {
         console.error("❌ Unexpected response format. Expected array, got:", res.data);
         setDeviceData([]); // fallback so UI doesn't crash
