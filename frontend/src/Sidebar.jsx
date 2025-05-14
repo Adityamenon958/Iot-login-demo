@@ -4,6 +4,7 @@ import { LayoutDashboard, FileText, Settings, LogOut, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { googleLogout } from '@react-oauth/google';
 import styles from './Sidebar.module.css';
+import { UserPlus } from 'lucide-react';
 
 export default function Sidebar({ isOpen, closeSidebar  }) {
   const navigate = useNavigate();
@@ -49,6 +50,11 @@ export default function Sidebar({ isOpen, closeSidebar  }) {
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/reports')}>
             <FileText size={20} className="me-2" />
             Report
+          </Button>
+
+          <Button className={styles.iconButton} onClick={() => navigate('/dashboard/adduser')}>
+           <UserPlus size={20} className="me-2" />
+             Add User
           </Button>
 
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/settings')}>

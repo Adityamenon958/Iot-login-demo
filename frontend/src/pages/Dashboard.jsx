@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Container, Row } from 'react-bootstrap';
 import { Outlet, useNavigate } from 'react-router-dom';
 import styles from './Dashboard.module.css';
-import Sidebar from './Sidebar';
-import Topbar from './Topbar';
+import Sidebar from '../Sidebar';
+import Topbar from '../Topbar';
 
 const Dashboard = () => {
   const navigate = useNavigate();

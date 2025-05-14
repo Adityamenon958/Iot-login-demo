@@ -1,11 +1,11 @@
 import React from 'react';
 import LoginPage from './LoginPage';
-import Dashboard from './Dashboard';
-import DashboardHome from './DashboardHome';
-import ReportsPage from './ReportsPage';
+import Dashboard from './pages/Dashboard';
+import DashboardHome from './pages/DashboardHome';
+import ReportsPage from './pages/ReportsPage';
 import { Routes, Route } from 'react-router-dom';
 import './App.css';
-import Settings from './Settings';
+import Settings from './pages/Settings';
 
 function App() {
   return ( 
