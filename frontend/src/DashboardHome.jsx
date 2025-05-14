@@ -30,7 +30,19 @@ const DashboardHome = () => {
       setDeviceData([]); // ensure fallback even if error
     }
   };
-  
+
+  const fetchDashboardStats = async () => {
+    try {
+      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
+      console.log("Dashboard API response:", res.data);
+      setActiveDevices(res.data.activeDevices);
+      setInactiveDevices(res.data.inactiveDevices);
+      setAlarms(res.data.alarms);
+    } catch (err) {
+      console.error("Dashboard API error:", err);
+    }
+  };
+    
 
   useEffect(() => {
     // Fetch dashboard card data
@@ -44,6 +56,8 @@ const DashboardHome = () => {
       .catch(err => {
         console.error("Dashboard API error:", err);
       });
+      
+    fetchDashboardStats();
 
     // Fetch device list for table
     fetchDevices();
@@ -69,6 +83,7 @@ const DashboardHome = () => {
 
       // Optional: refresh the device list after adding
       await fetchDevices(); // If you already have a function for this
+      await fetchDashboardStats();
 
       // Reset form
       setFormData({ name: '', location: '', subscription: '' });
@@ -83,6 +98,8 @@ const DashboardHome = () => {
       await axios.delete(`https://iot-dashboard-adi.azurewebsites.net/api/devices/${id}`);
       console.log("Device deleted successfully");
       fetchDevices(); // Refresh data
+      await fetchDashboardStats();
+
     } catch (err) {
       console.error("❌ Delete error:", err.response?.data || err.message);
     }
