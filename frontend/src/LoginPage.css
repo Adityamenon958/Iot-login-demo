@@ -1,0 +1,14 @@
+.custom_modal .modal-content {
+    border-radius: 30px !important;
+  }
+  .custom_label {
+    color: #333333;
+  }
+  .custom_input {
+    height: 54px !important;
+  }
+
+  .signIn{
+    height: 54px;
+    border-radius: 30px;
+  }

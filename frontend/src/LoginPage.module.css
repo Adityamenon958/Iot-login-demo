@@ -54,7 +54,7 @@
     text-align: center;
     background-color: #eefafc;
     border-radius: 2rem;
-    height: 10rem;
+    height: 14rem;
     width: 20rem;
   }
 
@@ -94,6 +94,14 @@
     width: 20px;
     height: 20px;
   }
+
+  .gmailIcon{
+    width: 20px;
+    height: 20px;
+    color: rgb(87, 87, 87);
+  }
+
+  
   
   @media (max-width: 935px) {
     .loginlogo {
