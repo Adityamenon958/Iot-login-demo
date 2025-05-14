@@ -109,7 +109,7 @@ const DashboardHome = () => {
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
       <div className="p-3">
         <Row className="g-4">
-          <Col xs={12} md={4}>
+          <Col xs={12} sm={4} md={4}>
             <Card className={`${styles.deviceCard} text-center`}>
               <Card.Body>
                 <i className={`bi bi-hdd-stack-fill text-primary ${styles.deviceIcon}`}></i>
@@ -119,7 +119,7 @@ const DashboardHome = () => {
             </Card>
           </Col>
 
-          <Col xs={12} md={4}>
+          <Col xs={12} sm={4} md={4}>
             <Card className={`${styles.deviceCard} text-center`}>
               <Card.Body>
                 <i className={`bi bi-hdd text-secondary ${styles.deviceIcon}`}></i>
@@ -129,7 +129,7 @@ const DashboardHome = () => {
             </Card>
           </Col>
 
-          <Col xs={12} md={4}>
+          <Col xs={12} sm={4} md={4}>
             <Card className={`${styles.deviceCard} text-center`}>
               <Card.Body>
                 <i className={`bi bi-exclamation-triangle-fill text-danger ${styles.deviceIcon}`}></i>

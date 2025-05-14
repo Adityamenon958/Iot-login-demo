@@ -3,11 +3,16 @@
     padding: 1rem;
     background-color: white; /* or your theme color */
   }
+  .sidebarWrapper {
+    display: none;
+    max-width: 14rem;
+    background-color: white;
+  }
 
   .sidebar {
     background-color: #ffffff;
     height: calc(100vh - 9rem);
-    
+    z-index: 1050;
     max-width: 14rem;
   }
 
@@ -35,5 +40,33 @@
     background-color: rgba(0, 0, 0, 0.05);
     border-radius: 0.5rem;
     color: #4db3b3;
+    width: 150px;
   }
   
+
+
+  @media (min-width: 800px) {
+  .sidebarWrapper {
+    display: block !important;
+  }
+}
+
+@media (max-width: 799px) {
+  .sidebarWrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 250px;
+    background-color: white;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease-in-out;
+    transform: translateX(-100%);
+    z-index: 999;
+  }
+
+  .sidebarWrapper.open {
+    transform: translateX(0);
+    display: block;
+  }
+}

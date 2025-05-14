@@ -13,3 +13,9 @@
   .DlogoText{
     color: #4db3b3;
   }
+
+  @media (min-width: 799px) {
+    .burgerButton{
+      display: none;
+    }
+  }

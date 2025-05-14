@@ -1,26 +1,46 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Col, Button, Nav } from 'react-bootstrap';
-import { LayoutDashboard, FileText, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, Settings, LogOut, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { googleLogout } from '@react-oauth/google';
 import styles from './Sidebar.module.css';
 
-export default function Sidebar() {
-
+export default function Sidebar({ isOpen, closeSidebar  }) {
   const navigate = useNavigate();
+  const sidebarRef = useRef(null);
 
   const handleLogout = () => {
-    googleLogout(); // optional, logs out of Google session too
-    localStorage.removeItem("token"); // clear token
-    navigate("/"); // redirect to login
+    googleLogout();
+    localStorage.removeItem("token");
+    navigate("/");
   };
 
-  return (
-    <Col xs={12} md={3} lg={2} xl={2} className={`${styles.sidebar} p-0 pt-4`}>
-      <div className={`${styles.vertical_line} ms-3`}></div>
+   // Close on outside click
+   useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target) &&
+        isOpen
+      ) {
+        closeSidebar();
+      }
+    };
 
-      <div className={styles.sidebar}>
-        <Nav className="flex-column align-items-start">
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, closeSidebar]);
+
+
+  return (
+    <div className={`${styles.sidebarWrapper} ${isOpen ? styles.open : ''} `} ref={sidebarRef}>
+      <Col xs={12} md={3} lg={2} xl={2} className={`${styles.sidebar} p-0 pt-4`}>
+        <Nav className="flex-column align-items-start px-3">
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard')}>
             <LayoutDashboard size={20} className="me-2" />
             Dashboard
@@ -41,7 +61,7 @@ export default function Sidebar() {
             Logout
           </Button>
         </Nav>
-      </div>
-    </Col>
+      </Col>
+    </div>
   );
 }

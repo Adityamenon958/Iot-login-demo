@@ -90,5 +90,11 @@
   .inlineEdit:hover {
     color: #000;
   }
+
+  @media (max-width: 799px) {
+    .main{
+      width: 100%;
+    }
+  }
   
   
