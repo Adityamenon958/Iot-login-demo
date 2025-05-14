@@ -11,8 +11,11 @@ const Dashboard = () => {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) navigate("/");
-  }, []);
+    if (!token) {
+      navigate("/");
+    }
+  }, [navigate]);
+  
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
   const closeSidebar = () => setSidebarOpen(false);

@@ -4,6 +4,8 @@ const cors = require('cors');
 const path = require('path');
 const connectDB = require('./backend/db');
 const Device = require('./backend/models/Device');
+const User = require('./backend/models/User');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -40,13 +42,15 @@ app.get('/api/dashboard', async (req, res) => {
 
 app.get('/api/seed', async (req, res) => {
   try {
-    await Device.insertMany([
-      { name: "Sensor Alpha", location: "Mumbai", subscription: "Active" },
-      { name: "Sensor Beta", location: "Delhi", subscription: "Inactive" },
-      { name: "Thermal Scanner", location: "Bangalore", subscription: "Active" },
-      { name: "Pressure Monitor", location: "Chennai", subscription: "Inactive" },
-      { name: "Humidity Tracker", location: "Hyderabad", subscription: "Active" },
-    ]);
+    // await Device.insertMany([
+    //   { name: "Sensor Alpha", location: "Mumbai", subscription: "Active" },
+    //   { name: "Sensor Beta", location: "Delhi", subscription: "Inactive" },
+    //   { name: "Thermal Scanner", location: "Bangalore", subscription: "Active" },
+    //   { name: "Pressure Monitor", location: "Chennai", subscription: "Inactive" },
+    //   { name: "Humidity Tracker", location: "Hyderabad", subscription: "Active" },
+
+    await User.create({ email: "admin@example.com", password: "admin123", role: "admin" });
+    
     res.send("Database seeded ✅");
   } catch (err) {
     res.status(500).json({ message: "Seeding failed ❌" });
@@ -75,6 +79,39 @@ app.delete('/api/devices/:id', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+
+
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user || user.password !== password) {
+      return res.status(401).json({ message: "Invalid credentials ❌" });
+    }
+
+    // Create JWT token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET || "supersecretkey",  // Use env in prod
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      message: "Login successful ✅",
+      token,
+      role: user.role
+    });
+  } catch (err) {
+    console.error("Login error:", err.message);
+    res.status(500).json({ message: "Login failed ❌" });
+  }
+});
+
+
+
 
 // ✅ Serve frontend from frontend/dist
 app.use(express.static(path.join(__dirname, "frontend/dist")));

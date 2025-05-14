@@ -7,10 +7,15 @@ import { useNavigate } from 'react-router-dom';
 import { SiGmail } from "react-icons/si";
 import { X } from 'lucide-react';
 import "./LoginPage.css"
+import axios from 'axios';
+
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
+
 
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
@@ -26,6 +31,28 @@ const LoginPage = () => {
   const handleEmailLogin = () => {
     setShowEmailModal(true);
   };
+
+  const handleEmailLoginSubmit = async (e) => {
+    e.preventDefault();
+  
+    try {
+      const response = await axios.post('/api/login', {
+        email,
+        password
+      });
+  
+      console.log("Login Success ✅", response.data);
+      localStorage.setItem("token", response.data.token);
+      localStorage.setItem("role", response.data.role);
+  
+      navigate('/dashboard');
+    } catch (error) {
+      console.error("Login Failed ❌", error.response?.data?.message || error.message);
+      alert("Invalid login");
+    }
+  };
+  
+  
 
   return (
     <>
@@ -94,15 +121,17 @@ const LoginPage = () => {
   </Modal.Header>
 
   <Modal.Body className="px-4 pb-4">
-    <Form>
+    <Form onSubmit={handleEmailLoginSubmit}> 
       <Form.Group controlId="formEmail">
         <Form.Label className="custom_label">Email address</Form.Label>
-        <Form.Control type="email" placeholder="Enter email" className="custom_input"/>
+        <Form.Control type="email" placeholder="Enter email" className="custom_input"  value={email}
+        onChange={(e) => setEmail(e.target.value)}/>
       </Form.Group>
 
       <Form.Group controlId="formPassword" className="mt-3">
         <Form.Label className="custom_label">Password</Form.Label>
-        <Form.Control type="password" placeholder="Password" className="custom_input"/>
+        <Form.Control type="password" placeholder="Password" className="custom_input" value={password}
+  onChange={(e) => setPassword(e.target.value)}/>
       </Form.Group>
 
       <div className="text-end mt-2">
