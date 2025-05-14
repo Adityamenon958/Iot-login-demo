@@ -147,6 +147,7 @@ const DashboardHome = () => {
         {loading ? (
           <div>Loading...</div>
         ) : (
+          <div className='tableScroll mb-2'>
           <Table striped bordered hover responsive>
             <thead>
               <tr>
@@ -187,6 +188,7 @@ const DashboardHome = () => {
               )}
             </tbody>
           </Table>
+          </div>
         )}
       </div>
 

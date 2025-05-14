@@ -3,4 +3,9 @@
     overflow: hidden;
     box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
   }
+
+  .tableScroll{
+    max-height: 520px;
+    overflow-y: auto;
+  }
   
