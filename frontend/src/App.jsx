@@ -6,8 +6,8 @@ import ReportsPage from './pages/ReportsPage';
 import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import Settings from './pages/Settings';
-import AddUserHome from './pages/AddUserHome';
-import AddUser from './pages/AddUserHome';
+import ManageCompany from './pages/ManageCompany';
+import AddUser from './pages/ManageCompany';
 
 function App() {
   return ( 
@@ -20,10 +20,10 @@ function App() {
         <Route path="settings" element={<Settings />} />
         
         <Route
-        path="/dashboard/adduser"
+        path="/dashboard/managecompany"
         element={
           <AddUser>
-            <AddUserHome />
+            <ManageCompany />
           </AddUser>
           }
           />

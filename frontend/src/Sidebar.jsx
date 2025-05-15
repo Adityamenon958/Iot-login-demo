@@ -56,7 +56,7 @@ export default function Sidebar({ isOpen, closeSidebar  }) {
           </Button>
 
           {role === "superadmin" && (
-          <Button className={styles.iconButton2} onClick={() => navigate('/dashboard/adduser')}>
+          <Button className={styles.iconButton2} onClick={() => navigate('/dashboard/managecompany')}>
            <HiOutlineOfficeBuilding size={25} className={`${styles.navText} me-2 `} />
             <div className={`${styles.Text} text-nowrap`}>
               Manage Company </div>
