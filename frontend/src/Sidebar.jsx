@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { googleLogout } from '@react-oauth/google';
 import styles from './Sidebar.module.css';
 import { UserPlus } from 'lucide-react';
+import { HiOutlineOfficeBuilding } from "react-icons/hi";
+
 
 export default function Sidebar({ isOpen, closeSidebar  }) {
   const navigate = useNavigate();
@@ -54,14 +56,22 @@ export default function Sidebar({ isOpen, closeSidebar  }) {
           </Button>
 
           {role === "superadmin" && (
+          <Button className={styles.iconButton2} onClick={() => navigate('/dashboard/adduser')}>
+           <HiOutlineOfficeBuilding size={25} className={`${styles.navText} me-2 `} />
+            <div className={`${styles.Text} text-nowrap`}>
+              Manage Company </div>
+          </Button>
+          )}
+
+          {role === "admin" && (
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/adduser')}>
            <UserPlus size={20} className={`${styles.navText} me-2 `} />
-             Add User
+             Add Users
           </Button>
           )}
 
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/settings')}>
-            <Settings size={20} className="me-2" />
+            <Settings size={20}  className="me-2" />
             Settings
           </Button>
 

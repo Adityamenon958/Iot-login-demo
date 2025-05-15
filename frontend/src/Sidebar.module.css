@@ -39,14 +39,37 @@
     white-space: nowrap;
     
   }
-  
+
+  .Text{
+    width: 90px;
+  }
+
+  .iconButton2{
+    background-color: white;
+    border: none;
+    box-shadow: none;
+    color: #333;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    transition: background-color 0.2s ease;
+    width: 150px;
+  }
+
   .iconButton:hover {
     background-color: rgba(0, 0, 0, 0.05);
     border-radius: 0.5rem;
     color: #4db3b3;
     width: 150px;
   }
-  
+  .iconButton2:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    color: #4db3b3;
+    width: 180px;
+  }
 
 
   @media (min-width: 800px) {
