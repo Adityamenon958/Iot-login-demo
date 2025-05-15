@@ -69,6 +69,23 @@ app.post('/api/devices', async (req, res) => {
   }
 });
 
+app.post('/api/users', async (req, res) => {
+  const { email, password, role, companyName, contactInfo } = req.body;
+
+  try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
+
+    const newUser = new User({ email, password, role, companyName, contactInfo });
+    await newUser.save();
+    
+    res.status(201).json({ message: "User created successfully ✅" });
+  } catch (err) {
+    console.error("Add user error:", err.message);
+    res.status(500).json({ message: "Server error ❌" });
+  }
+});
+
 app.delete('/api/devices/:id', async (req, res) => {
   try {
     const deleted = await Device.findByIdAndDelete(req.params.id);
