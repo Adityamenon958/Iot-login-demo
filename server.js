@@ -49,11 +49,13 @@ app.get('/api/seed', async (req, res) => {
     //   { name: "Pressure Monitor", location: "Chennai", subscription: "Inactive" },
     //   { name: "Humidity Tracker", location: "Hyderabad", subscription: "Active" },
 
-    await User.create({ email: "admin@example.com", password: "admin123", role: "admin" });
+    await User.create({ email: "admin2@example.com", password: "admin123", role: "user" });
+    
     
     res.send("Database seeded ✅");
   } catch (err) {
-    res.status(500).json({ message: "Seeding failed ❌" });
+    console.error("🔥 Seeding error:", err);
+    res.status(500).json({ message: "Seeding failed ❌" , error: err.message  });
   }
 });
 

@@ -9,6 +9,7 @@ import { UserPlus } from 'lucide-react';
 export default function Sidebar({ isOpen, closeSidebar  }) {
   const navigate = useNavigate();
   const sidebarRef = useRef(null);
+  const role = localStorage.getItem("role");
 
   const handleLogout = () => {
     googleLogout();
@@ -48,14 +49,16 @@ export default function Sidebar({ isOpen, closeSidebar  }) {
           </Button>
 
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/reports')}>
-            <FileText size={20} className="me-2" />
+            <FileText size={20} className={`${styles.navText} me-2 `} />
             Report
           </Button>
 
+          {role === "superadmin" && (
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/adduser')}>
-           <UserPlus size={20} className="me-2" />
+           <UserPlus size={20} className={`${styles.navText} me-2 `} />
              Add User
           </Button>
+          )}
 
           <Button className={styles.iconButton} onClick={() => navigate('/dashboard/settings')}>
             <Settings size={20} className="me-2" />

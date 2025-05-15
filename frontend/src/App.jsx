@@ -6,6 +6,8 @@ import ReportsPage from './pages/ReportsPage';
 import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import Settings from './pages/Settings';
+import AddUserHome from './pages/AddUserHome';
+import AddUser from './pages/AddUserHome';
 
 function App() {
   return ( 
@@ -16,6 +18,15 @@ function App() {
         <Route index element={<DashboardHome />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
+        
+        <Route
+        path="/dashboard/adduser"
+        element={
+          <AddUser>
+            <AddUserHome />
+          </AddUser>
+          }
+          />
       </Route>
     </Routes>
   );

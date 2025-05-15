@@ -8,4 +8,16 @@
     max-height: 520px;
     overflow-y: auto;
   }
+
+  .custom_label {
+    color: #333333;
+  }
+  .custom_input {
+    height: 54px !important;
+  }
+
+  .custom_AddBtn{
+    height: 54px !important;
+    border-radius: 30px;
+  }
   

@@ -26,6 +26,8 @@
     
   }
   
+ 
+
   .cardTitle {
     font-weight: 600;
     font-size: 1.2rem;
@@ -90,6 +92,8 @@
   .inlineEdit:hover {
     color: #000;
   }
+
+  
 
   @media (max-width: 799px) {
     .main{
