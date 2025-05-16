@@ -13,7 +13,7 @@ const DashboardHome2 = () => {
 
   const fetchSensorData = async () => {
     try {
-      const res = await axios.get(`http://localhost:5173/api/levelsensor`);
+      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/levelsensor`);
       console.log("Sensor Data API response:", res.data);
 
       if (Array.isArray(res.data)) {
@@ -33,7 +33,7 @@ const DashboardHome2 = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const res = await axios.get(`http://localhost:5173/api/dashboard`);
+      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
       console.log("Dashboard API response:", res.data);
       setActiveDevices(res.data.activeDevices);
       setInactiveDevices(res.data.inactiveDevices);
@@ -112,7 +112,7 @@ const DashboardHome2 = () => {
                       <td><Form.Check type="checkbox" /></td>
                       <td>{item.D}</td>
                       <td>{item.address}</td>
-                      <td>{item.data}</td>
+                      <td>{item.data} mm</td>
                       <td>{item.vehicleNo}</td>
                     </tr>
                   ))
