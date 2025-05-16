@@ -5,6 +5,7 @@ const path = require('path');
 const connectDB = require('./backend/db');
 const Device = require('./backend/models/Device');
 const User = require('./backend/models/User');
+const LevelSensor = require('./backend/models/LevelSensor');
 const jwt = require('jsonwebtoken');
 
 const app = express();
@@ -78,6 +79,45 @@ app.get('/api/users', async (req, res) => {
     res.status(500).json({ message: "Failed to fetch users" });
   }
 });
+
+
+// POST sensor data from IoT device
+app.post('/api/levelsensor', async (req, res) => {
+  try {
+    const { D, address, data, "Vehicle no": vehicleNo } = req.body;
+
+    if (!D || !address || !data || !vehicleNo) {
+      return res.status(400).json({ message: "Missing required fields ❌" });
+    }
+
+    const newSensorData = new LevelSensor({
+      D,
+      address,
+      data,
+      vehicleNo,
+    });
+
+    await newSensorData.save();
+
+    res.status(201).json({ message: "Sensor data saved successfully ✅" });
+  } catch (err) {
+    console.error("Error saving sensor data:", err);
+    res.status(500).json({ message: "Internal Server Error 💥" });
+  }
+});
+
+// GET all sensor data (for frontend table)
+app.get('/api/levelsensor', async (req, res) => {
+  try {
+    const allData = await LevelSensor.find().sort({ D: -1 }); // newest first
+    res.json(allData);
+  } catch (err) {
+    console.error("Error fetching sensor data:", err);
+    res.status(500).json({ message: "Internal Server Error 💥" });
+  }
+});
+
+
 
 app.post('/api/users', async (req, res) => {
   const { email, password, role, name, companyName, contactInfo } = req.body;
