@@ -171,7 +171,8 @@ app.post('/api/login', async (req, res) => {
     res.json({
       message: "Login successful ✅",
       token,
-      role: user.role
+      role: user.role,
+      companyName: user.companyName,
     });
   } catch (err) {
     console.error("Login error:", err.message);

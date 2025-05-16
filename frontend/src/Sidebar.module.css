@@ -35,6 +35,13 @@
     transition: background-color 0.2s ease;
     width: 150px;
   }
+
+  .active {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    color: #4db3b3;
+    width: 150px;
+  }
   .navText{
     white-space: nowrap;
     
@@ -64,6 +71,14 @@
     color: #4db3b3;
     width: 150px;
   }
+
+  .active2 {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    color: #4db3b3;
+    width: 180px;
+  }
+
   .iconButton2:hover {
     background-color: rgba(0, 0, 0, 0.05);
     border-radius: 0.5rem;

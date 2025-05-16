@@ -8,6 +8,8 @@ import { SiGmail } from "react-icons/si";
 import { X } from 'lucide-react';
 import "./LoginPage.css"
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode'; // ✅ correct for ES Modules
+
 
 
 const LoginPage = () => {
@@ -16,6 +18,9 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
 const [password, setPassword] = useState('');
 
+
+
+// if companyName is present in the token
 
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
@@ -40,10 +45,14 @@ const [password, setPassword] = useState('');
         email,
         password
       });
+      const decoded = jwtDecode(response.data.token);
+console.log("Decoded JWT:", decoded);
   
       console.log("Login Success ✅", response.data);
       localStorage.setItem("token", response.data.token);
       localStorage.setItem("role", response.data.role);
+      localStorage.setItem("companyName", response.data.companyName);
+      console.log("Full response:", response.data);
   
       navigate('/dashboard');
     } catch (error) {

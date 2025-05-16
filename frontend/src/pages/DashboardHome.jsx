@@ -10,6 +10,7 @@ const DashboardHome = () => {
   const [alarms, setAlarms] = useState(0);
   const [deviceData, setDeviceData] = useState([]);
   const [loading, setLoading] = useState(true);
+  
 
   const fetchDevices = async () => {
     try {
