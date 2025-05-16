@@ -8,6 +8,10 @@ import './App.css';
 import Settings from './pages/Settings';
 import ManageCompany from './pages/ManageCompany';
 import AddUser from './pages/ManageCompany';
+import AddUserHome from './pages/AddUserHome';
+import AddUser2 from './pages/AddUser2';
+
+
 
 function App() {
   return ( 
@@ -24,7 +28,16 @@ function App() {
         element={
           <AddUser>
             <ManageCompany />
+            
           </AddUser>
+          }
+          />
+          <Route 
+          path='/dashboard/adduser'
+          element={
+            <AddUser2>
+              <AddUserHome />
+            </AddUser2>
           }
           />
       </Route>
