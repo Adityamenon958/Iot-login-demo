@@ -11,6 +11,7 @@ import AddUser from './pages/ManageCompany';
 import AddUserHome from './pages/AddUserHome';
 import AddUser2 from './pages/AddUser2';
 import DashboardHome2 from './pages/DashboardHome2';
+import AddDevice from './pages/AddDevices';
 
 
 
@@ -42,6 +43,10 @@ function App() {
             </AddUser2>
           }
           />
+
+      <Route path="adddevice" element={<AddDevice />} />
+
+
       </Route>
     </Routes>
   );

@@ -126,7 +126,7 @@ const AddUser = () => {
             <td className="truncate-cell">{user.name || '-'}</td>
             <td className="truncate-cell">{user.contactInfo || '-'}</td>
             <td className="truncate-cell">{user.email}</td>
-            <td className="truncate-cell">{user.password}</td>
+            <td className="truncate-cell">{user.role}</td>
             <td>
               <Form.Check 
                 type="switch" 

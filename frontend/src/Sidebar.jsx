@@ -6,13 +6,15 @@ import { googleLogout } from '@react-oauth/google';
 import styles from './Sidebar.module.css';
 import { UserPlus } from 'lucide-react';
 import { HiOutlineOfficeBuilding } from "react-icons/hi";
-
+import { PlusSquare } from 'lucide-react';
 
 export default function Sidebar({ isOpen, closeSidebar  }) {
   const navigate = useNavigate();
   const location = useLocation();
   const sidebarRef = useRef(null);
   const role = localStorage.getItem("role");
+  const companyName = localStorage.getItem("companyName");
+
 
   const handleLogout = () => {
     googleLogout();
@@ -73,6 +75,16 @@ export default function Sidebar({ isOpen, closeSidebar  }) {
              Add Users
           </Button>
           )}
+
+{(role === "admin" || (role === "superadmin" && companyName === "Gsn Soln")) && (
+  <Button
+    className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`}
+    onClick={() => navigate('/dashboard/adddevice')}
+  >
+<PlusSquare size={20} className="me-2" />    Add Device
+  </Button>
+)}
+
 
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/settings' ? styles.active : ''}`} onClick={() => navigate('/dashboard/settings')}>
             <Settings size={20}  className="me-2" />
