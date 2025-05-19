@@ -19,15 +19,47 @@ connectDB();
 
 
 
-// API routes
-app.get('/api/devices', async (req, res) => {
-  try {
-    const devices = await Device.find();
-    res.json(devices);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to fetch devices" });
-  }
-});
+// For Old Devices 
+// app.get('/api/devices', async (req, res) => {
+//   try {
+//     const devices = await Device.find();
+//     res.json(devices);
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to fetch devices" });
+//   }
+// });
+
+
+
+// app.get('/api/seed', async (req, res) => {
+//   try {
+//     // await Device.insertMany([
+//     //   { name: "Sensor Alpha", location: "Mumbai", subscription: "Active" },
+//     //   { name: "Sensor Beta", location: "Delhi", subscription: "Inactive" },
+//     //   { name: "Thermal Scanner", location: "Bangalore", subscription: "Active" },
+//     //   { name: "Pressure Monitor", location: "Chennai", subscription: "Inactive" },
+//     //   { name: "Humidity Tracker", location: "Hyderabad", subscription: "Active" },
+
+//     await User.create({ email: "admin2@example.com", password: "admin123", role: "user" });
+    
+    
+//     res.send("Database seeded ✅");
+//   } catch (err) {
+//     console.error("🔥 Seeding error:", err);
+//     res.status(500).json({ message: "Seeding failed ❌" , error: err.message  });
+//   }
+// });
+
+// app.post('/api/devices', async (req, res) => {
+//   try {
+//     const newDevice = new Device(req.body);
+//     await newDevice.save();
+//     res.status(201).json(newDevice);
+//   } catch (err) {
+//     res.status(400).json({ message: "Failed to add device" });
+//   }
+// });
+
 
 app.get('/api/dashboard', async (req, res) => {
   try {
@@ -41,32 +73,41 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-app.get('/api/seed', async (req, res) => {
+// For Master Devices Table
+app.post('/api/devices', async (req, res) => {
   try {
-    // await Device.insertMany([
-    //   { name: "Sensor Alpha", location: "Mumbai", subscription: "Active" },
-    //   { name: "Sensor Beta", location: "Delhi", subscription: "Inactive" },
-    //   { name: "Thermal Scanner", location: "Bangalore", subscription: "Active" },
-    //   { name: "Pressure Monitor", location: "Chennai", subscription: "Inactive" },
-    //   { name: "Humidity Tracker", location: "Hyderabad", subscription: "Active" },
+    const { companyName, uid, deviceId, deviceType, location, frequency } = req.body;
 
-    await User.create({ email: "admin2@example.com", password: "admin123", role: "user" });
-    
-    
-    res.send("Database seeded ✅");
-  } catch (err) {
-    console.error("🔥 Seeding error:", err);
-    res.status(500).json({ message: "Seeding failed ❌" , error: err.message  });
+    // Optional basic validation
+    if (!companyName || !uid || !deviceId || !deviceType || !location || !frequency) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const newDevice = new Device({
+      companyName,
+      uid,
+      deviceId,
+      deviceType,
+      location,
+      frequency,
+    });
+
+    await newDevice.save();
+
+    res.status(201).json({ message: 'Device added successfully' });
+  } catch (error) {
+    console.error('Error adding device:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.post('/api/devices', async (req, res) => {
+app.get('/api/devices', async (req, res) => {
   try {
-    const newDevice = new Device(req.body);
-    await newDevice.save();
-    res.status(201).json(newDevice);
-  } catch (err) {
-    res.status(400).json({ message: "Failed to add device" });
+    const devices = await Device.find(); // optionally filter by companyName
+    res.json(devices);
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    res.status(500).json({ message: 'Failed to fetch devices' });
   }
 });
 

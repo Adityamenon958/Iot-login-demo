@@ -7,6 +7,8 @@ import './MainContent.css';
 
 export default function AddDevice() {
   const navigate = useNavigate();
+//   For Storing Devices from db
+  const [devices, setDevices] = useState([]);
 
   const [companyName, setCompanyName] = useState('');
   const [deviceId, setDeviceId] = useState('');
@@ -29,7 +31,19 @@ export default function AddDevice() {
     }
 
     setCompanyName(company || '');
+    fetchDevices();
+
   }, [navigate]);
+
+  
+const fetchDevices = async () => {
+    try {
+      const response = await axios.get('/api/devices');
+      setDevices(response.data);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+    }
+  };
 
   // UID generation
   useEffect(() => {
@@ -54,6 +68,7 @@ export default function AddDevice() {
   
     try {
       const response = await axios.post('/api/devices', formData);
+      fetchDevices();
       alert(response.data.message); // Show success message
       // Optional: reset fields
       setDeviceId('');
@@ -64,11 +79,13 @@ export default function AddDevice() {
       console.error('Error submitting form:', error);
       alert('Failed to add device');
     }
+
   };
   
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
+        <Row>
       <h3>Add New Device</h3>
       <Form onSubmit={handleSubmit} className="mt-4">
 
@@ -140,6 +157,8 @@ export default function AddDevice() {
           Add Device
         </Button>
       </Form>
+      </Row>
+      <Row>hello</Row>
     </Col>
   );
 }
