@@ -24,12 +24,8 @@ const AddUser = () => {
   }, []);
   
   const fetchUsers = async () => {
-    const companyName = localStorage.getItem("companyName");
-  
     try {
-      const res = await axios.get('/api/users', {
-        params: { companyName }
-      });
+      const res = await axios.get('/api/users');
       setUsers(res.data);
     } catch (err) {
       console.error("Failed to fetch users:", err.message);
