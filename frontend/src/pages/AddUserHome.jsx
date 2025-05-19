@@ -27,8 +27,12 @@ export default function AddUserHome() {
   }, []);
 
   const fetchUsers = async () => {
+    const companyName = localStorage.getItem("companyName"); // get from login
+  
     try {
-      const res = await axios.get('/api/users');
+      const res = await axios.get('/api/users', {
+        params: { companyName }  // send as query parameter
+      });
       setUsers(res.data);
     } catch (err) {
       console.error("Failed to fetch users:", err.message);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Col, Form, Button } from 'react-bootstrap';
+import { Col,Row, Form, Button, Table } from 'react-bootstrap';
 import styles from './MainContent.module.css';
 import './MainContent.css';
 
@@ -36,14 +36,19 @@ export default function AddDevice() {
   }, [navigate]);
 
   
-const fetchDevices = async () => {
+  const fetchDevices = async () => {
+    const companyName = localStorage.getItem('companyName'); // get from storage
+  
     try {
-      const response = await axios.get('/api/devices');
+      const response = await axios.get('/api/devices', {
+        params: { companyName } // send it as query param
+      });
       setDevices(response.data);
     } catch (error) {
       console.error('Error fetching devices:', error);
     }
   };
+  
 
   // UID generation
   useEffect(() => {
@@ -158,7 +163,37 @@ const fetchDevices = async () => {
         </Button>
       </Form>
       </Row>
-      <Row>hello</Row>
+      <Row className='mt-4'><h4 className="mt-5">Existing Devices</h4>
+      <Table striped bordered hover responsive>
+  <thead>
+    <tr>
+      <th>UID</th>
+      <th>Device ID</th>
+      <th>Type</th>
+      <th>Location</th>
+      <th>Frequency</th>
+      <th>Company</th>
+    </tr>
+  </thead>
+  <tbody>
+    {devices.length === 0 ? (
+      <tr>
+        <td colSpan="6" className="text-center">No devices found</td>
+      </tr>
+    ) : (
+      devices.map((dev, index) => (
+        <tr key={index}>
+          <td>{dev.uid}</td>
+          <td>{dev.deviceId}</td>
+          <td>{dev.deviceType}</td>
+          <td>{dev.location}</td>
+          <td>{dev.frequency}</td>
+          <td>{dev.companyName}</td>
+        </tr>
+      ))
+    )}
+  </tbody>
+</Table></Row>
     </Col>
   );
 }

@@ -102,8 +102,15 @@ app.post('/api/devices', async (req, res) => {
 });
 
 app.get('/api/devices', async (req, res) => {
+  const companyName = req.query.companyName; // get it from URL query
+  console.log('Received company name in query:', companyName);
   try {
-    const devices = await Device.find(); // optionally filter by companyName
+    let query = {};
+    if (companyName) {
+      query.companyName = companyName;
+    }
+
+    const devices = await Device.find(query);
     res.json(devices);
   } catch (error) {
     console.error('Error fetching devices:', error);
@@ -111,13 +118,21 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
+
 app.get('/api/users', async (req, res) => {
+  const companyName = req.query.companyName; // get from frontend query
+
   try {
-    const users = await User.find({}, '-__v');  // exclude __v field
+    let query = {};
+    if (companyName) {
+      query.companyName = companyName;
+    }
+
+    const users = await User.find(query);
     res.json(users);
-  } catch (err) {
-    console.error("Fetch users error:", err.message);
-    res.status(500).json({ message: "Failed to fetch users" });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
   }
 });
 
