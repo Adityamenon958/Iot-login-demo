@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Col, Form, Button } from 'react-bootstrap';
 import styles from './MainContent.module.css';
@@ -10,7 +11,7 @@ export default function AddDevice() {
   const [companyName, setCompanyName] = useState('');
   const [deviceId, setDeviceId] = useState('');
   const [deviceType, setDeviceType] = useState('');
-  const [deviceLocation, setDeviceLocation] = useState('');
+  const [location, setLocation] = useState('');
   const [frequency, setFrequency] = useState('');
   const [uid, setUid] = useState('');
 
@@ -38,18 +39,33 @@ export default function AddDevice() {
     }
   }, [companyName, deviceId]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Backend submission logic will go here (step 2)
-    console.log({
+  
+    // Prepare data
+    const formData = {
       companyName,
       uid,
       deviceId,
       deviceType,
-      deviceLocation,
-      frequency
-    });
+      location,
+      frequency,
+    };
+  
+    try {
+      const response = await axios.post('/api/devices', formData);
+      alert(response.data.message); // Show success message
+      // Optional: reset fields
+      setDeviceId('');
+      setDeviceType('');
+      setLocation('');
+      setFrequency('');
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      alert('Failed to add device');
+    }
   };
+  
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
@@ -97,8 +113,8 @@ export default function AddDevice() {
           <Form.Label>Device Location</Form.Label>
           <Form.Control
             type="text"
-            value={deviceLocation}
-            onChange={(e) => setDeviceLocation(e.target.value)}
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
             required
             className="custom_input"
           />

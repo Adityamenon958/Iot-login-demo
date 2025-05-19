@@ -19,6 +19,7 @@
   }
   .custom_input {
     height: 54px !important;
+    max-width: 500px;
   }
 
   .custom_AddBtn{
