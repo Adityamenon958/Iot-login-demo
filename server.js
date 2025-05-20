@@ -139,10 +139,13 @@ app.get('/api/users', async (req, res) => {
 
 // POST sensor data from IoT device
 app.post('/api/levelsensor', async (req, res) => {
+  console.log("Received sensor POST data:", req.body);  
   try {
-    const { D, address, data, "Vehicle no": vehicleNo } = req.body;
+    // Destructure uid from req.body as well
+    const { D, address, data, "Vehicle no": vehicleNo, uid } = req.body;
 
-    if (!D || !address || !data || !vehicleNo) {
+    // Validate required fields including uid
+    if (!D || !address || !data || !vehicleNo || !uid) {
       return res.status(400).json({ message: "Missing required fields ❌" });
     }
 
@@ -151,6 +154,7 @@ app.post('/api/levelsensor', async (req, res) => {
       address,
       data,
       vehicleNo,
+      uid,    // Save uid here
     });
 
     await newSensorData.save();

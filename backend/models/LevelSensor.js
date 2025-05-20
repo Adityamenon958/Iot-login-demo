@@ -1,3 +1,5 @@
+// backend/models/LevelSensor.js
+
 const mongoose = require('mongoose');
 
 const levelSensorSchema = new mongoose.Schema({
@@ -14,6 +16,10 @@ const levelSensorSchema = new mongoose.Schema({
     required: true
   },
   vehicleNo: {
+    type: String,
+    required: true
+  },
+  uid: {              // <-- new field added here
     type: String,
     required: true
   }
