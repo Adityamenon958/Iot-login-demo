@@ -61,7 +61,14 @@ export default function AddDevice() {
   const handleSubmit = async (e) => {
     e.preventDefault();
   
-    // Prepare data
+    // Check for duplicate UID
+    const isDuplicate = devices.some(device => device.uid === uid);
+    if (isDuplicate) {
+      alert('Device with same UID already exists!');
+      return; // Stop submission
+    }
+  
+    // Prepare data to send
     const formData = {
       companyName,
       uid,
@@ -73,9 +80,10 @@ export default function AddDevice() {
   
     try {
       const response = await axios.post('/api/devices', formData);
-      fetchDevices();
-      alert(response.data.message); // Show success message
-      // Optional: reset fields
+      fetchDevices(); // Refresh the device list
+      alert(response.data.message);
+  
+      // Reset fields after successful add
       setDeviceId('');
       setDeviceType('');
       setLocation('');
@@ -84,8 +92,8 @@ export default function AddDevice() {
       console.error('Error submitting form:', error);
       alert('Failed to add device');
     }
-
   };
+  
   
 
   return (
