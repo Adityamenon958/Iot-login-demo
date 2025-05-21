@@ -10,6 +10,21 @@ const DashboardHome2 = () => {
   const [alarms, setAlarms] = useState(0);
   const [sensorData, setSensorData] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+const [filteredSensorData, setFilteredSensorData] = useState([]);
+const [devices, setDevices] = useState([]);
+
+const fetchDevices = async () => {
+  try {
+    const companyName = localStorage.getItem('companyName');
+    const res = await axios.get('/api/devices', { params: { companyName } });
+    setDevices(res.data);
+  } catch (err) {
+    console.error("Device API error:", err);
+    setDevices([]);
+  }
+};
+
 
   const fetchSensorData = async () => {
     try {
@@ -44,9 +59,47 @@ const DashboardHome2 = () => {
   };
 
   useEffect(() => {
-    fetchDashboardStats();
-    fetchSensorData();
+    const fetchAll = async () => {
+      await fetchDashboardStats();
+  
+      try {
+        const companyName = localStorage.getItem('companyName');
+  
+        // Fetch both in parallel
+        const [deviceRes, sensorRes] = await Promise.all([
+          axios.get('/api/devices', { params: { companyName } }),
+          axios.get('/api/levelsensor')
+        ]);
+  
+        const devicesData = deviceRes.data || [];
+        const sensorDataRaw = sensorRes.data || [];
+  
+        const deviceUids = devicesData.map(dev => dev.uid);
+        console.log("✅ Device UIDs:", deviceUids);
+  
+        const allSensorUids = sensorDataRaw.map(s => s.uid);
+        console.log("📦 All Sensor UIDs:", allSensorUids);
+  
+        const allowedUids = new Set(deviceUids);
+        const filtered = sensorDataRaw.filter(s => allowedUids.has(s.uid));
+  
+        const filteredUids = filtered.map(s => s.uid);
+        console.log("🔍 Filtered Sensor UIDs:", filteredUids);
+  
+        setDevices(devicesData);
+        setSensorData(sensorDataRaw);
+        setFilteredSensorData(filtered);
+        setLoading(false);
+      } catch (err) {
+        console.error("❌ Data fetching error:", err);
+        setLoading(false);
+      }
+    };
+  
+    fetchAll();
   }, []);
+  
+  
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
@@ -102,22 +155,22 @@ const DashboardHome2 = () => {
                 </tr>
               </thead>
               <tbody>
-                {sensorData.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="text-center">No sensor data found</td>
-                  </tr>
-                ) : (
-                  sensorData.map((item) => (
-                    <tr key={item._id}>
-                      <td><Form.Check type="checkbox" /></td>
-                      <td>{item.D}</td>
-                      <td>{item.address}</td>
-                      <td>{item.data} mm</td>
-                      <td>{item.vehicleNo}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+  {filteredSensorData.length === 0 ? (
+    <tr>
+      <td colSpan="5" className="text-center">No sensor data found</td>
+    </tr>
+  ) : (
+    filteredSensorData.map((item) => (
+      <tr key={item._id}>
+        <td><Form.Check type="checkbox" /></td>
+        <td>{item.D}</td>
+        <td>{item.address}</td>
+        <td>{item.data} mm</td>
+        <td>{item.vehicleNo}</td>
+      </tr>
+    ))
+  )}
+</tbody>
             </Table>
           </div>
         )}
