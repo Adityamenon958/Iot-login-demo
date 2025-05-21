@@ -14,7 +14,9 @@ const DashboardHome = () => {
 
   const fetchDevices = async () => {
     try {
-      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/devices`);
+      // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/devices`);
+      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/devices`);
+
       console.log("Devices API response:", res.data);
       
       if (Array.isArray(res.data)) {
@@ -34,7 +36,8 @@ const DashboardHome = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
+      // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
+      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`);
       console.log("Dashboard API response:", res.data);
       setActiveDevices(res.data.activeDevices);
       setInactiveDevices(res.data.inactiveDevices);
@@ -47,7 +50,8 @@ const DashboardHome = () => {
 
   useEffect(() => {
     // Fetch dashboard card data
-    axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`)
+    // axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`)
+    axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`)
       .then(res => {
         console.log("Dashboard API response:", res.data); // Debugging log here
         setActiveDevices(res.data.activeDevices);
@@ -79,7 +83,8 @@ const DashboardHome = () => {
     e.preventDefault();
     console.log("Form submitted with data:", formData); // Log form data on submit
     try {
-      const res = await axios.post(`https://iot-dashboard-adi.azurewebsites.net/api/devices`, formData);
+      // const res = await axios.post(`https://iot-dashboard-adi.azurewebsites.net/api/devices`, formData);
+      const res = await axios.post(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/devices`, formData);
       console.log("Device added ✅", res.data);
 
       // Optional: refresh the device list after adding
@@ -96,7 +101,8 @@ const DashboardHome = () => {
   const handleDelete = async (id) => {
     console.log("Attempting to delete device with ID:", id); // Log device ID on delete
     try {
-      await axios.delete(`https://iot-dashboard-adi.azurewebsites.net/api/devices/${id}`);
+      // await axios.delete(`https://iot-dashboard-adi.azurewebsites.net/api/devices/${id}`);
+      await axios.delete(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/devices/${id}`);
       console.log("Device deleted successfully");
       fetchDevices(); // Refresh data
       await fetchDashboardStats();

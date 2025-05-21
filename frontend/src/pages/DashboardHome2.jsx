@@ -28,7 +28,8 @@ const fetchDevices = async () => {
 
   const fetchSensorData = async () => {
     try {
-      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/levelsensor`);
+      // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/levelsensor`);
+      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/levelsensor`);
       console.log("Sensor Data API response:", res.data);
 
       if (Array.isArray(res.data)) {
@@ -48,7 +49,8 @@ const fetchDevices = async () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
+      // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
+      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`);
       console.log("Dashboard API response:", res.data);
       setActiveDevices(res.data.activeDevices);
       setInactiveDevices(res.data.inactiveDevices);
