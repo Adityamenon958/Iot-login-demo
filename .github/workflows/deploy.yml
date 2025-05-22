@@ -1,0 +1,36 @@
+name: Build and Deploy Fullstack App to Azure
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Install backend dependencies
+      run: npm install
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm install
+        npm run build
+        cd ..
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: Gsn-Iot-Dashboard # 👈 REPLACE if needed
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: .
