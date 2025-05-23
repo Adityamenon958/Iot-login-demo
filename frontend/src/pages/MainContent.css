@@ -34,3 +34,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.std_button{
+  border-radius: 30px;
+  height: 45px;
+}
+
+.custom_modal1 .modal-content {
+  border-radius: 30px !important;
+
+}
+.custom_label1 {
+  color: #333333;
+}
+.custom_input1 {
+  height: 34px !important;
+}
+
+.signIn1{
+  height: 40px;
+  border-radius: 30px;
+}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Col, Row, Form, Button, Table, Spinner } from 'react-bootstrap';
+import { Col, Row, Form, Button, Table, Spinner, Modal } from 'react-bootstrap';
 import styles from './MainContent.module.css';
 import './MainContent.css';
 
@@ -9,7 +9,7 @@ export default function AddDevice() {
   const navigate = useNavigate();
 
   const [devices, setDevices] = useState([]);
-  const [loading, setLoading] = useState(true); // ✅ loading state
+  const [loading, setLoading] = useState(true);
 
   const [companyName, setCompanyName] = useState('');
   const [deviceId, setDeviceId] = useState('');
@@ -17,6 +17,7 @@ export default function AddDevice() {
   const [location, setLocation] = useState('');
   const [frequency, setFrequency] = useState('');
   const [uid, setUid] = useState('');
+  const [showModal, setShowModal] = useState(false); // ✅ Modal toggle state
 
   useEffect(() => {
     const role = localStorage.getItem('role');
@@ -35,7 +36,7 @@ export default function AddDevice() {
   }, [navigate]);
 
   const fetchDevices = async () => {
-    setLoading(true); // Start loading
+    setLoading(true);
     const companyName = localStorage.getItem('companyName');
     try {
       const response = await axios.get('/api/devices', {
@@ -45,7 +46,7 @@ export default function AddDevice() {
     } catch (error) {
       console.error('Error fetching devices:', error);
     } finally {
-      setLoading(false); // Stop loading
+      setLoading(false);
     }
   };
 
@@ -76,13 +77,15 @@ export default function AddDevice() {
 
     try {
       const response = await axios.post('/api/devices', formData);
-      fetchDevices(); // Refresh device list
+      fetchDevices(); // Refresh list
       alert(response.data.message);
 
+      // Reset form fields
       setDeviceId('');
       setDeviceType('');
       setLocation('');
       setFrequency('');
+      setShowModal(false); // Close modal after submission
     } catch (error) {
       console.error('Error submitting form:', error);
       alert('Failed to add device');
@@ -91,84 +94,96 @@ export default function AddDevice() {
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
-      <Row>
-        <h3>Add New Device</h3>
-        <Form onSubmit={handleSubmit} className="mt-4">
-
-          <Form.Group className="mb-3">
-            <Form.Label>Company Name</Form.Label>
-            <Form.Control className="custom_input" type="text" value={companyName} disabled />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label>UID</Form.Label>
-            <Form.Control className="custom_input" type="text" value={uid} disabled />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label>Device ID</Form.Label>
-            <Form.Control
-              type="text"
-              value={deviceId}
-              onChange={(e) => setDeviceId(e.target.value)}
-              required
-              className="custom_input"
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label>Device Type</Form.Label>
-            <Form.Select
-              value={deviceType}
-              onChange={(e) => setDeviceType(e.target.value)}
-              required
-              className="custom_input"
-            >
-              <option value="">Select type</option>
-              <option value="Temperature Sensor">Temperature Sensor</option>
-              <option value="Pressure Sensor">Pressure Sensor</option>
-              <option value="Humidity Sensor">Humidity Sensor</option>
-              <option value="Motion Detector">Motion Detector</option>
-            </Form.Select>
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label>Device Location</Form.Label>
-            <Form.Control
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              required
-              className="custom_input"
-            />
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label>Frequency</Form.Label>
-            <Form.Select
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value)}
-              required
-              className="custom_input"
-            >
-              <option value="">Select frequency</option>
-              <option value="1s">1 sec</option>
-              <option value="10s">10 sec</option>
-              <option value="30s">30 sec</option>
-              <option value="1m">1 min</option>
-            </Form.Select>
-          </Form.Group>
-
-          <Button variant="primary" type="submit" className="custom_AddBtn">
+      <Row className="justify-content-between d-flex align-items-start flex-column justify-content-evenly">
+        <Col><h3>Device Management</h3></Col>
+        <Col  className='mt-3' xs="auto" >
+          <Button variant="success" onClick={() => setShowModal(true)} className='std_button'>
             Add Device
           </Button>
-        </Form>
+        </Col>
       </Row>
 
-      {/* Table Section with loader */}
-      <Row className='mt-4'>
-        <h4 className="mt-5">Existing Devices</h4>
+      {/* Modal Form */}
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1" >
+        <Modal.Header className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center" closeButton>
+          <Modal.Title >Add New Device</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="my-1">
+              <Form.Label className="custom_label1">Company Name</Form.Label>
+              <Form.Control className="custom_input1" type="text" value={companyName} disabled />
+            </Form.Group>
 
+            <Form.Group className="my-1">
+              <Form.Label className="custom_label1">UID</Form.Label>
+              <Form.Control className="custom_input1" type="text" value={uid} disabled />
+            </Form.Group>
+
+            <Form.Group className="my-1">
+              <Form.Label className="custom_label1">Device ID</Form.Label>
+              <Form.Control
+                type="text"
+                value={deviceId}
+                onChange={(e) => setDeviceId(e.target.value)}
+                required
+                className="custom_input1"
+              />
+            </Form.Group>
+
+            <Form.Group className="my-1">
+              <Form.Label className="custom_label1">Device Type</Form.Label>
+              <Form.Select
+                value={deviceType}
+                onChange={(e) => setDeviceType(e.target.value)}
+                required
+                className="custom_input1"
+              >
+                <option value="">Select type</option>
+                <option value="Temperature Sensor">Temperature Sensor</option>
+                <option value="Pressure Sensor">Pressure Sensor</option>
+                <option value="Humidity Sensor">Humidity Sensor</option>
+                <option value="Motion Detector">Motion Detector</option>
+              </Form.Select>
+            </Form.Group>
+
+            <Form.Group className="my-1">
+              <Form.Label className="custom_label1">Device Location</Form.Label>
+              <Form.Control
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                required
+                className="custom_input1"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="custom_label1">Frequency</Form.Label>
+              <Form.Select
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value)}
+                required
+                className="custom_input1"
+              >
+                <option value="">Select frequency</option>
+                <option value="1s">1 sec</option>
+                <option value="10s">10 sec</option>
+                <option value="30s">30 sec</option>
+                <option value="1m">1 min</option>
+              </Form.Select>
+            </Form.Group>
+
+            <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">
+              Submit
+            </Button>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      {/* Table Section */}
+      <Row className="mt-4">
+        <h4 className="mt-3">Existing Devices</h4>
         <div style={{ position: 'relative', minHeight: '250px' }}>
           {loading && (
             <div style={{
