@@ -17,7 +17,10 @@ export default function AddDevice() {
   const [location, setLocation] = useState('');
   const [frequency, setFrequency] = useState('');
   const [uid, setUid] = useState('');
-  const [showModal, setShowModal] = useState(false); // ✅ Modal toggle state
+  const [showModal, setShowModal] = useState(false);
+
+  const [searchColumn, setSearchColumn] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const role = localStorage.getItem('role');
@@ -77,36 +80,46 @@ export default function AddDevice() {
 
     try {
       const response = await axios.post('/api/devices', formData);
-      fetchDevices(); // Refresh list
+      fetchDevices();
       alert(response.data.message);
-
-      // Reset form fields
       setDeviceId('');
       setDeviceType('');
       setLocation('');
       setFrequency('');
-      setShowModal(false); // Close modal after submission
+      setShowModal(false);
     } catch (error) {
       console.error('Error submitting form:', error);
       alert('Failed to add device');
     }
   };
 
+  const filteredDevices = devices.filter((dev) => {
+    if (!searchTerm) return true;
+    const lowerTerm = searchTerm.toLowerCase();
+
+    if (searchColumn) {
+      return dev[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
+    }
+
+    return Object.values(dev).some(val =>
+      val?.toString().toLowerCase().includes(lowerTerm)
+    );
+  });
+
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
       <Row className="justify-content-between d-flex align-items-start flex-column justify-content-evenly">
         <Col><h3>Device Management</h3></Col>
-        <Col  className='mt-3' xs="auto" >
+        <Col className='mt-3' xs="auto">
           <Button variant="success" onClick={() => setShowModal(true)} className='std_button'>
             Add Device
           </Button>
         </Col>
       </Row>
 
-      {/* Modal Form */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1" >
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
         <Modal.Header className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center" closeButton>
-          <Modal.Title >Add New Device</Modal.Title>
+          <Modal.Title>Add New Device</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
@@ -181,9 +194,37 @@ export default function AddDevice() {
         </Modal.Body>
       </Modal>
 
-      {/* Table Section */}
       <Row className="mt-4">
         <h4 className="mt-3">Existing Devices</h4>
+
+        {/* Search Inputs */}
+        <Row className="mb-3">
+          <Col md={4}>
+            <Form.Select
+              value={searchColumn}
+              onChange={(e) => setSearchColumn(e.target.value)}
+              className="custom_input1"
+            >
+              <option value="">All Columns</option>
+              <option value="uid">UID</option>
+              <option value="deviceId">Device ID</option>
+              <option value="deviceType">Type</option>
+              <option value="location">Location</option>
+              <option value="frequency">Frequency</option>
+              <option value="companyName">Company</option>
+            </Form.Select>
+          </Col>
+          <Col md={8}>
+            <Form.Control
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="custom_input1"
+            />
+          </Col>
+        </Row>
+
         <div style={{ position: 'relative', minHeight: '250px' }}>
           {loading && (
             <div style={{
@@ -213,12 +254,12 @@ export default function AddDevice() {
                 </tr>
               </thead>
               <tbody>
-                {devices.length === 0 ? (
+                {filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center">No devices found</td>
+                    <td colSpan="6" className="text-center">No matching devices</td>
                   </tr>
                 ) : (
-                  devices.map((dev, index) => (
+                  filteredDevices.map((dev, index) => (
                     <tr key={index}>
                       <td>{dev.uid}</td>
                       <td>{dev.deviceId}</td>
