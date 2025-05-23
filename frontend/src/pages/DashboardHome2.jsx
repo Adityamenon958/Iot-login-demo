@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Col, Row, Card, Table, Form } from 'react-bootstrap';
+import { Col, Row, Card, Table, Form, Spinner } from 'react-bootstrap';
 import styles from './MainContent.module.css';
 import './MainContent.css';
 
@@ -58,18 +58,7 @@ const fetchDevices = async () => {
     }
   };
 
-  // const fetchDashboardStats = async () => {
-  //   try {
-  //     // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
-  //     const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`);
-  //     console.log("Dashboard API response:", res.data);
-  //     setActiveDevices(res.data.activeDevices);
-  //     setInactiveDevices(res.data.inactiveDevices);
-  //     setAlarms(res.data.alarms);
-  //   } catch (err) {
-  //     console.error("Dashboard API error:", err);
-  //   }
-  // };
+ 
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -203,43 +192,58 @@ const fetchDevices = async () => {
       </div>
 
       {/* Table Section */}
-      <div className="mt-4">
-        <h5>Sensor Data Logs</h5>
-        {loading ? (
-          <div>Loading...</div>
-        ) : (
-          <div className='tableScroll mb-2'>
-            <Table striped bordered hover responsive>
-              <thead>
-                <tr>
-                  <th><Form.Check type="checkbox" disabled /></th>
-                  <th>Date</th>
-                  <th>Location</th>
-                  <th>Data</th>
-                  <th>Vehicle Number</th>
-                </tr>
-              </thead>
-              <tbody>
-  {filteredSensorData.length === 0 ? (
-    <tr>
-      <td colSpan="5" className="text-center">No sensor data found</td>
-    </tr>
-  ) : (
-    filteredSensorData.map((item) => (
-      <tr key={item._id}>
-        <td><Form.Check type="checkbox" /></td>
-        <td>{item.D}</td>
-        <td>{item.address}</td>
-        <td>{item.data} mm</td>
-        <td>{item.vehicleNo}</td>
-      </tr>
-    ))
+      <div className="mt-4" style={{ position: 'relative', minHeight: '200px' }}>
+  <h5>Sensor Data Logs</h5>
+
+  {loading && (
+    <div style={{
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: 10,
+      backgroundColor: 'rgba(255,255,255,0.8)',
+      padding: '2rem',
+      borderRadius: '0.5rem'
+    }}>
+      <Spinner animation="border" role="status" variant="primary" />
+    </div>
   )}
-</tbody>
-            </Table>
-          </div>
-        )}
-      </div>
+
+  {!loading && (
+    <div className='tableScroll mb-2'>
+      <Table striped bordered hover responsive>
+        <thead>
+          <tr>
+            <th><Form.Check type="checkbox" disabled /></th>
+            <th>Date</th>
+            <th>Location</th>
+            <th>Data</th>
+            <th>Vehicle Number</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredSensorData.length === 0 ? (
+            <tr>
+              <td colSpan="5" className="text-center">No sensor data found</td>
+            </tr>
+          ) : (
+            filteredSensorData.map((item) => (
+              <tr key={item._id}>
+                <td><Form.Check type="checkbox" /></td>
+                <td>{item.D}</td>
+                <td>{item.address}</td>
+                <td>{item.data} mm</td>
+                <td>{item.vehicleNo}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </Table>
+    </div>
+  )}
+</div>
+
     </Col>
     
   );
