@@ -10,7 +10,6 @@ export default function AddDevice() {
 
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [companyName, setCompanyName] = useState('');
   const [deviceId, setDeviceId] = useState('');
   const [deviceType, setDeviceType] = useState('');
@@ -18,22 +17,18 @@ export default function AddDevice() {
   const [frequency, setFrequency] = useState('');
   const [uid, setUid] = useState('');
   const [showModal, setShowModal] = useState(false);
-
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortByDateAsc, setSortByDateAsc] = useState(false); // sorting toggle
 
   useEffect(() => {
     const role = localStorage.getItem('role');
     const company = localStorage.getItem('companyName');
-
-    const isAuthorized =
-      role === "admin" || (role === "superadmin" && company === "Gsn Soln");
-
+    const isAuthorized = role === "admin" || (role === "superadmin" && company === "Gsn Soln");
     if (!isAuthorized) {
       navigate('/dashboard');
       console.log("Unauthorized access");
     }
-
     setCompanyName(company || '');
     fetchDevices();
   }, [navigate]);
@@ -62,13 +57,11 @@ export default function AddDevice() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const isDuplicate = devices.some(device => device.uid === uid);
     if (isDuplicate) {
       alert('Device with same UID already exists!');
       return;
     }
-
     const formData = {
       companyName,
       uid,
@@ -77,7 +70,6 @@ export default function AddDevice() {
       location,
       frequency,
     };
-
     try {
       const response = await axios.post('/api/devices', formData);
       fetchDevices();
@@ -93,18 +85,20 @@ export default function AddDevice() {
     }
   };
 
-  const filteredDevices = devices.filter((dev) => {
-    if (!searchTerm) return true;
-    const lowerTerm = searchTerm.toLowerCase();
-
-    if (searchColumn) {
-      return dev[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
-    }
-
-    return Object.values(dev).some(val =>
-      val?.toString().toLowerCase().includes(lowerTerm)
-    );
-  });
+  const filteredDevices = devices
+    .filter((dev) => {
+      if (!searchTerm) return true;
+      const lowerTerm = searchTerm.toLowerCase();
+      if (searchColumn) {
+        return dev[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
+      }
+      return Object.values(dev).some(val => val?.toString().toLowerCase().includes(lowerTerm));
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return sortByDateAsc ? dateA - dateB : dateB - dateA;
+    });
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
@@ -127,31 +121,17 @@ export default function AddDevice() {
               <Form.Label className="custom_label1">Company Name</Form.Label>
               <Form.Control className="custom_input1" type="text" value={companyName} disabled />
             </Form.Group>
-
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">UID</Form.Label>
               <Form.Control className="custom_input1" type="text" value={uid} disabled />
             </Form.Group>
-
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">Device ID</Form.Label>
-              <Form.Control
-                type="text"
-                value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-                required
-                className="custom_input1"
-              />
+              <Form.Control type="text" value={deviceId} onChange={(e) => setDeviceId(e.target.value)} required className="custom_input1" />
             </Form.Group>
-
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">Device Type</Form.Label>
-              <Form.Select
-                value={deviceType}
-                onChange={(e) => setDeviceType(e.target.value)}
-                required
-                className="custom_input1"
-              >
+              <Form.Select value={deviceType} onChange={(e) => setDeviceType(e.target.value)} required className="custom_input1">
                 <option value="">Select type</option>
                 <option value="Temperature Sensor">Temperature Sensor</option>
                 <option value="Pressure Sensor">Pressure Sensor</option>
@@ -159,26 +139,13 @@ export default function AddDevice() {
                 <option value="Motion Detector">Motion Detector</option>
               </Form.Select>
             </Form.Group>
-
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">Device Location</Form.Label>
-              <Form.Control
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                required
-                className="custom_input1"
-              />
+              <Form.Control type="text" value={location} onChange={(e) => setLocation(e.target.value)} required className="custom_input1" />
             </Form.Group>
-
             <Form.Group className="mb-3">
               <Form.Label className="custom_label1">Frequency</Form.Label>
-              <Form.Select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value)}
-                required
-                className="custom_input1"
-              >
+              <Form.Select value={frequency} onChange={(e) => setFrequency(e.target.value)} required className="custom_input1">
                 <option value="">Select frequency</option>
                 <option value="1s">1 sec</option>
                 <option value="10s">10 sec</option>
@@ -186,25 +153,16 @@ export default function AddDevice() {
                 <option value="1m">1 min</option>
               </Form.Select>
             </Form.Group>
-
-            <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">
-              Submit
-            </Button>
+            <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">Submit</Button>
           </Form>
         </Modal.Body>
       </Modal>
 
       <Row className="mt-4">
         <h4 className="mt-3">Existing Devices</h4>
-
-        {/* Search Inputs */}
         <Row className="mb-3">
           <Col md={4}>
-            <Form.Select
-              value={searchColumn}
-              onChange={(e) => setSearchColumn(e.target.value)}
-              className="custom_input1"
-            >
+            <Form.Select value={searchColumn} onChange={(e) => setSearchColumn(e.target.value)} className="custom_input1">
               <option value="">All Columns</option>
               <option value="uid">UID</option>
               <option value="deviceId">Device ID</option>
@@ -212,31 +170,17 @@ export default function AddDevice() {
               <option value="location">Location</option>
               <option value="frequency">Frequency</option>
               <option value="companyName">Company</option>
+              <option value="createdAt">Date</option>
             </Form.Select>
           </Col>
           <Col md={8}>
-            <Form.Control
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="custom_input1"
-            />
+            <Form.Control type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="custom_input1" />
           </Col>
         </Row>
 
         <div style={{ position: 'relative', minHeight: '250px' }}>
           {loading && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 10,
-              backgroundColor: 'rgba(255,255,255,0.85)',
-              padding: '2rem',
-              borderRadius: '0.5rem'
-            }}>
+            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2rem', borderRadius: '0.5rem' }}>
               <Spinner animation="border" variant="primary" />
             </div>
           )}
@@ -245,22 +189,28 @@ export default function AddDevice() {
             <Table striped bordered hover responsive>
               <thead>
                 <tr>
+                <th style={{ cursor: 'pointer' }} onClick={() => setSortByDateAsc(!sortByDateAsc)}>
+                    Date {sortByDateAsc ? '↑' : '↓'}
+                  </th>
                   <th>UID</th>
                   <th>Device ID</th>
                   <th>Type</th>
                   <th>Location</th>
                   <th>Frequency</th>
                   <th>Company</th>
+                  
                 </tr>
               </thead>
               <tbody>
                 {filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center">No matching devices</td>
+                    <td colSpan="7" className="text-center">No matching devices</td>
                   </tr>
                 ) : (
                   filteredDevices.map((dev, index) => (
                     <tr key={index}>
+                                            <td>{new Date(dev.createdAt).toLocaleDateString()}</td>
+
                       <td>{dev.uid}</td>
                       <td>{dev.deviceId}</td>
                       <td>{dev.deviceType}</td>
