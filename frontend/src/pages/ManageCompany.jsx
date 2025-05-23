@@ -114,7 +114,7 @@ const AddUser = () => {
           <th>Name</th>
           <th>Contact</th>
           <th>Email ID</th>
-          <th>Password</th>
+          <th>Role</th>
           <th>Toggle</th>
         </tr>
       </thead>

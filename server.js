@@ -60,18 +60,46 @@ connectDB();
 //   }
 // });
 
-
-app.get('/api/dashboard', async (req, res) => {
+// Get total companies count (unique company names)
+app.get('/api/companies/count', async (req, res) => {
   try {
-    const devices = await Device.find();
-    const activeDevices = devices.filter(d => d.subscription === "Active").length;
-    const inactiveDevices = devices.filter(d => d.subscription === "Inactive").length;
-    const alarms = 0;
-    res.json({ activeDevices, inactiveDevices, alarms });
+    const companies = await User.distinct("companyName");
+    res.json({ totalCompanies: companies.length });
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch dashboard stats" });
+    res.status(500).json({ error: "Failed to count companies" });
   }
 });
+
+// Get total users count
+app.get('/api/users/count', async (req, res) => {
+  try {
+    const count = await User.countDocuments();
+    res.json({ totalUsers: count });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to count users" });
+  }
+});
+
+app.get('/api/devices/count', async (req, res) => {
+  try {
+    const totalDevices = await Device.countDocuments();
+    res.json({ totalDevices });
+  } catch (err) {
+    res.status(500).json({ message: "Error counting devices ❌" });
+  }
+});
+
+// app.get('/api/dashboard', async (req, res) => {
+//   try {
+//     const devices = await Device.find();
+//     const activeDevices = devices.filter(d => d.subscription === "Active").length;
+//     const inactiveDevices = devices.filter(d => d.subscription === "Inactive").length;
+//     const alarms = 0;
+//     res.json({ activeDevices, inactiveDevices, alarms });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to fetch dashboard stats" });
+//   }
+// });
 
 // For Master Devices Table
 app.post('/api/devices', async (req, res) => {
@@ -103,7 +131,7 @@ app.post('/api/devices', async (req, res) => {
 
 app.get('/api/devices', async (req, res) => {
   const companyName = req.query.companyName; // get it from URL query
-  console.log('Received company name in query:', companyName);
+  // console.log('Received company name in query:', companyName);
   try {
     let query = {};
     if (companyName) {

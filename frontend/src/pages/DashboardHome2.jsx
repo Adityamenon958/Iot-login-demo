@@ -14,6 +14,14 @@ const DashboardHome2 = () => {
 const [filteredSensorData, setFilteredSensorData] = useState([]);
 const [devices, setDevices] = useState([]);
 
+const [role, setRole] = useState('');
+const [companyName, setCompanyName] = useState('');
+const [totalCompanies, setTotalCompanies] = useState(0);
+const [totalUsers, setTotalUsers] = useState(0);
+const [totalDevices, setTotalDevices] = useState(0);
+
+
+
 const fetchDevices = async () => {
   try {
     const companyName = localStorage.getItem('companyName');
@@ -62,14 +70,16 @@ const fetchDevices = async () => {
 
   useEffect(() => {
     const fetchAll = async () => {
+      const storedRole = localStorage.getItem('role');
+      const storedCompany = localStorage.getItem('companyName');
+      setRole(storedRole);
+      setCompanyName(storedCompany);
+  
       await fetchDashboardStats();
   
       try {
-        const companyName = localStorage.getItem('companyName');
-  
-        // Fetch both in parallel
         const [deviceRes, sensorRes] = await Promise.all([
-          axios.get('/api/devices', { params: { companyName } }),
+          axios.get('/api/devices', { params: { companyName: storedCompany } }),
           axios.get('/api/levelsensor')
         ]);
   
@@ -77,20 +87,25 @@ const fetchDevices = async () => {
         const sensorDataRaw = sensorRes.data || [];
   
         const deviceUids = devicesData.map(dev => dev.uid);
-        console.log("✅ Device UIDs:", deviceUids);
-  
-        const allSensorUids = sensorDataRaw.map(s => s.uid);
-        console.log("📦 All Sensor UIDs:", allSensorUids);
-  
         const allowedUids = new Set(deviceUids);
         const filtered = sensorDataRaw.filter(s => allowedUids.has(s.uid));
-  
-        const filteredUids = filtered.map(s => s.uid);
-        console.log("🔍 Filtered Sensor UIDs:", filteredUids);
   
         setDevices(devicesData);
         setSensorData(sensorDataRaw);
         setFilteredSensorData(filtered);
+  
+        if (storedRole === 'superadmin' && storedCompany === 'Gsn Soln') {
+          const [companyRes, userRes, deviceRes] = await Promise.all([
+            axios.get('/api/companies/count'),
+            axios.get('/api/users/count'),
+            axios.get('/api/devices/count'),
+          ]);
+          setTotalCompanies(companyRes.data.totalCompanies);
+          setTotalUsers(userRes.data.totalUsers);
+          setTotalDevices(deviceRes.data.totalDevices);
+          console.log("Superadmin stats:", companyRes.data, userRes.data, deviceRes.data);
+        }
+  
         setLoading(false);
       } catch (err) {
         console.error("❌ Data fetching error:", err);
@@ -103,40 +118,56 @@ const fetchDevices = async () => {
   
   
 
+  
+  console.log("🧮 Final card values -> Total Devices:", totalDevices);
+
+
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
       <div className="p-3">
-        <Row className="g-4">
-          <Col xs={12} sm={4} md={4}>
-            <Card className={`${styles.deviceCard} text-center`}>
-              <Card.Body>
-                <i className={`bi bi-hdd-stack-fill text-primary ${styles.deviceIcon}`}></i>
-                <Card.Title className={styles.cardTitle}>Active Devices</Card.Title>
-                <div className={styles.metricNumber}>{activeDevices}</div>
-              </Card.Body>
-            </Card>
-          </Col>
+      <Row className="g-4">
+  <Col xs={12} sm={4} md={4}>
+    <Card className={`${styles.deviceCard} text-center`}>
+      <Card.Body>
+        <i className={`bi bi-buildings-fill text-primary ${styles.deviceIcon}`}></i>
+        <Card.Title className={styles.cardTitle}>
+          {role === 'superadmin' && companyName === 'Gsn Soln' ? "Total Companies" : "Active Devices"}
+        </Card.Title>
+        <div className={styles.metricNumber}>
+          {role === 'superadmin' && companyName === 'Gsn Soln' ? totalCompanies : activeDevices}
+        </div>
+      </Card.Body>
+    </Card>
+  </Col>
 
-          <Col xs={12} sm={4} md={4}>
-            <Card className={`${styles.deviceCard} text-center`}>
-              <Card.Body>
-                <i className={`bi bi-hdd text-secondary ${styles.deviceIcon}`}></i>
-                <Card.Title className={styles.cardTitle}>Inactive Devices</Card.Title>
-                <div className={styles.metricNumber}>{inactiveDevices}</div>
-              </Card.Body>
-            </Card>
-          </Col>
+  <Col xs={12} sm={4} md={4}>
+    <Card className={`${styles.deviceCard} text-center`}>
+      <Card.Body>
+        <i className={`bi bi-people-fill text-secondary ${styles.deviceIcon}`}></i>
+        <Card.Title className={styles.cardTitle}>
+          {role === 'superadmin' && companyName === 'Gsn Soln' ? "Total Users" : "Inactive Devices"}
+        </Card.Title>
+        <div className={styles.metricNumber}>
+          {role === 'superadmin' && companyName === 'Gsn Soln' ? totalUsers : inactiveDevices}
+        </div>
+      </Card.Body>
+    </Card>
+  </Col>
 
-          <Col xs={12} sm={4} md={4}>
-            <Card className={`${styles.deviceCard} text-center`}>
-              <Card.Body>
-                <i className={`bi bi-exclamation-triangle-fill text-danger ${styles.deviceIcon}`}></i>
-                <Card.Title className={styles.cardTitle}>Alarms</Card.Title>
-                <div className={styles.metricNumber}>{alarms}</div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+  <Col xs={12} sm={4} md={4}>
+    <Card className={`${styles.deviceCard} text-center`}>
+      <Card.Body>
+        <i className={`bi bi-hdd-stack-fill text-success ${styles.deviceIcon}`}></i>
+        <Card.Title className={styles.cardTitle}>
+  {role === 'superadmin' && companyName === 'Gsn Soln' ? "Total Devices" : "Alarms"}
+</Card.Title>
+<div className={styles.metricNumber}>
+  {role === 'superadmin' && companyName === 'Gsn Soln' ? totalDevices : alarms}
+</div>
+      </Card.Body>
+    </Card>
+  </Col>
+</Row>
       </div>
 
       {/* Table Section */}
@@ -178,6 +209,7 @@ const fetchDevices = async () => {
         )}
       </div>
     </Col>
+    
   );
 };
 
