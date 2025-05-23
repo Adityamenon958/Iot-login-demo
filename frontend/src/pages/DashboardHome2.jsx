@@ -19,6 +19,9 @@ const [companyName, setCompanyName] = useState('');
 const [totalCompanies, setTotalCompanies] = useState(0);
 const [totalUsers, setTotalUsers] = useState(0);
 const [totalDevices, setTotalDevices] = useState(0);
+const [totalUsersByCompany, setTotalUsersByCompany] = useState(0);
+const [totalDevicesByCompany, setTotalDevicesByCompany] = useState(0);
+
 
 
 
@@ -55,18 +58,18 @@ const fetchDevices = async () => {
     }
   };
 
-  const fetchDashboardStats = async () => {
-    try {
-      // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
-      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`);
-      console.log("Dashboard API response:", res.data);
-      setActiveDevices(res.data.activeDevices);
-      setInactiveDevices(res.data.inactiveDevices);
-      setAlarms(res.data.alarms);
-    } catch (err) {
-      console.error("Dashboard API error:", err);
-    }
-  };
+  // const fetchDashboardStats = async () => {
+  //   try {
+  //     // const res = await axios.get(`https://iot-dashboard-adi.azurewebsites.net/api/dashboard`);
+  //     const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`);
+  //     console.log("Dashboard API response:", res.data);
+  //     setActiveDevices(res.data.activeDevices);
+  //     setInactiveDevices(res.data.inactiveDevices);
+  //     setAlarms(res.data.alarms);
+  //   } catch (err) {
+  //     console.error("Dashboard API error:", err);
+  //   }
+  // };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -75,7 +78,7 @@ const fetchDevices = async () => {
       setRole(storedRole);
       setCompanyName(storedCompany);
   
-      await fetchDashboardStats();
+      // await fetchDashboardStats();
   
       try {
         const [deviceRes, sensorRes] = await Promise.all([
@@ -105,6 +108,29 @@ const fetchDevices = async () => {
           setTotalDevices(deviceRes.data.totalDevices);
           console.log("Superadmin stats:", companyRes.data, userRes.data, deviceRes.data);
         }
+
+        if (storedRole === 'admin') {
+          const [usersRes, devicesRes] = await Promise.all([
+            axios.get('/api/users/count/by-company', {
+              params: { companyName: storedCompany },
+            }),
+            axios.get('/api/devices/count/by-company', {
+              params: { companyName: storedCompany },
+            }),
+          ]);
+          setTotalUsersByCompany(usersRes.data.totalUsersByCompany);
+          setTotalDevicesByCompany(devicesRes.data.totalDevicesByCompany);
+        }
+
+        if (storedRole === 'user') {
+          const [devicesRes] = await Promise.all([
+           
+            axios.get('/api/devices/count/by-company', {
+              params: { companyName: storedCompany },
+            }),
+          ]);
+          setTotalDevicesByCompany(devicesRes.data.totalDevicesByCompany);
+        }
   
         setLoading(false);
       } catch (err) {
@@ -126,48 +152,54 @@ const fetchDevices = async () => {
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
       <div className="p-3">
       <Row className="g-4">
-  <Col xs={12} sm={4} md={4}>
-    <Card className={`${styles.deviceCard} text-center`}>
-      <Card.Body>
-        <i className={`bi bi-buildings-fill text-primary ${styles.deviceIcon}`}></i>
-        <Card.Title className={styles.cardTitle}>
-          {role === 'superadmin' && companyName === 'Gsn Soln' ? "Total Companies" : "Active Devices"}
-        </Card.Title>
-        <div className={styles.metricNumber}>
-          {role === 'superadmin' && companyName === 'Gsn Soln' ? totalCompanies : activeDevices}
-        </div>
-      </Card.Body>
-    </Card>
-  </Col>
+  {/* Only show this card for superadmin */}
+  {role === 'superadmin' && companyName === 'Gsn Soln' && (
+    <Col xs={12} sm={4} md={4}>
+      <Card className={`${styles.deviceCard} text-center`}>
+        <Card.Body>
+          <i className={`bi bi-buildings-fill text-primary ${styles.deviceIcon}`}></i>
+          <Card.Title className={styles.cardTitle}>Total Companies</Card.Title>
+          <div className={styles.metricNumber}>{totalCompanies}</div>
+        </Card.Body>
+      </Card>
+    </Col>
+  )}
 
-  <Col xs={12} sm={4} md={4}>
-    <Card className={`${styles.deviceCard} text-center`}>
-      <Card.Body>
-        <i className={`bi bi-people-fill text-secondary ${styles.deviceIcon}`}></i>
-        <Card.Title className={styles.cardTitle}>
-          {role === 'superadmin' && companyName === 'Gsn Soln' ? "Total Users" : "Inactive Devices"}
-        </Card.Title>
-        <div className={styles.metricNumber}>
-          {role === 'superadmin' && companyName === 'Gsn Soln' ? totalUsers : inactiveDevices}
-        </div>
-      </Card.Body>
-    </Card>
-  </Col>
+  {/* Users card */}
+  {(role === 'superadmin' && companyName === 'Gsn Soln') || role === 'admin' ? (
+    <Col xs={12} sm={4} md={4}>
+      <Card className={`${styles.deviceCard} text-center`}>
+        <Card.Body>
+          <i className={`bi bi-people-fill text-secondary ${styles.deviceIcon}`}></i>
+          <Card.Title className={styles.cardTitle}>Total Users</Card.Title>
+          <div className={styles.metricNumber}>
+            {role === 'superadmin'
+              ? totalUsers
+              : totalUsersByCompany}
+          </div>
+        </Card.Body>
+      </Card>
+    </Col>
+  ) : null}
 
-  <Col xs={12} sm={4} md={4}>
-    <Card className={`${styles.deviceCard} text-center`}>
-      <Card.Body>
-        <i className={`bi bi-hdd-stack-fill text-success ${styles.deviceIcon}`}></i>
-        <Card.Title className={styles.cardTitle}>
-  {role === 'superadmin' && companyName === 'Gsn Soln' ? "Total Devices" : "Alarms"}
-</Card.Title>
-<div className={styles.metricNumber}>
-  {role === 'superadmin' && companyName === 'Gsn Soln' ? totalDevices : alarms}
-</div>
-      </Card.Body>
-    </Card>
-  </Col>
+  {/* Devices card */}
+  {(role === 'superadmin' && companyName === 'Gsn Soln') || role === 'admin' || role === 'user' ? (
+    <Col xs={12} sm={4} md={4}>
+      <Card className={`${styles.deviceCard} text-center`}>
+        <Card.Body>
+          <i className={`bi bi-hdd-stack-fill text-success ${styles.deviceIcon}`}></i>
+          <Card.Title className={styles.cardTitle}>Total Devices</Card.Title>
+          <div className={styles.metricNumber}>
+            {role === 'superadmin'
+              ? totalDevices
+              : totalDevicesByCompany}
+          </div>
+        </Card.Body>
+      </Card>
+    </Col>
+  ) : null}
 </Row>
+
       </div>
 
       {/* Table Section */}

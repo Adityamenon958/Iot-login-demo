@@ -60,7 +60,7 @@ connectDB();
 //   }
 // });
 
-// Get total companies count (unique company names)
+// For Superadmin
 app.get('/api/companies/count', async (req, res) => {
   try {
     const companies = await User.distinct("companyName");
@@ -86,6 +86,29 @@ app.get('/api/devices/count', async (req, res) => {
     res.json({ totalDevices });
   } catch (err) {
     res.status(500).json({ message: "Error counting devices ❌" });
+  }
+});
+
+// For Admin
+// 🔹 Count users for a given company
+app.get('/api/users/count/by-company', async (req, res) => {
+  const { companyName } = req.query;
+  try {
+    const count = await User.countDocuments({ companyName });
+    res.json({ totalUsersByCompany: count });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to count users by company" });
+  }
+});
+
+// 🔹 Count devices for a given company
+app.get('/api/devices/count/by-company', async (req, res) => {
+  const { companyName } = req.query;
+  try {
+    const count = await Device.countDocuments({ companyName });
+    res.json({ totalDevicesByCompany: count });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to count devices by company" });
   }
 });
 
