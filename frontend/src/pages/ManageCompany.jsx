@@ -16,7 +16,10 @@ const AddUser = () => {
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false); // ✅ Modal toggle
+  const [showModal, setShowModal] = useState(false);
+  const [searchColumn, setSearchColumn] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortByDateAsc, setSortByDateAsc] = useState(false); // newest first by default
 
   useEffect(() => {
     fetchUsers();
@@ -43,7 +46,6 @@ const AddUser = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     try {
       const res = await axios.post('/api/users', formData);
       alert(res.data.message);
@@ -56,12 +58,29 @@ const AddUser = () => {
         name: '',
       });
       fetchUsers();
-      setShowModal(false); // ✅ Close modal after submit
+      setShowModal(false);
     } catch (err) {
       console.error(err.response?.data || err.message);
       alert(err.response?.data?.message || "Something went wrong ❌");
     }
   };
+
+  const filteredUsers = users
+    .filter(user => {
+      if (!searchTerm) return true;
+      const lowerTerm = searchTerm.toLowerCase();
+      if (searchColumn) {
+        return user[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
+      }
+      return Object.values(user).some(val =>
+        val?.toString().toLowerCase().includes(lowerTerm)
+      );
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return sortByDateAsc ? dateA - dateB : dateB - dateA;
+    });
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
@@ -74,14 +93,14 @@ const AddUser = () => {
         </Col>
       </Row>
 
-      {/* ✅ Modal for Add Company Form */}
+      {/* Modal */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
         <Modal.Header closeButton className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center">
           <Modal.Title>Add Company</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3" controlId="formName">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Full Name</Form.Label>
               <Form.Control
                 type="text"
@@ -92,8 +111,7 @@ const AddUser = () => {
                 className="custom_input1"
               />
             </Form.Group>
-
-            <Form.Group className="mb-3" controlId="formCompanyName">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Company Name</Form.Label>
               <Form.Control
                 type="text"
@@ -104,8 +122,7 @@ const AddUser = () => {
                 className="custom_input1"
               />
             </Form.Group>
-
-            <Form.Group className="mb-3" controlId="formContactInfo">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Contact Info</Form.Label>
               <Form.Control
                 type="text"
@@ -116,8 +133,7 @@ const AddUser = () => {
                 className="custom_input1"
               />
             </Form.Group>
-
-            <Form.Group className="mb-3" controlId="formEmail">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Email ID</Form.Label>
               <Form.Control
                 type="email"
@@ -128,8 +144,7 @@ const AddUser = () => {
                 className="custom_input1"
               />
             </Form.Group>
-
-            <Form.Group className="mb-3" controlId="formPassword">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Password</Form.Label>
               <Form.Control
                 type="password"
@@ -140,7 +155,6 @@ const AddUser = () => {
                 className="custom_input1"
               />
             </Form.Group>
-
             <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">
               Submit
             </Button>
@@ -148,10 +162,39 @@ const AddUser = () => {
         </Modal.Body>
       </Modal>
 
-      {/* ✅ Users Table */}
+      
+
+      {/* Table */}
       <Row>
         <div className="p-4 table2Scroll" style={{ position: 'relative', minHeight: '250px' }}>
           <h3 className="mb-3">Users List</h3>
+
+          {/* Search Filter */}
+      <Row className="mb-3">
+        <Col md={4} className=''>
+          <Form.Select
+            value={searchColumn}
+            onChange={(e) => setSearchColumn(e.target.value)}
+            className="custom_input1"
+          >
+            <option value="">All Columns</option>
+            <option value="companyName">Company</option>
+            <option value="name">Name</option>
+            <option value="contactInfo">Contact</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+          </Form.Select>
+        </Col>
+        <Col md={8} className=''>
+          <Form.Control
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="custom_input1"
+          />
+        </Col>
+      </Row>
 
           {loading && (
             <div style={{
@@ -178,27 +221,40 @@ const AddUser = () => {
                   <th>Contact</th>
                   <th>Email ID</th>
                   <th>Role</th>
+                  <th
+                    onClick={() => setSortByDateAsc(!sortByDateAsc)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    Date {sortByDateAsc ? "↑" : "↓"}
+                  </th>
                   <th>Toggle</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => (
-                  <tr key={user._id}>
-                    <td className="truncate-cell"><input type="checkbox" /></td>
-                    <td className="truncate-cell">{user.companyName || '-'}</td>
-                    <td className="truncate-cell">{user.name || '-'}</td>
-                    <td className="truncate-cell">{user.contactInfo || '-'}</td>
-                    <td className="truncate-cell">{user.email}</td>
-                    <td className="truncate-cell">{user.role}</td>
-                    <td>
-                      <Form.Check
-                        type="switch"
-                        id={`toggle-${user._id}`}
-                        label=""
-                      />
-                    </td>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="text-center">No matching users found</td>
                   </tr>
-                ))}
+                ) : (
+                  filteredUsers.map(user => (
+                    <tr key={user._id}>
+                      <td><input type="checkbox" /></td>
+                      <td>{user.companyName || '-'}</td>
+                      <td>{user.name || '-'}</td>
+                      <td>{user.contactInfo || '-'}</td>
+                      <td>{user.email}</td>
+                      <td>{user.role}</td>
+                      <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                      <td>
+                        <Form.Check
+                          type="switch"
+                          id={`toggle-${user._id}`}
+                          label=""
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           )}

@@ -16,7 +16,10 @@ export default function AddUserHome() {
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false); // ✅ Modal toggle
+  const [showModal, setShowModal] = useState(false);
+  const [searchColumn, setSearchColumn] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortByDateAsc, setSortByDateAsc] = useState(false); // false = newest first
 
   useEffect(() => {
     const adminCompany = localStorage.getItem("companyName");
@@ -24,7 +27,6 @@ export default function AddUserHome() {
       ...prev,
       companyName: adminCompany || '',
     }));
-
     fetchUsers();
   }, []);
 
@@ -65,19 +67,38 @@ export default function AddUserHome() {
         role: 'user',
         name: '',
       });
-      fetchUsers(); // Refresh table
-      setShowModal(false); // Close modal
+      fetchUsers();
+      setShowModal(false);
     } catch (err) {
       console.error(err.response?.data || err.message);
       alert(err.response?.data?.message || "Something went wrong ❌");
     }
   };
 
+  const filteredUsers = users
+    .filter(user => {
+      if (!searchTerm) return true;
+      const lowerTerm = searchTerm.toLowerCase();
+
+      if (searchColumn) {
+        return user[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
+      }
+
+      return Object.values(user).some(val =>
+        val?.toString().toLowerCase().includes(lowerTerm)
+      );
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return sortByDateAsc ? dateA - dateB : dateB - dateA;
+    });
+
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.main} p-4`}>
       <Row className="justify-content-between d-flex align-items-start flex-column justify-content-evenly">
         <Col><h2 className="mb-4">User Management</h2></Col>
-        <Col  xs="auto">
+        <Col xs="auto">
           <Button variant="success" onClick={() => setShowModal(true)} className='std_button'>
             Add User
           </Button>
@@ -91,7 +112,7 @@ export default function AddUserHome() {
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3" controlId="formName">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Full Name</Form.Label>
               <Form.Control
                 type="text"
@@ -103,7 +124,7 @@ export default function AddUserHome() {
               />
             </Form.Group>
 
-            <Form.Group className="mb-3" controlId="formContactInfo">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Contact Info</Form.Label>
               <Form.Control
                 type="text"
@@ -115,7 +136,7 @@ export default function AddUserHome() {
               />
             </Form.Group>
 
-            <Form.Group className="mb-3" controlId="formEmail">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Email ID</Form.Label>
               <Form.Control
                 type="email"
@@ -127,7 +148,7 @@ export default function AddUserHome() {
               />
             </Form.Group>
 
-            <Form.Group className="mb-3" controlId="formPassword">
+            <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Password</Form.Label>
               <Form.Control
                 type="password"
@@ -146,10 +167,40 @@ export default function AddUserHome() {
         </Modal.Body>
       </Modal>
 
+      
+
       {/* Users Table */}
-      <Row >
+      <Row>
         <div className="p-4 ps-3 table2Scroll" style={{ position: 'relative', minHeight: '250px' }}>
           <h3 className="mb-3">Users List</h3>
+
+          {/* Search Inputs */}
+      <Row className="mb-3">
+        <Col md={4}>
+          <Form.Select
+            value={searchColumn}
+            onChange={(e) => setSearchColumn(e.target.value)}
+            className="custom_input1"
+          >
+            <option value="">All Columns</option>
+            <option value="companyName">Company</option>
+            <option value="name">Name</option>
+            <option value="contactInfo">Contact</option>
+            <option value="email">Email</option>
+            <option value="password">Password</option>
+            <option value="role">Role</option>
+          </Form.Select>
+        </Col>
+        <Col md={8}>
+          <Form.Control
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="custom_input1"
+          />
+        </Col>
+      </Row>
 
           {loading && (
             <div style={{
@@ -171,32 +222,46 @@ export default function AddUserHome() {
               <thead>
                 <tr>
                   <th><input type="checkbox" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => setSortByDateAsc(!sortByDateAsc)}>
+                    Date {sortByDateAsc ? '↑' : '↓'}
+                  </th>
                   <th>Company Name</th>
                   <th>Name</th>
                   <th>Contact</th>
                   <th>Email ID</th>
                   <th>Password</th>
+                  <th>Role</th>
+                 
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => (
-                  <tr key={user._id}>
-                    <td><input type="checkbox" /></td>
-                    <td>{user.companyName || '-'}</td>
-                    <td>{user.name || '-'}</td>
-                    <td>{user.contactInfo || '-'}</td>
-                    <td>{user.email}</td>
-                    <td>{user.password}</td>
-                    <td>
-                      <Form.Check
-                        type="switch"
-                        id={`toggle-${user._id}`}
-                        label=""
-                      />
-                    </td>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" className="text-center">No matching users found</td>
                   </tr>
-                ))}
+                ) : (
+                  filteredUsers.map(user => (
+                    <tr key={user._id}>
+                      <td><input type="checkbox" /></td>
+                      <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+
+                      <td>{user.companyName || '-'}</td>
+                      <td>{user.name || '-'}</td>
+                      <td>{user.contactInfo || '-'}</td>
+                      <td>{user.email}</td>
+                      <td>{user.password}</td>
+                      <td>{user.role}</td>
+                      <td>
+                        <Form.Check
+                          type="switch"
+                          id={`toggle-${user._id}`}
+                          label=""
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           )}

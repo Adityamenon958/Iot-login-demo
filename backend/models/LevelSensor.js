@@ -4,27 +4,28 @@ const mongoose = require('mongoose');
 
 const levelSensorSchema = new mongoose.Schema({
   D: {
-    type: String,
-    required: true
+    type: String
   },
-  address: {
-    type: Number,
-    required: true
+  uid: {
+    type: String
+  },
+  level: {
+    type: Number
+  },
+  ts: {
+    type: String  // or `Date` if you'd like to parse ISO strings
   },
   data: {
-    type: [Number],
-    required: true
+    type: [Number]
+  },
+  address: {
+    type: Number
   },
   vehicleNo: {
-    type: String,
-    required: true
-  },
-  uid: {              // <-- new field added here
-    type: String,
-    required: true
+    type: String
   }
 }, {
-  timestamps: true
+  timestamps: true  // adds createdAt and updatedAt automatically
 });
 
 module.exports = mongoose.model('LevelSensor', levelSensorSchema);

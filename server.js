@@ -190,32 +190,31 @@ app.get('/api/users', async (req, res) => {
 
 // POST sensor data from IoT device
 app.post('/api/levelsensor', async (req, res) => {
-  console.log("Received sensor POST data:", req.body);  
+  console.log("📡 Incoming sensor data:", req.body);
+
   try {
-    // Destructure uid from req.body as well
-    const { D, address, data, "Vehicle no": vehicleNo, uid } = req.body;
+    // Accept everything from body
+    const { D, UID, LEVEL, TS, vehicleNo, address, data } = req.body;
 
-    // Validate required fields including uid
-    if (!D || !address || !data || !vehicleNo || !uid) {
-      return res.status(400).json({ message: "Missing required fields ❌" });
-    }
-
+    // Create the flexible object for LevelSensor
     const newSensorData = new LevelSensor({
-      D,
-      address,
-      data,
-      vehicleNo,
-      uid,    // Save uid here
+      D: D || null,
+      uid: UID || null,
+      level: LEVEL !== undefined ? LEVEL : null,
+      ts: TS || null,
+      vehicleNo: vehicleNo || null,
+      address: address !== undefined ? address : null,
+      data: Array.isArray(data) ? data : (data !== undefined ? [data] : null)
     });
 
     await newSensorData.save();
-
     res.status(201).json({ message: "Sensor data saved successfully ✅" });
   } catch (err) {
-    console.error("Error saving sensor data:", err);
+    console.error("❌ Sensor save error:", err);
     res.status(500).json({ message: "Internal Server Error 💥" });
   }
 });
+
 
 // GET all sensor data (for frontend table)
 app.get('/api/levelsensor', async (req, res) => {
