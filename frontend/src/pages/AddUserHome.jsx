@@ -172,7 +172,7 @@ export default function AddUserHome() {
       {/* Users Table */}
       <Row>
         <div className="p-4 ps-3 table2Scroll" style={{ position: 'relative', minHeight: '250px' }}>
-          <h3 className="mb-3">Users List</h3>
+          <h3 className="">Users List</h3>
 
           {/* Search Inputs */}
       <Row className="mb-3">

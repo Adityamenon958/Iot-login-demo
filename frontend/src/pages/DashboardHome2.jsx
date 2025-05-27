@@ -139,7 +139,7 @@ const fetchDevices = async () => {
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
-      <div className="p-3">
+      <div className="p-3 mt-2">
       <Row className="g-4">
   {/* Only show this card for superadmin */}
   {role === 'superadmin' && companyName === 'Gsn Soln' && (
@@ -192,7 +192,7 @@ const fetchDevices = async () => {
       </div>
 
       {/* Table Section */}
-      <div className="mt-4" style={{ position: 'relative', minHeight: '200px' }}>
+      <div className="mt-3 ms-3 " style={{ position: 'relative', minHeight: '200px' }}>
   <h5>Sensor Data Logs</h5>
 
   {loading && (
@@ -211,7 +211,7 @@ const fetchDevices = async () => {
   )}
 
   {!loading && (
-    <div className='tableScroll mb-2'>
+    <div className='tableScroll  bg-danger'>
       <Table striped bordered hover responsive>
         <thead>
           <tr>
