@@ -32,11 +32,16 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     fetchUserInfo();
   }, []);
 
-  const handleLogout = () => {
-    googleLogout();
-    localStorage.clear();
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await axios.post('/api/logout', {}, { withCredentials: true }); // ✅ Clears cookie
+      navigate('/');
+    } catch (err) {
+      console.error("Logout error:", err.message);
+      alert("Logout failed");
+    }
   };
+  
 
   useEffect(() => {
     const handleClickOutside = (event) => {

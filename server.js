@@ -217,6 +217,16 @@ app.post('/api/login', async (req, res) => {
       { expiresIn: '1h' }
     );
 
+    app.post('/api/logout', (req, res) => {
+      res.clearCookie('token', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Strict',
+      });
+      res.json({ message: 'Logged out successfully ✅' });
+    });
+    
+
     res
       .cookie('token', token, {
         httpOnly: true,
