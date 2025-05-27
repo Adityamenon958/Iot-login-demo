@@ -7,60 +7,39 @@ const Device = require('./backend/models/Device');
 const User = require('./backend/models/User');
 const LevelSensor = require('./backend/models/LevelSensor');
 const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser'); // ✅ added cookie-parser
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-app.use(cors());
+
+// ✅ Middleware
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser()); // ✅ use cookie-parser
 
 // DB connect
 connectDB();
 
+app.get('/api/auth/userinfo', (req, res) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
 
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
+    User.findById(decoded.id).then(user => {
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json({ role: user.role, companyName: user.companyName });
+    });
+  } catch (err) {
+    console.error("Auth error:", err.message);
+    res.status(403).json({ message: "Forbidden" });
+  }
+});
 
-
-// For Old Devices 
-// app.get('/api/devices', async (req, res) => {
-//   try {
-//     const devices = await Device.find();
-//     res.json(devices);
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to fetch devices" });
-//   }
-// });
-
-
-
-// app.get('/api/seed', async (req, res) => {
-//   try {
-//     // await Device.insertMany([
-//     //   { name: "Sensor Alpha", location: "Mumbai", subscription: "Active" },
-//     //   { name: "Sensor Beta", location: "Delhi", subscription: "Inactive" },
-//     //   { name: "Thermal Scanner", location: "Bangalore", subscription: "Active" },
-//     //   { name: "Pressure Monitor", location: "Chennai", subscription: "Inactive" },
-//     //   { name: "Humidity Tracker", location: "Hyderabad", subscription: "Active" },
-
-//     await User.create({ email: "admin2@example.com", password: "admin123", role: "user" });
-    
-    
-//     res.send("Database seeded ✅");
-//   } catch (err) {
-//     console.error("🔥 Seeding error:", err);
-//     res.status(500).json({ message: "Seeding failed ❌" , error: err.message  });
-//   }
-// });
-
-// app.post('/api/devices', async (req, res) => {
-//   try {
-//     const newDevice = new Device(req.body);
-//     await newDevice.save();
-//     res.status(201).json(newDevice);
-//   } catch (err) {
-//     res.status(400).json({ message: "Failed to add device" });
-//   }
-// });
-
-// For Superadmin
+// Superadmin Routes
 app.get('/api/companies/count', async (req, res) => {
   try {
     const companies = await User.distinct("companyName");
@@ -70,7 +49,6 @@ app.get('/api/companies/count', async (req, res) => {
   }
 });
 
-// Get total users count
 app.get('/api/users/count', async (req, res) => {
   try {
     const count = await User.countDocuments();
@@ -89,8 +67,7 @@ app.get('/api/devices/count', async (req, res) => {
   }
 });
 
-// For Admin
-// 🔹 Count users for a given company
+// Admin Routes
 app.get('/api/users/count/by-company', async (req, res) => {
   const { companyName } = req.query;
   try {
@@ -101,7 +78,6 @@ app.get('/api/users/count/by-company', async (req, res) => {
   }
 });
 
-// 🔹 Count devices for a given company
 app.get('/api/devices/count/by-company', async (req, res) => {
   const { companyName } = req.query;
   try {
@@ -112,24 +88,11 @@ app.get('/api/devices/count/by-company', async (req, res) => {
   }
 });
 
-// app.get('/api/dashboard', async (req, res) => {
-//   try {
-//     const devices = await Device.find();
-//     const activeDevices = devices.filter(d => d.subscription === "Active").length;
-//     const inactiveDevices = devices.filter(d => d.subscription === "Inactive").length;
-//     const alarms = 0;
-//     res.json({ activeDevices, inactiveDevices, alarms });
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to fetch dashboard stats" });
-//   }
-// });
-
-// For Master Devices Table
+// Devices
 app.post('/api/devices', async (req, res) => {
   try {
     const { companyName, uid, deviceId, deviceType, location, frequency } = req.body;
 
-    // Optional basic validation
     if (!companyName || !uid || !deviceId || !deviceType || !location || !frequency) {
       return res.status(400).json({ message: 'All fields are required' });
     }
@@ -144,7 +107,6 @@ app.post('/api/devices', async (req, res) => {
     });
 
     await newDevice.save();
-
     res.status(201).json({ message: 'Device added successfully' });
   } catch (error) {
     console.error('Error adding device:', error);
@@ -153,14 +115,9 @@ app.post('/api/devices', async (req, res) => {
 });
 
 app.get('/api/devices', async (req, res) => {
-  const companyName = req.query.companyName; // get it from URL query
-  // console.log('Received company name in query:', companyName);
+  const companyName = req.query.companyName;
   try {
-    let query = {};
-    if (companyName) {
-      query.companyName = companyName;
-    }
-
+    const query = companyName ? { companyName } : {};
     const devices = await Device.find(query);
     res.json(devices);
   } catch (error) {
@@ -169,16 +126,11 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
-
+// Users
 app.get('/api/users', async (req, res) => {
-  const companyName = req.query.companyName; // get from frontend query
-
+  const companyName = req.query.companyName;
   try {
-    let query = {};
-    if (companyName) {
-      query.companyName = companyName;
-    }
-
+    const query = companyName ? { companyName } : {};
     const users = await User.find(query);
     res.json(users);
   } catch (error) {
@@ -187,16 +139,40 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-
-// POST sensor data from IoT device
-app.post('/api/levelsensor', async (req, res) => {
-  console.log("📡 Incoming sensor data:", req.body);
+app.post('/api/users', async (req, res) => {
+  const { email, password, role, name, companyName, contactInfo } = req.body;
 
   try {
-    // Accept everything from body
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
+
+    const newUser = new User({ email, password, role, name, companyName, contactInfo });
+    await newUser.save();
+
+    res.status(201).json({ message: "User created successfully ✅" });
+  } catch (err) {
+    console.error("Add user error:", err.message);
+    res.status(500).json({ message: "Server error ❌" });
+  }
+});
+
+app.delete('/api/devices/:id', async (req, res) => {
+  try {
+    const deleted = await Device.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Device not found' });
+    res.json({ message: 'Device deleted successfully' });
+  } catch (err) {
+    console.error("❌ Delete failed:", err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Level Sensor Data
+app.post('/api/levelsensor', async (req, res) => {
+  console.log("📡 Incoming sensor data:", req.body);
+  try {
     const { D, UID, LEVEL, TS, vehicleNo, address, data } = req.body;
 
-    // Create the flexible object for LevelSensor
     const newSensorData = new LevelSensor({
       D: D || null,
       uid: UID || null,
@@ -215,11 +191,9 @@ app.post('/api/levelsensor', async (req, res) => {
   }
 });
 
-
-// GET all sensor data (for frontend table)
 app.get('/api/levelsensor', async (req, res) => {
   try {
-    const allData = await LevelSensor.find().sort({ D: -1 }); // newest first
+    const allData = await LevelSensor.find().sort({ D: -1 });
     res.json(allData);
   } catch (err) {
     console.error("Error fetching sensor data:", err);
@@ -227,86 +201,49 @@ app.get('/api/levelsensor', async (req, res) => {
   }
 });
 
-
-
-app.post('/api/users', async (req, res) => {
-  const { email, password, role, name, companyName, contactInfo } = req.body;
-
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: "User already exists" });
-
-    const newUser = new User({ email, password, role, name, companyName, contactInfo });
-    await newUser.save();
-    
-    res.status(201).json({ message: "User created successfully ✅" });
-  } catch (err) {
-    console.error("Add user error:", err.message);
-    res.status(500).json({ message: "Server error ❌" });
-  }
-});
-
-app.delete('/api/devices/:id', async (req, res) => {
-  try {
-    const deleted = await Device.findByIdAndDelete(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ message: 'Device not found' });
-    }
-    res.json({ message: 'Device deleted successfully' });
-  } catch (err) {
-    console.error("❌ Delete failed:", err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-
-
+// ✅ Modified Login API — sets token as secure HTTP-only cookie
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
     const user = await User.findOne({ email });
-
     if (!user || user.password !== password) {
       return res.status(401).json({ message: "Invalid credentials ❌" });
     }
 
-    // Create JWT token
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET || "supersecretkey",  // Use env in prod
+      process.env.JWT_SECRET || "supersecretkey",
       { expiresIn: '1h' }
     );
 
-    res.json({
-      message: "Login successful ✅",
-      token,
-      role: user.role,
-      companyName: user.companyName,
-    });
+    res
+      .cookie('token', token, {
+        httpOnly: true,
+        secure: true, // ⚠️ must use HTTPS
+        sameSite: 'Strict',
+        maxAge: 60 * 60 * 1000, // 1 hour
+      })
+      .json({
+        message: "Login successful ✅",
+        role: user.role,
+        companyName: user.companyName,
+      });
   } catch (err) {
     console.error("Login error:", err.message);
     res.status(500).json({ message: "Login failed ❌" });
   }
 });
 
-
-
-
-// ✅ Serve frontend from frontend/dist
+// Serve frontend
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
-
 app.get('*', (req, res) => {
-  // If the request is for an API route and didn't match anything, send 404 JSON
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ message: 'API route not found' });
   }
-
-  // Otherwise, serve React app
   res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
-
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);

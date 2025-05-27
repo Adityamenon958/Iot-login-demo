@@ -10,6 +10,8 @@ export default function AddDevice() {
 
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [role, setRole] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [deviceId, setDeviceId] = useState('');
   const [deviceType, setDeviceType] = useState('');
@@ -19,26 +21,37 @@ export default function AddDevice() {
   const [showModal, setShowModal] = useState(false);
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortByDateAsc, setSortByDateAsc] = useState(false); // sorting toggle
+  const [sortByDateAsc, setSortByDateAsc] = useState(false);
 
   useEffect(() => {
-    const role = localStorage.getItem('role');
-    const company = localStorage.getItem('companyName');
-    const isAuthorized = role === "admin" || (role === "superadmin" && company === "Gsn Soln");
-    if (!isAuthorized) {
-      navigate('/dashboard');
-      console.log("Unauthorized access");
-    }
-    setCompanyName(company || '');
-    fetchDevices();
+    const fetchAuth = async () => {
+      try {
+        const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
+        const { role, companyName } = res.data;
+        setRole(role);
+        setCompanyName(companyName);
+
+        const isAuthorized = role === "admin" || (role === "superadmin" && companyName === "Gsn Soln");
+        if (!isAuthorized) {
+          console.warn("Unauthorized access ❌");
+          navigate('/dashboard');
+        } else {
+          fetchDevices(companyName);
+        }
+      } catch (err) {
+        console.error("Auth fetch failed:", err.message);
+        navigate('/dashboard');
+      }
+    };
+
+    fetchAuth();
   }, [navigate]);
 
-  const fetchDevices = async () => {
+  const fetchDevices = async (company) => {
     setLoading(true);
-    const companyName = localStorage.getItem('companyName');
     try {
       const response = await axios.get('/api/devices', {
-        params: { companyName }
+        params: { companyName: company }
       });
       setDevices(response.data);
     } catch (error) {
@@ -62,6 +75,7 @@ export default function AddDevice() {
       alert('Device with same UID already exists!');
       return;
     }
+
     const formData = {
       companyName,
       uid,
@@ -70,9 +84,10 @@ export default function AddDevice() {
       location,
       frequency,
     };
+
     try {
       const response = await axios.post('/api/devices', formData);
-      fetchDevices();
+      fetchDevices(companyName);
       alert(response.data.message);
       setDeviceId('');
       setDeviceType('');
@@ -189,7 +204,7 @@ export default function AddDevice() {
             <Table striped bordered hover responsive>
               <thead>
                 <tr>
-                <th style={{ cursor: 'pointer' }} onClick={() => setSortByDateAsc(!sortByDateAsc)}>
+                  <th style={{ cursor: 'pointer' }} onClick={() => setSortByDateAsc(!sortByDateAsc)}>
                     Date {sortByDateAsc ? '↑' : '↓'}
                   </th>
                   <th>UID</th>
@@ -198,7 +213,6 @@ export default function AddDevice() {
                   <th>Location</th>
                   <th>Frequency</th>
                   <th>Company</th>
-                  
                 </tr>
               </thead>
               <tbody>
@@ -209,8 +223,7 @@ export default function AddDevice() {
                 ) : (
                   filteredDevices.map((dev, index) => (
                     <tr key={index}>
-                                            <td>{new Date(dev.createdAt).toLocaleDateString()}</td>
-
+                      <td>{new Date(dev.createdAt).toLocaleDateString()}</td>
                       <td>{dev.uid}</td>
                       <td>{dev.deviceId}</td>
                       <td>{dev.deviceType}</td>

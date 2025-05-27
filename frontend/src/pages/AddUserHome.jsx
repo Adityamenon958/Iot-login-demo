@@ -19,24 +19,34 @@ export default function AddUserHome() {
   const [showModal, setShowModal] = useState(false);
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortByDateAsc, setSortByDateAsc] = useState(false); // false = newest first
+  const [sortByDateAsc, setSortByDateAsc] = useState(false);
 
   useEffect(() => {
-    const adminCompany = localStorage.getItem("companyName");
-    setFormData((prev) => ({
-      ...prev,
-      companyName: adminCompany || '',
-    }));
-    fetchUsers();
+    const fetchUserInfo = async () => {
+      try {
+        const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
+        const { companyName } = res.data;
+
+        setFormData((prev) => ({
+          ...prev,
+          companyName: companyName || '',
+        }));
+
+        fetchUsers(companyName);
+      } catch (err) {
+        console.error("Failed to fetch user info:", err);
+      }
+    };
+
+    fetchUserInfo();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (companyName) => {
     setLoading(true);
-    const companyName = localStorage.getItem("companyName");
-
     try {
       const res = await axios.get('/api/users', {
-        params: { companyName }
+        params: { companyName },
+        withCredentials: true,
       });
       setUsers(res.data);
     } catch (err) {
@@ -57,17 +67,17 @@ export default function AddUserHome() {
     e.preventDefault();
 
     try {
-      const res = await axios.post('/api/users', formData);
+      const res = await axios.post('/api/users', formData, { withCredentials: true });
       alert(res.data.message);
       setFormData({
-        companyName: localStorage.getItem("companyName") || '',
+        companyName: formData.companyName,
         contactInfo: '',
         email: '',
         password: '',
         role: 'user',
         name: '',
       });
-      fetchUsers();
+      fetchUsers(formData.companyName);
       setShowModal(false);
     } catch (err) {
       console.error(err.response?.data || err.message);
@@ -114,52 +124,20 @@ export default function AddUserHome() {
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Full Name</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Enter Full name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="custom_input1"
-              />
+              <Form.Control type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Enter Full name" className="custom_input1" />
             </Form.Group>
-
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Contact Info</Form.Label>
-              <Form.Control
-                type="text"
-                name="contactInfo"
-                value={formData.contactInfo}
-                onChange={handleChange}
-                placeholder="Enter contact info"
-                className="custom_input1"
-              />
+              <Form.Control type="text" name="contactInfo" value={formData.contactInfo} onChange={handleChange} placeholder="Enter contact info" className="custom_input1" />
             </Form.Group>
-
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Email ID</Form.Label>
-              <Form.Control
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Enter email"
-                className="custom_input1"
-              />
+              <Form.Control type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter email" className="custom_input1" />
             </Form.Group>
-
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Password</Form.Label>
-              <Form.Control
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter password"
-                className="custom_input1"
-              />
+              <Form.Control type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter password" className="custom_input1" />
             </Form.Group>
-
             <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">
               Submit
             </Button>
@@ -167,52 +145,29 @@ export default function AddUserHome() {
         </Modal.Body>
       </Modal>
 
-      
-
       {/* Users Table */}
       <Row>
         <div className="p-4 ps-3 table2Scroll" style={{ position: 'relative', minHeight: '250px' }}>
           <h3 className="">Users List</h3>
-
-          {/* Search Inputs */}
-      <Row className="mb-3">
-        <Col md={4}>
-          <Form.Select
-            value={searchColumn}
-            onChange={(e) => setSearchColumn(e.target.value)}
-            className="custom_input1"
-          >
-            <option value="">All Columns</option>
-            <option value="companyName">Company</option>
-            <option value="name">Name</option>
-            <option value="contactInfo">Contact</option>
-            <option value="email">Email</option>
-            <option value="password">Password</option>
-            <option value="role">Role</option>
-          </Form.Select>
-        </Col>
-        <Col md={8}>
-          <Form.Control
-            type="text"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="custom_input1"
-          />
-        </Col>
-      </Row>
+          <Row className="mb-3">
+            <Col md={4}>
+              <Form.Select value={searchColumn} onChange={(e) => setSearchColumn(e.target.value)} className="custom_input1">
+                <option value="">All Columns</option>
+                <option value="companyName">Company</option>
+                <option value="name">Name</option>
+                <option value="contactInfo">Contact</option>
+                <option value="email">Email</option>
+                <option value="password">Password</option>
+                <option value="role">Role</option>
+              </Form.Select>
+            </Col>
+            <Col md={8}>
+              <Form.Control type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="custom_input1" />
+            </Col>
+          </Row>
 
           {loading && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 10,
-              backgroundColor: 'rgba(255,255,255,0.85)',
-              padding: '2rem',
-              borderRadius: '0.5rem'
-            }}>
+            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2rem', borderRadius: '0.5rem' }}>
               <Spinner animation="border" variant="primary" />
             </div>
           )}
@@ -231,21 +186,17 @@ export default function AddUserHome() {
                   <th>Email ID</th>
                   <th>Password</th>
                   <th>Role</th>
-                 
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan="9" className="text-center">No matching users found</td>
-                  </tr>
+                  <tr><td colSpan="9" className="text-center">No matching users found</td></tr>
                 ) : (
                   filteredUsers.map(user => (
                     <tr key={user._id}>
                       <td><input type="checkbox" /></td>
                       <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-
                       <td>{user.companyName || '-'}</td>
                       <td>{user.name || '-'}</td>
                       <td>{user.contactInfo || '-'}</td>
@@ -253,11 +204,7 @@ export default function AddUserHome() {
                       <td>{user.password}</td>
                       <td>{user.role}</td>
                       <td>
-                        <Form.Check
-                          type="switch"
-                          id={`toggle-${user._id}`}
-                          label=""
-                        />
+                        <Form.Check type="switch" id={`toggle-${user._id}`} label="" />
                       </td>
                     </tr>
                   ))

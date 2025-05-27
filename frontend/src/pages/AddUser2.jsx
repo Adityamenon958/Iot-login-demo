@@ -1,14 +1,28 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
 
-const AddUser2 = ({ children }) => {
-    const role = localStorage.getItem("role");
-  
-    if (role !== "admin") {
-      return <Navigate to="/dashboard" replace />;
-    }
-  
-    return children;
-  };
-  
-  export default AddUser2;
+import React, { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import axios from 'axios';
+
+const AddUser = ({ children }) => {
+  const [isAuthorized, setIsAuthorized] = useState(null);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
+        const { role } = res.data;
+        setIsAuthorized(role === "admin");
+      } catch (err) {
+        setIsAuthorized(false);
+      }
+    };
+
+    checkRole();
+  }, []);
+
+  if (isAuthorized === null) return null;
+
+  return isAuthorized ? children : <Navigate to="/dashboard" replace />;
+};
+
+export default AddUser;

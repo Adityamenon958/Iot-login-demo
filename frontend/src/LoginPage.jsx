@@ -6,30 +6,23 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { SiGmail } from "react-icons/si";
 import { X } from 'lucide-react';
-import "./LoginPage.css"
+import "./LoginPage.css";
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode'; // ✅ correct for ES Modules
-
-
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
-const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('');
 
-
-
-// if companyName is present in the token
-
+  // Google login (cookie setup should be done in backend if used)
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
-      console.log("Login Success ✅", tokenResponse);
-      localStorage.setItem("token", tokenResponse.access_token);
-      navigate('/dashboard');
+      console.log("Google Login Success ✅", tokenResponse);
+      navigate('/dashboard'); // Token will be stored via backend cookie if needed
     },
     onError: () => {
-      console.log("Login Failed ❌");
+      console.log("Google Login Failed ❌");
     },
   });
 
@@ -39,35 +32,25 @@ const [password, setPassword] = useState('');
 
   const handleEmailLoginSubmit = async (e) => {
     e.preventDefault();
-  
     try {
-      const response = await axios.post('/api/login', {
-        email,
-        password
-      });
-      const decoded = jwtDecode(response.data.token);
-console.log("Decoded JWT:", decoded);
-  
-      console.log("Login Success ✅", response.data);
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("role", response.data.role);
-      localStorage.setItem("companyName", response.data.companyName);
-      console.log("Full response:", response.data);
-  
+      const response = await axios.post(
+        '/api/login',
+        { email, password },
+        { withCredentials: true } // ✅ Important for sending/receiving cookies
+      );
+
+      console.log("Login Response ✅", response.data);
       navigate('/dashboard');
     } catch (error) {
       console.error("Login Failed ❌", error.response?.data?.message || error.message);
       alert("Invalid login");
     }
   };
-  
-  
 
   return (
     <>
       <Container fluid className={styles.loginContainer}>
         <Row className="min-vh-100">
-          {/* Left Section */}
           <Col xs={12} md={6} className={`${styles.leftSection} d-flex justify-content-center align-items-center`}>
             <Card className={`text-center ${styles.iotCard}`}>
               <Card.Body className="d-flex align-items-center justify-content-center flex-column">
@@ -79,13 +62,11 @@ console.log("Decoded JWT:", decoded);
             </Card>
           </Col>
 
-          {/* Right Section */}
           <Col xs={12} md={6} className={`${styles.rightSection} d-flex justify-content-center align-items-center`}>
             <Card className={`text-center ${styles.iotCard2}`}>
               <Card.Body className="d-flex align-items-center justify-content-center flex-column">
                 <div className={`${styles.loginPlaceholder} d-flex justify-content-center align-items-center flex-column`}>
                   <h3 className={styles.loginTitle}>To Login</h3>
-
                   <Button className={styles.googleButton} onClick={() => login()}>
                     <img
                       src="https://developers.google.com/identity/images/g-logo.png"
@@ -110,50 +91,53 @@ console.log("Decoded JWT:", decoded);
 
       {/* Email Login Modal */}
       <Modal
-  show={showEmailModal}
-  onHide={() => setShowEmailModal(false)}
-  centered
-  backdrop="static"
-  className="custom_modal" 
->
-  <Modal.Header
-    className="border-0 px-4 pt-4 d-flex justify-content-between align-items-center" // Removes border, adds spacing
-  >
-    <Modal.Title>Sign in</Modal.Title>
-    <Button
-      variant="light"
-      onClick={() => setShowEmailModal(false)}
-      className="border-0"
-    >
-      <X size={20} />
-    </Button>
-  </Modal.Header>
+        show={showEmailModal}
+        onHide={() => setShowEmailModal(false)}
+        centered
+        backdrop="static"
+        className="custom_modal"
+      >
+        <Modal.Header className="border-0 px-4 pt-4 d-flex justify-content-between align-items-center">
+          <Modal.Title>Sign in</Modal.Title>
+          <Button variant="light" onClick={() => setShowEmailModal(false)} className="border-0">
+            <X size={20} />
+          </Button>
+        </Modal.Header>
 
-  <Modal.Body className="px-4 pb-4">
-    <Form onSubmit={handleEmailLoginSubmit}> 
-      <Form.Group controlId="formEmail">
-        <Form.Label className="custom_label">Email address</Form.Label>
-        <Form.Control type="email" placeholder="Enter email" className="custom_input"  value={email}
-        onChange={(e) => setEmail(e.target.value)}/>
-      </Form.Group>
+        <Modal.Body className="px-4 pb-4">
+          <Form onSubmit={handleEmailLoginSubmit}>
+            <Form.Group controlId="formEmail">
+              <Form.Label className="custom_label">Email address</Form.Label>
+              <Form.Control
+                type="email"
+                placeholder="Enter email"
+                className="custom_input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Form.Group>
 
-      <Form.Group controlId="formPassword" className="mt-3">
-        <Form.Label className="custom_label">Password</Form.Label>
-        <Form.Control type="password" placeholder="Password" className="custom_input" value={password}
-  onChange={(e) => setPassword(e.target.value)}/>
-      </Form.Group>
+            <Form.Group controlId="formPassword" className="mt-3">
+              <Form.Label className="custom_label">Password</Form.Label>
+              <Form.Control
+                type="password"
+                placeholder="Password"
+                className="custom_input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </Form.Group>
 
-      <div className="text-end mt-2">
-        <a href="#" className="text-decoration-none">Forgot password?</a>
-      </div>
+            <div className="text-end mt-2">
+              <a href="#" className="text-decoration-none">Forgot password?</a>
+            </div>
 
-      <Button className="w-100 mt-4 signIn" variant="primary" type="submit">
-        Sign In
-      </Button>
-    </Form>
-  </Modal.Body>
-</Modal>
-
+            <Button className="w-100 mt-4 signIn" variant="primary" type="submit">
+              Sign In
+            </Button>
+          </Form>
+        </Modal.Body>
+      </Modal>
     </>
   );
 };
