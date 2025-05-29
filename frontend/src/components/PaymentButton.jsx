@@ -4,37 +4,46 @@ import axios from 'axios';
 export default function PaymentButton({ amount }) {
   const loadRazorpay = async () => {
     try {
-      const { data: order } = await axios.post("/api/payment/order", { amount });
+      // Determine the plan type from the amount
+      let planType;
+      if (amount === 99) planType = "standard";
+      else if (amount === 199) planType = "premium";
+      else {
+        alert("Invalid plan amount selected");
+        return;
+      }
+
+      // Request backend to create Razorpay subscription
+      const { data: subscription } = await axios.post("/api/payment/subscription", {
+        planType,
+      });
 
       const options = {
-        key: "rzp_test_jBIMs968bslFfa", // 🔁 Replace with your Razorpay TEST key
-        amount: order.amount,
-        currency: order.currency,
+        key: "rzp_test_jBIMs968bslFfa", // ✅ Use your Razorpay TEST key
         name: "IoT Dashboard Subscription",
-        description: `Pay ₹${amount} for Subscription`,
-        order_id: order.id,
+        description: `Monthly ${planType} plan`,
+        subscription_id: subscription.id, // 🔑 Required for recurring
         handler: function (response) {
-          alert("✅ Payment Successful!");
-          console.log("Payment Response:", response);
-
-          // OPTIONAL: You can POST this response to backend for verification
+          alert("✅ Subscription started successfully!");
+          console.log("Subscription Response:", response);
+          // You can send this response to backend if needed
         },
         theme: {
           color: "#4db3b3",
         },
       };
 
-      const razor = new window.Razorpay(options);
-      razor.open();
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (err) {
-      console.error("❌ Razorpay error", err);
-      alert("Failed to initiate payment");
+      console.error("❌ Razorpay subscription error", err);
+      alert("Failed to initiate subscription");
     }
   };
 
   return (
     <button className="btn btn-primary mt-3" onClick={loadRazorpay}>
-      Pay ₹{amount}
+      Subscribe for ₹{amount}/month
     </button>
   );
 }

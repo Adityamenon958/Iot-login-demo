@@ -30,24 +30,36 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// ✅ Razorpay Order Route
-app.post('/api/payment/order', async (req, res) => {
-  const { amount } = req.body;
+// ✅ Razorpay Subscription Route
+app.post('/api/payment/subscription', async (req, res) => {
+  const { planType } = req.body;
 
-  const options = {
-    amount: amount * 100, // convert ₹ to paise
-    currency: 'INR',
-    receipt: `receipt_order_${Math.floor(Math.random() * 1000000)}`,
+  // map plan types to Razorpay plan_ids
+  const planMap = {
+    standard: 'plan_QahYd7AXNyAmW0', // ₹99 plan
+    premium: 'plan_QahYvtyIlkGGuA',  // ₹199 plan
   };
 
+  const plan_id = planMap[planType];
+
+  if (!plan_id) {
+    return res.status(400).json({ message: 'Invalid plan type' });
+  }
+
   try {
-    const order = await razorpay.orders.create(options);
-    res.json(order);
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: plan_id,
+      customer_notify: 1,
+      total_count: 12, // optional: 12 months max billing
+    });
+
+    res.json(subscription);
   } catch (err) {
-    console.error("Error creating Razorpay order:", err);
-    res.status(500).send("Failed to create Razorpay order");
+    console.error("Error creating subscription:", err);
+    res.status(500).json({ message: "Subscription creation failed" });
   }
 });
+
 
 // ✅ User Info from Token (via Cookie)
 app.get('/api/auth/userinfo', (req, res) => {
