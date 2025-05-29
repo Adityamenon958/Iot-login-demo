@@ -93,6 +93,74 @@
     color: #000;
   }
 
+  /* Subscription Page */
+  .subscriptionCard {
+    width: 100%;
+    max-width: 500px;
+    min-height: 360px;
+    max-height: 400px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    border-radius: 20px;
+    padding: 24px 20px;
+    background: linear-gradient(to bottom right, #f8f9fa, #ffffff);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  .subscriptionCard:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  }
+  
+  .subscriptionTitle {
+    font-size: 2.2rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    white-space: nowrap;
+  }
+  
+  .subscriptionPrice {
+    font-size: 1.5rem;
+    font-weight: 500;
+    white-space: nowrap;
+    margin: 30px 0;
+  }
+  
+  .subscribeBtn {
+    background-color: #4db3b3;
+    border: none;
+    color: white;
+    padding: 10px 24px;
+    margin-top: auto;
+    border-radius: 25px;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+  }
+  
+  .subscribeBtn:hover {
+    background-color: #367e7e;
+  }
+  
+  /* Optional: control spacing and avoid layout shift on small screens */
+  @media (max-width: 400px) {
+    .subscriptionTitle {
+      font-size: 1.8rem;
+    }
+  
+    .subscriptionPrice {
+      font-size: 1.3rem;
+    }
+  
+    .subscribeBtn {
+      font-size: 0.95rem;
+      padding: 8px 20px;
+    }
+  }
+  
   
 
   @media (max-width: 799px) {

@@ -12,6 +12,7 @@ import AddUserHome from './pages/AddUserHome';
 import AddUser2 from './pages/AddUser2';
 import DashboardHome2 from './pages/DashboardHome2';
 import AddDevice from './pages/AddDevices';
+import Subscription from './pages/Subscription';
 
 
 
@@ -45,7 +46,7 @@ function App() {
           />
 
       <Route path="adddevice" element={<AddDevice />} />
-
+      <Route path="subscription" element={<Subscription />} />
 
       </Route>
     </Routes>

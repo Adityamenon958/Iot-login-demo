@@ -7,6 +7,8 @@ import styles from './Sidebar.module.css';
 import { UserPlus } from 'lucide-react';
 import { HiOutlineOfficeBuilding } from "react-icons/hi";
 import { PlusSquare } from 'lucide-react';
+import { MdOutlineSubscriptions } from "react-icons/md";
+
 import axios from 'axios';
 
 export default function Sidebar({ isOpen, closeSidebar }) {
@@ -97,6 +99,11 @@ export default function Sidebar({ isOpen, closeSidebar }) {
               Add Device
             </Button>
           )}
+          
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/subscription' ? styles.active : ''}`} onClick={() => navigate('/dashboard/subscription')}>
+          <MdOutlineSubscriptions size={20} className="me-2" />
+            Subscription
+          </Button>
 
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/settings' ? styles.active : ''}`} onClick={() => navigate('/dashboard/settings')}>
             <Settings size={20} className="me-2" />
