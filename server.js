@@ -7,7 +7,8 @@ const Device = require('./backend/models/Device');
 const User = require('./backend/models/User');
 const LevelSensor = require('./backend/models/LevelSensor');
 const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser'); // ✅ added cookie-parser
+const cookieParser = require('cookie-parser');
+const Razorpay = require('razorpay'); // ✅ Razorpay added
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -18,11 +19,37 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-app.use(cookieParser()); // ✅ use cookie-parser
+app.use(cookieParser());
 
-// DB connect
+// ✅ Connect MongoDB
 connectDB();
 
+// ✅ Razorpay Instance
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// ✅ Razorpay Order Route
+app.post('/api/payment/order', async (req, res) => {
+  const { amount } = req.body;
+
+  const options = {
+    amount: amount * 100, // convert ₹ to paise
+    currency: 'INR',
+    receipt: `receipt_order_${Math.floor(Math.random() * 1000000)}`,
+  };
+
+  try {
+    const order = await razorpay.orders.create(options);
+    res.json(order);
+  } catch (err) {
+    console.error("Error creating Razorpay order:", err);
+    res.status(500).send("Failed to create Razorpay order");
+  }
+});
+
+// ✅ User Info from Token (via Cookie)
 app.get('/api/auth/userinfo', (req, res) => {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ message: "Unauthorized" });
@@ -39,7 +66,7 @@ app.get('/api/auth/userinfo', (req, res) => {
   }
 });
 
-// Superadmin Routes
+// ✅ Superadmin Routes
 app.get('/api/companies/count', async (req, res) => {
   try {
     const companies = await User.distinct("companyName");
@@ -67,7 +94,7 @@ app.get('/api/devices/count', async (req, res) => {
   }
 });
 
-// Admin Routes
+// ✅ Admin Routes
 app.get('/api/users/count/by-company', async (req, res) => {
   const { companyName } = req.query;
   try {
@@ -88,7 +115,7 @@ app.get('/api/devices/count/by-company', async (req, res) => {
   }
 });
 
-// Devices
+// ✅ Device Routes
 app.post('/api/devices', async (req, res) => {
   try {
     const { companyName, uid, deviceId, deviceType, location, frequency } = req.body;
@@ -126,7 +153,7 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
-// Users
+// ✅ User Routes
 app.get('/api/users', async (req, res) => {
   const companyName = req.query.companyName;
   try {
@@ -167,7 +194,7 @@ app.delete('/api/devices/:id', async (req, res) => {
   }
 });
 
-// Level Sensor Data
+// ✅ Level Sensor
 app.post('/api/levelsensor', async (req, res) => {
   console.log("📡 Incoming sensor data:", req.body);
   try {
@@ -201,7 +228,7 @@ app.get('/api/levelsensor', async (req, res) => {
   }
 });
 
-// ✅ Modified Login API — sets token as secure HTTP-only cookie
+// ✅ Login with Cookie
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -217,22 +244,12 @@ app.post('/api/login', async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    app.post('/api/logout', (req, res) => {
-      res.clearCookie('token', {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'Strict',
-      });
-      res.json({ message: 'Logged out successfully ✅' });
-    });
-    
-
     res
       .cookie('token', token, {
         httpOnly: true,
-        secure: true, // ⚠️ must use HTTPS
+        secure: true,
         sameSite: 'Strict',
-        maxAge: 60 * 60 * 1000, // 1 hour
+        maxAge: 60 * 60 * 1000,
       })
       .json({
         message: "Login successful ✅",
@@ -245,7 +262,17 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Serve frontend
+// ✅ Logout
+app.post('/api/logout', (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Strict',
+  });
+  res.json({ message: 'Logged out successfully ✅' });
+});
+
+// ✅ Serve frontend
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
 app.get('*', (req, res) => {
@@ -256,5 +283,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

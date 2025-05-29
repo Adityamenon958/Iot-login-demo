@@ -1,6 +1,7 @@
 import React from 'react';
 import { Col, Row, Card } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
+import PaymentButton from '../components/PaymentButton'; // ✅ Import Razorpay button
 
 export default function Subscription() {
   const plans = [
@@ -21,9 +22,15 @@ export default function Subscription() {
             <Card className={styles.subscriptionCard}>
               <Card.Body className='text-center'>
                 <Card.Title className={styles.subscriptionTitle}>{plan.name}</Card.Title>
-                <Card.Subtitle className={`my-5  ${styles.subscriptionPrice}`}>{plan.price}</Card.Subtitle>
+                <Card.Subtitle className={`my-5 ${styles.subscriptionPrice}`}>{plan.price}</Card.Subtitle>
                 <Card.Text>{plan.desc}</Card.Text>
-                <button className={styles.subscribeBtn}>Choose Plan</button>
+
+                {/* ✅ Show button only for paid plans */}
+                {plan.price !== "₹0" ? (
+                  <PaymentButton  amount={parseInt(plan.price.replace("₹", ""))} />
+                ) : (
+                  <button className={styles.subscribeBtn}>Choose Plan</button>
+                )}
               </Card.Body>
             </Card>
           </Col>
