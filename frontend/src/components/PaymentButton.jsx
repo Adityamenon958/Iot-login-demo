@@ -23,29 +23,29 @@ export default function PaymentButton({ amount }) {
         description: `Monthly ${planType} plan`,
         subscription_id: subscription.id,
         handler: async function (response) {
-          alert("✅ Subscription started successfully!");
-          console.log("Subscription Response:", response);
-
-          try {
-            // ✅ Extract the subscriptionId from Razorpay response
+            alert("✅ Subscription started successfully!");
+            console.log("Subscription Response:", response);
+          
             const razorpaySubscriptionId = response.razorpay_subscription_id;
-
-            // ✅ 1. Activate subscription in DB
-            await axios.post("/api/payment/activate-subscription", {
-              subscriptionId: razorpaySubscriptionId,
-            }, { withCredentials: true });
-
-            // ✅ 2. Re-issue JWT with updated subscription info
-            await axios.post("/api/auth/update-subscription", {}, { withCredentials: true });
-
-            // ✅ 3. Refresh page to reflect updated UI
-            window.location.reload();
-
-          } catch (activationError) {
-            console.error("❌ Activation error:", activationError);
-            alert("❌ Failed to activate access. Please contact support.");
-          }
-        },
+          
+            try {
+              // ✅ 1. Activate subscription in DB
+              await axios.post("/api/payment/activate-subscription", {
+                subscriptionId: razorpaySubscriptionId,
+              }, { withCredentials: true });
+          
+              // ✅ 2. Re-issue JWT with updated subscription info
+              await axios.post("/api/auth/update-subscription", {}, { withCredentials: true });
+          
+              // ✅ 3. Optional: Refresh page to re-render buttons
+              window.location.reload();
+          
+            } catch (activationError) {
+              console.error("❌ Activation error:", activationError);
+              alert("❌ Failed to activate access. Please contact support.");
+            }
+          },
+          
         theme: {
           color: "#4db3b3",
         },
