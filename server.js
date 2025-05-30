@@ -170,12 +170,15 @@ app.post('/api/payment/activate-subscription', authenticateToken, async (req, re
     await user.save();
 
     // ✅ Re-issue JWT with updated subscriptionStatus
-    const updatedToken = jwt.sign({
-      id: user._id,
-      role: user.role,
-      companyName: user.companyName,
-      subscriptionStatus: user.subscriptionStatus,
-    }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const jwtSecret = process.env.JWT_SECRET || 'supersecretkey';
+
+const updatedToken = jwt.sign({
+  id: user._id,
+  role: user.role,
+  companyName: user.companyName,
+  subscriptionStatus: user.subscriptionStatus,
+}, jwtSecret, { expiresIn: '7d' });
+
 
     console.log("🔐 Activating subscription for user ID:", user._id);
 
