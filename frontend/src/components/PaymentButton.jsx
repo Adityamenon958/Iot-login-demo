@@ -1,6 +1,6 @@
 import React from 'react';
 import axios from 'axios';
-
+import styles from "../pages/MainContent.module.css";
 export default function PaymentButton({ amount }) {
   const loadRazorpay = async () => {
     try {
@@ -60,7 +60,7 @@ export default function PaymentButton({ amount }) {
   };
 
   return (
-    <button className="btn btn-primary mt-3" onClick={loadRazorpay}>
+    <button className={`${styles.subscribeBtn} mt-3`} onClick={loadRazorpay}>
       Subscribe for ₹{amount}/month
     </button>
   );

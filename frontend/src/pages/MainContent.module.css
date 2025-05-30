@@ -145,6 +145,21 @@
     background-color: #367e7e;
   }
   
+  /* ✅ Stylish highlight for selected free plan */
+  .selectedCard {
+    border: 2px solid #4db3b3;
+    background: linear-gradient(to bottom right, #e0f7f7, #f6ffff);
+    box-shadow: 0 0 20px rgba(77, 179, 179, 0.4);
+    transform: scale(1.05);
+  }
+  
+  /* ✅ Dimmed style for free card if already subscribed */
+  .disabledCard {
+    opacity: 0.5;
+    pointer-events: none;
+    filter: grayscale(0.3);
+  }
+  
   /* Optional: control spacing and avoid layout shift on small screens */
   @media (max-width: 400px) {
     .subscriptionTitle {
