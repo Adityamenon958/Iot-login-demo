@@ -177,15 +177,17 @@ app.post('/api/payment/activate-subscription', authenticateToken, async (req, re
       subscriptionStatus: user.subscriptionStatus,
     }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res
-      .cookie('token', updatedToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'None',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      })
-      .json({ message: "Subscription activated and token updated ✅" });
-      console.log("🔐 Activating subscription for user ID:", req.user.id);
+    console.log("🔐 Activating subscription for user ID:", user._id);
+
+res
+  .cookie('token', updatedToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'None',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  })
+  .json({ message: "Subscription activated and token updated ✅" });
+
 
   } catch (err) {
     console.error("❌ Activation error:", err.message);
