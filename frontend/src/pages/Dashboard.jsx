@@ -1,7 +1,7 @@
 // frontend/src/pages/Dashboard.jsx
 
 import React, { useEffect, useState } from 'react';
-import { Container, Row } from 'react-bootstrap';
+import { Container, Row, Col } from 'react-bootstrap';
 import { Outlet, useNavigate } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 import Sidebar from '../Sidebar';
@@ -36,7 +36,9 @@ const Dashboard = () => {
       <Topbar toggleSidebar={toggleSidebar} />
       <Row className="flex-grow-1">
         <Sidebar isOpen={sidebarOpen} closeSidebar={closeSidebar} />
+        <Col className="p-0">
         <Outlet />
+        </Col>
       </Row>
     </Container>
   );

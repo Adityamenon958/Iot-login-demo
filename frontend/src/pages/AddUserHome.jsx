@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { Col, Row, Form, Button, Spinner, Modal } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
 import "./MainContent.css";
 
 export default function AddUserHome() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     companyName: '',
     contactInfo: '',
@@ -25,7 +28,13 @@ export default function AddUserHome() {
     const fetchUserInfo = async () => {
       try {
         const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
-        const { companyName } = res.data;
+        const { companyName, role, subscriptionStatus } = res.data;
+
+        if (role !== "admin" || subscriptionStatus !== "active") {
+          console.warn("Unauthorized access or inactive subscription ❌");
+          navigate('/dashboard');
+          return;
+        }
 
         setFormData((prev) => ({
           ...prev,
@@ -35,11 +44,12 @@ export default function AddUserHome() {
         fetchUsers(companyName);
       } catch (err) {
         console.error("Failed to fetch user info:", err);
+        navigate('/dashboard');
       }
     };
 
     fetchUserInfo();
-  }, []);
+  }, [navigate]);
 
   const fetchUsers = async (companyName) => {
     setLoading(true);

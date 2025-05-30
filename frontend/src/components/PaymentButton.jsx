@@ -4,7 +4,6 @@ import axios from 'axios';
 export default function PaymentButton({ amount }) {
   const loadRazorpay = async () => {
     try {
-      // Determine the plan type from the amount
       let planType;
       if (amount === 99) planType = "standard";
       else if (amount === 199) planType = "premium";
@@ -19,14 +18,33 @@ export default function PaymentButton({ amount }) {
       });
 
       const options = {
-        key: "rzp_test_jBIMs968bslFfa", // ✅ Use your Razorpay TEST key
+        key: "rzp_test_jBIMs968bslFfa",
         name: "IoT Dashboard Subscription",
         description: `Monthly ${planType} plan`,
-        subscription_id: subscription.id, // 🔑 Required for recurring
-        handler: function (response) {
+        subscription_id: subscription.id,
+        handler: async function (response) {
           alert("✅ Subscription started successfully!");
           console.log("Subscription Response:", response);
-          // You can send this response to backend if needed
+
+          try {
+            // ✅ Extract the subscriptionId from Razorpay response
+            const razorpaySubscriptionId = response.razorpay_subscription_id;
+
+            // ✅ 1. Activate subscription in DB
+            await axios.post("/api/payment/activate-subscription", {
+              subscriptionId: razorpaySubscriptionId,
+            }, { withCredentials: true });
+
+            // ✅ 2. Re-issue JWT with updated subscription info
+            await axios.post("/api/auth/update-subscription", {}, { withCredentials: true });
+
+            // ✅ 3. Refresh page to reflect updated UI
+            window.location.reload();
+
+          } catch (activationError) {
+            console.error("❌ Activation error:", activationError);
+            alert("❌ Failed to activate access. Please contact support.");
+          }
         },
         theme: {
           color: "#4db3b3",

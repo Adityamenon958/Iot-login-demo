@@ -36,16 +36,22 @@ const LoginPage = () => {
       const response = await axios.post(
         '/api/login',
         { email, password },
-        { withCredentials: true } // ✅ Important for sending/receiving cookies
+        { withCredentials: true }
       );
-
+  
       console.log("Login Response ✅", response.data);
+  
+      // 🔁 Double-check via /api/auth/userinfo
+      const res2 = await axios.get('/api/auth/userinfo', { withCredentials: true });
+      console.log("Verified User Info ✅", res2.data);
+  
       navigate('/dashboard');
     } catch (error) {
       console.error("Login Failed ❌", error.response?.data?.message || error.message);
       alert("Invalid login");
     }
   };
+  
 
   return (
     <>

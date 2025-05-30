@@ -18,6 +18,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
 
   const [role, setRole] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
 
   // ✅ Securely fetch role & companyName from backend cookies
   useEffect(() => {
@@ -31,7 +32,18 @@ export default function Sidebar({ isOpen, closeSidebar }) {
       }
     };
 
+    const fetchSubscriptionStatus = async () => {
+      try {
+        const res = await axios.get('/api/subscription/status', { withCredentials: true });
+        setSubscriptionStatus(res.data.active ? 'active' : 'inactive');
+      } catch (err) {
+        console.error("❌ Failed to fetch subscription status:", err.message);
+        setSubscriptionStatus('inactive');
+      }
+    };
+
     fetchUserInfo();
+    fetchSubscriptionStatus();
   }, []);
 
   const handleLogout = async () => {
@@ -43,7 +55,6 @@ export default function Sidebar({ isOpen, closeSidebar }) {
       alert("Logout failed");
     }
   };
-  
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -87,21 +98,21 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           )}
 
           {role === "admin" && (
-            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adduser' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adduser')}>
+            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adduser' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adduser')} disabled={subscriptionStatus !== 'active'}>
               <UserPlus size={20} className={`${styles.navText} me-2`} />
               Add Users
             </Button>
           )}
 
           {(role === "admin" || (role === "superadmin" && companyName === "Gsn Soln")) && (
-            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adddevice')}>
+            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adddevice')} disabled={subscriptionStatus !== 'active'}>
               <PlusSquare size={20} className="me-2" />
               Add Device
             </Button>
           )}
-          
+
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/subscription' ? styles.active : ''}`} onClick={() => navigate('/dashboard/subscription')}>
-          <MdOutlineSubscriptions size={20} className="me-2" />
+            <MdOutlineSubscriptions size={20} className="me-2" />
             Subscription
           </Button>
 

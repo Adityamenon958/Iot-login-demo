@@ -27,13 +27,16 @@ export default function AddDevice() {
     const fetchAuth = async () => {
       try {
         const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
-        const { role, companyName } = res.data;
+        const { role, companyName, subscriptionStatus } = res.data;
+
         setRole(role);
         setCompanyName(companyName);
 
-        const isAuthorized = role === "admin" || (role === "superadmin" && companyName === "Gsn Soln");
-        if (!isAuthorized) {
-          console.warn("Unauthorized access ❌");
+        const isAuthorized = (role === "admin" || (role === "superadmin" && companyName === "Gsn Soln"));
+        const hasSubscription = subscriptionStatus === "active";
+
+        if (!isAuthorized || !hasSubscription) {
+          console.warn("Unauthorized or inactive subscription ❌");
           navigate('/dashboard');
         } else {
           fetchDevices(companyName);

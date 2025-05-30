@@ -8,7 +8,7 @@ const User = require('./backend/models/User');
 const LevelSensor = require('./backend/models/LevelSensor');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const Razorpay = require('razorpay'); // ✅ Razorpay added
+const Razorpay = require('razorpay');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -20,6 +20,21 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// ✅ JWT Authentication Middleware (fixed)
+function authenticateToken(req, res, next) {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.error("Token verification error:", err.message);
+    return res.status(403).json({ message: "Forbidden" });
+  }
+}
 
 // ✅ Connect MongoDB
 connectDB();
@@ -60,23 +75,163 @@ app.post('/api/payment/subscription', async (req, res) => {
   }
 });
 
+// POST /api/auth/update-subscription
+app.post('/api/auth/update-subscription', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id); // `req.user` comes from JWT
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-// ✅ User Info from Token (via Cookie)
-app.get('/api/auth/userinfo', (req, res) => {
+    // Re-issue updated JWT
+    const tokenPayload = {
+      id: user._id,
+      role: user.role,
+      companyName: user.companyName,
+      subscriptionStatus: user.subscriptionStatus,
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res
+      .cookie('token', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .json({ message: "Subscription info updated" });
+  } catch (err) {
+    console.error("❌ Update subscription error:", err.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ✅ Check Subscription Status
+app.get('/api/subscription/status', async (req, res) => {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ message: "Unauthorized" });
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
-    User.findById(decoded.id).then(user => {
-      if (!user) return res.status(404).json({ message: "User not found" });
-      res.json({ role: user.role, companyName: user.companyName });
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // If no subscription ID stored, it's inactive
+    if (!user.subscriptionId) return res.json({ active: false });
+
+    // 🔄 Call Razorpay to check real-time status
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
+    const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
+
+    // If subscription is cancelled or completed
+    if (razorSub.status !== 'active') {
+      user.subscriptionStatus = 'inactive';
+      await user.save();
+      return res.json({ active: false });
+    }
+
+    // ✅ Also double check expiry (1 month logic stays)
+    const now = new Date();
+    const oneMonthLater = new Date(user.subscriptionStart);
+    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+    if (now > oneMonthLater) {
+      user.subscriptionStatus = 'inactive';
+      await user.save();
+      return res.json({ active: false });
+    }
+
+    return res.json({ active: true });
+  } catch (err) {
+    console.error("Subscription check error:", err.message);
+    res.status(500).json({ message: "Failed to check subscription" });
+  }
+});
+
+
+// ✅ Mark Subscription Active After Payment
+app.post('/api/payment/activate-subscription', authenticateToken, async (req, res) => {
+
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Update DB fields
+    user.subscriptionStatus = "active";
+    user.subscriptionStart = new Date();
+    user.subscriptionId = req.body.subscriptionId || null;
+    await user.save();
+
+    // ✅ Re-issue JWT with updated subscriptionStatus
+    const updatedToken = jwt.sign({
+      id: user._id,
+      role: user.role,
+      companyName: user.companyName,
+      subscriptionStatus: user.subscriptionStatus,
+    }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res
+      .cookie('token', updatedToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .json({ message: "Subscription activated and token updated ✅" });
+      console.log("🔐 Activating subscription for user ID:", req.user.id);
+
+  } catch (err) {
+    console.error("❌ Activation error:", err.message);
+    res.status(500).json({ message: "Subscription activation failed" });
+  }
+});
+
+
+
+
+// ✅ User Info from Token (via Cookie)
+app.get('/api/auth/userinfo', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // 🔄 Live check with Razorpay if subscriptionId exists
+    if (user.subscriptionId) {
+      const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
+
+      // ❌ If cancelled or not active
+      const now = new Date();
+      const oneMonthLater = new Date(user.subscriptionStart);
+      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+      if (
+        razorSub.status !== 'active' ||
+        now > oneMonthLater
+      ) {
+        user.subscriptionStatus = 'inactive';
+        await user.save();
+      }
+    }
+
+    res.json({
+      role: user.role,
+      companyName: user.companyName,
+      subscriptionStatus: user.subscriptionStatus,
     });
   } catch (err) {
     console.error("Auth error:", err.message);
     res.status(403).json({ message: "Forbidden" });
   }
 });
+
+
 
 // ✅ Superadmin Routes
 app.get('/api/companies/count', async (req, res) => {
@@ -240,18 +395,67 @@ app.get('/api/levelsensor', async (req, res) => {
   }
 });
 
-// ✅ Login with Cookie
+// ✅ Login with Cookie (Live Subscription Check)
+// ✅ Login with Cookie (Live Subscription Check)
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    let user = await User.findOne({ email });
     if (!user || user.password !== password) {
       return res.status(401).json({ message: "Invalid credentials ❌" });
     }
 
+    
+
+    // 🔄 Check Razorpay subscription in real-time if subscriptionId exists
+    if (user.subscriptionId) {
+      try {
+        const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
+
+        const now = new Date();
+        const oneMonthLater = new Date(user.subscriptionStart);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+        console.log("🔍 Checking subscription expiry:");
+console.log("→ Razorpay Status:", razorSub.status);
+console.log("→ Now:", now);
+console.log("→ Subscription Expiry (one month later):", oneMonthLater);
+
+if (razorSub.status !== 'active') {
+  console.log("❌ Razorpay subscription is not active:", razorSub.status);
+}
+
+if (now > oneMonthLater) {
+  console.log("⏰ Subscription has expired by time limit.");
+}
+
+if (razorSub.status !== 'active' || now > oneMonthLater) {
+  user.subscriptionStatus = 'inactive';
+  await user.save();
+  console.log("✅ Updated user subscription to inactive in DB");
+} else {
+  console.log("✅ Subscription still valid, keeping active.");
+}
+
+      } catch (err) {
+        console.warn("⚠️ Failed to fetch Razorpay subscription:", err.message);
+        user.subscriptionStatus = 'inactive';
+        await user.save();
+      }
+    }
+
+    // ✅ Re-fetch updated user after saving
+    user = await User.findById(user._id);
+
+    // ✅ Generate token with updated subscriptionStatus
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      {
+        id: user._id,
+        role: user.role,
+        companyName: user.companyName,
+        subscriptionStatus: user.subscriptionStatus || "inactive"
+      },
       process.env.JWT_SECRET || "supersecretkey",
       { expiresIn: '1h' }
     );
@@ -267,12 +471,16 @@ app.post('/api/login', async (req, res) => {
         message: "Login successful ✅",
         role: user.role,
         companyName: user.companyName,
+        subscriptionStatus: user.subscriptionStatus || "inactive"
       });
+
   } catch (err) {
     console.error("Login error:", err.message);
     res.status(500).json({ message: "Login failed ❌" });
   }
 });
+
+
 
 // ✅ Logout
 app.post('/api/logout', (req, res) => {
