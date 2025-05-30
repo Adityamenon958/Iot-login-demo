@@ -23,6 +23,9 @@ export default function AddUserHome() {
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortByDateAsc, setSortByDateAsc] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectAllUsers, setSelectAllUsers] = useState(false);
+
 
   useEffect(() => {
     const fetchUserInfo = async () => {
@@ -177,50 +180,80 @@ export default function AddUserHome() {
           </Row>
 
           {loading && (
-            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2rem', borderRadius: '0.5rem' }}>
+            <div style={{ position: 'absolute', top: '80%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2rem', borderRadius: '0.5rem' }}>
               <Spinner animation="border" variant="primary" />
             </div>
           )}
 
           {!loading && (
             <table className="table table-striped align-middle text-nowrap">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" /></th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => setSortByDateAsc(!sortByDateAsc)}>
-                    Date {sortByDateAsc ? '↑' : '↓'}
-                  </th>
-                  <th>Company Name</th>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Email ID</th>
-                  <th>Password</th>
-                  <th>Role</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.length === 0 ? (
-                  <tr><td colSpan="9" className="text-center">No matching users found</td></tr>
-                ) : (
-                  filteredUsers.map(user => (
-                    <tr key={user._id}>
-                      <td><input type="checkbox" /></td>
-                      <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-                      <td>{user.companyName || '-'}</td>
-                      <td>{user.name || '-'}</td>
-                      <td>{user.contactInfo || '-'}</td>
-                      <td>{user.email}</td>
-                      <td>{user.password}</td>
-                      <td>{user.role}</td>
-                      <td>
-                        <Form.Check type="switch" id={`toggle-${user._id}`} label="" />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={selectAllUsers}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setSelectAllUsers(isChecked);
+                      if (isChecked) {
+                        const allIds = filteredUsers.map(user => user._id);
+                        setSelectedUserIds(allIds);
+                      } else {
+                        setSelectedUserIds([]);
+                      }
+                    }}
+                  />
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => setSortByDateAsc(!sortByDateAsc)}>
+                  Date {sortByDateAsc ? '↑' : '↓'}
+                </th>
+                <th>Company Name</th>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Email ID</th>
+                <th>Password</th>
+                <th>Role</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.length === 0 ? (
+                <tr><td colSpan="9" className="text-center">No matching users found</td></tr>
+              ) : (
+                filteredUsers.map(user => (
+                  <tr key={user._id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(user._id)}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          if (isChecked) {
+                            setSelectedUserIds(prev => [...prev, user._id]);
+                          } else {
+                            setSelectedUserIds(prev => prev.filter(id => id !== user._id));
+                            setSelectAllUsers(false);
+                          }
+                        }}
+                      />
+                    </td>
+                    <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td>{user.companyName || '-'}</td>
+                    <td>{user.name || '-'}</td>
+                    <td>{user.contactInfo || '-'}</td>
+                    <td>{user.email}</td>
+                    <td>{user.password}</td>
+                    <td>{user.role}</td>
+                    <td>
+                      <Form.Check type="switch" id={`toggle-${user._id}`} label="" />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          
           )}
         </div>
       </Row>

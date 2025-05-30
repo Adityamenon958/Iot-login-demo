@@ -1,10 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import LoginPage from './LoginPage';
 import Dashboard from './pages/Dashboard';
-import DashboardHome from './pages/DashboardHome';
 import ReportsPage from './pages/ReportsPage';
-import { Routes, Route } from 'react-router-dom';
-import './App.css';
 import Settings from './pages/Settings';
 import ManageCompany from './pages/ManageCompany';
 import AddUser from './pages/ManageCompany';
@@ -13,41 +11,49 @@ import AddUser2 from './pages/AddUser2';
 import DashboardHome2 from './pages/DashboardHome2';
 import AddDevice from './pages/AddDevices';
 import Subscription from './pages/Subscription';
-
-
+import FullPageSpinner from './components/FullPageSpinner'; // 👈 import this
+import './App.css';
 
 function App() {
-  return ( 
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate loading delay — replace this with token check or API call later
+    setTimeout(() => {
+      setLoading(false);
+    }, 1000);
+  }, []);
+
+  if (loading) {
+    return <FullPageSpinner />;
+  }
+
+  return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
 
       <Route path="/dashboard" element={<Dashboard />}>
-        {/* <Route index element={<DashboardHome />} /> */}
         <Route index element={<DashboardHome2 />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
-        
         <Route
-        path="/dashboard/managecompany"
-        element={
-          <AddUser>
-            <ManageCompany />
-            
-          </AddUser>
+          path="/dashboard/managecompany"
+          element={
+            <AddUser>
+              <ManageCompany />
+            </AddUser>
           }
-          />
-          <Route 
-          path='/dashboard/adduser'
+        />
+        <Route
+          path="/dashboard/adduser"
           element={
             <AddUser2>
               <AddUserHome />
             </AddUser2>
           }
-          />
-
-      <Route path="adddevice" element={<AddDevice />} />
-      <Route path="subscription" element={<Subscription />} />
-
+        />
+        <Route path="adddevice" element={<AddDevice />} />
+        <Route path="subscription" element={<Subscription />} />
       </Route>
     </Routes>
   );

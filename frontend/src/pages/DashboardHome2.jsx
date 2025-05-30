@@ -22,6 +22,8 @@ const DashboardHome2 = () => {
   const [totalDevices, setTotalDevices] = useState(0);
   const [totalUsersByCompany, setTotalUsersByCompany] = useState(0);
   const [totalDevicesByCompany, setTotalDevicesByCompany] = useState(0);
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   const fetchUserInfo = async () => {
     try {
@@ -149,7 +151,7 @@ const DashboardHome2 = () => {
         {loading && (
           <div style={{
             position: 'absolute',
-            top: '50%',
+            top: '90%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             zIndex: 10,
@@ -164,33 +166,63 @@ const DashboardHome2 = () => {
         {!loading && (
           <div className='tableScroll'>
             <Table striped bordered hover responsive>
-              <thead>
-                <tr>
-                  <th><Form.Check type="checkbox" disabled /></th>
-                  <th>Date</th>
-                  <th>Location</th>
-                  <th>Data</th>
-                  <th>Vehicle Number</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSensorData.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="text-center">No sensor data found</td>
-                  </tr>
-                ) : (
-                  filteredSensorData.map((item) => (
-                    <tr key={item._id}>
-                      <td><Form.Check type="checkbox" /></td>
-                      <td>{item.D}</td>
-                      <td>{item.address}</td>
-                      <td>{item.data} mm</td>
-                      <td>{item.vehicleNo}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
+  <thead>
+    <tr>
+      <th>
+        <Form.Check
+          type="checkbox"
+          checked={selectAll}
+          onChange={(e) => {
+            const isChecked = e.target.checked;
+            setSelectAll(isChecked);
+            if (isChecked) {
+              const allIds = filteredSensorData.map(item => item._id);
+              setSelectedRows(allIds);
+            } else {
+              setSelectedRows([]);
+            }
+          }}
+        />
+      </th>
+      <th>Date</th>
+      <th>Location</th>
+      <th>Data</th>
+      <th>Vehicle Number</th>
+    </tr>
+  </thead>
+  <tbody>
+    {filteredSensorData.length === 0 ? (
+      <tr>
+        <td colSpan="5" className="text-center">No sensor data found</td>
+      </tr>
+    ) : (
+      filteredSensorData.map((item) => (
+        <tr key={item._id}>
+          <td>
+            <Form.Check
+              type="checkbox"
+              checked={selectedRows.includes(item._id)}
+              onChange={(e) => {
+                const isChecked = e.target.checked;
+                if (isChecked) {
+                  setSelectedRows(prev => [...prev, item._id]);
+                } else {
+                  setSelectedRows(prev => prev.filter(id => id !== item._id));
+                  setSelectAll(false); // uncheck header if one is deselected
+                }
+              }}
+            />
+          </td>
+          <td>{item.D}</td>
+          <td>{item.address}</td>
+          <td>{item.data} mm</td>
+          <td>{item.vehicleNo}</td>
+        </tr>
+      ))
+    )}
+  </tbody>
+</Table>
+
           </div>
         )}
       </div>
