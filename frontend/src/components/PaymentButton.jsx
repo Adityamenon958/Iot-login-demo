@@ -31,7 +31,7 @@ export default function PaymentButton({ amount }) {
             try {
               // ✅ 1. Activate subscription in DB
               await axios.post("/api/payment/activate-subscription", {
-                subscriptionId: razorpaySubscriptionId,
+                subscriptionId: response.razorpay_subscription_id,
               }, { withCredentials: true });
           
               // ✅ 2. Re-issue JWT with updated subscription info
