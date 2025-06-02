@@ -15,14 +15,33 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Google login (cookie setup should be done in backend if used)
+  // ✅ Updated Google Login flow
   const login = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
+    onSuccess: async (tokenResponse) => {
       console.log("Google Login Success ✅", tokenResponse);
-      navigate('/dashboard'); // Token will be stored via backend cookie if needed
+
+      try {
+        const response = await axios.post(
+          '/api/auth/google-login',
+          { access_token: tokenResponse.access_token },
+          { withCredentials: true } // Send and receive cookies
+        );
+
+        console.log("Google Login Verified ✅", response.data);
+
+        // Optional: verify token payload again
+        const res2 = await axios.get('/api/auth/userinfo', { withCredentials: true });
+        console.log("Verified User Info ✅", res2.data);
+
+        navigate('/dashboard');
+      } catch (error) {
+        console.error("Google Login Backend Error ❌", error.response?.data?.message || error.message);
+        alert("Google login failed");
+      }
     },
     onError: () => {
       console.log("Google Login Failed ❌");
+      alert("Google login failed");
     },
   });
 
@@ -41,7 +60,6 @@ const LoginPage = () => {
   
       console.log("Login Response ✅", response.data);
   
-      // 🔁 Double-check via /api/auth/userinfo
       const res2 = await axios.get('/api/auth/userinfo', { withCredentials: true });
       console.log("Verified User Info ✅", res2.data);
   
@@ -51,7 +69,6 @@ const LoginPage = () => {
       alert("Invalid login");
     }
   };
-  
 
   return (
     <>

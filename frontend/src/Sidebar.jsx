@@ -104,7 +104,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             </Button>
           )}
 
-          {(role === "admin" || (role === "superadmin" && companyName === "Gsn Soln")) && (
+          {(role === "admin" || (role === "superadmin" )) && (
             <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adddevice')} disabled={subscriptionStatus !== 'active'}>
               <PlusSquare size={20} className="me-2" />
               Add Device

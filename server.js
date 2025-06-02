@@ -9,6 +9,8 @@ const LevelSensor = require('./backend/models/LevelSensor');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const Razorpay = require('razorpay');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -399,6 +401,89 @@ app.get('/api/levelsensor', async (req, res) => {
     res.status(500).json({ message: "Internal Server Error 💥" });
   }
 });
+
+// Google Login 
+const { OAuth2Client } = require('google-auth-library');
+const googleClient = new OAuth2Client(); // We don't need client ID here
+
+app.post('/api/auth/google-login', async (req, res) => {
+  const { access_token } = req.body;
+  if (!access_token) return res.status(400).json({ message: "Missing Google access token" });
+
+  try {
+    // Fetch Google profile
+    const googleRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+
+    const profile = await googleRes.json();
+
+    if (!profile || !profile.email) {
+      return res.status(400).json({ message: "Invalid Google token" });
+    }
+
+    const { email, name, phone_number } = profile;
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = new User({
+        email,
+        name,
+        role: 'superadmin',
+        companyName: '',
+        contactInfo: phone_number || '', // Google may not provide this
+        subscriptionStatus: 'inactive',
+        subscriptionId: null,
+      });
+
+      await user.save();
+      console.log("✅ New Google user created:", user.email);
+    }
+
+    // Re-check Razorpay subscription (like email login)
+    if (user.subscriptionId) {
+      try {
+        const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
+        const now = new Date();
+        const oneMonthLater = new Date(user.subscriptionStart);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+        if (razorSub.status !== 'active' || now > oneMonthLater) {
+          user.subscriptionStatus = 'inactive';
+          await user.save();
+        }
+      } catch (err) {
+        console.warn("⚠️ Razorpay check failed:", err.message);
+        user.subscriptionStatus = 'inactive';
+        await user.save();
+      }
+    }
+
+    const tokenPayload = {
+      id: user._id,
+      role: user.role,
+      companyName: user.companyName,
+      subscriptionStatus: user.subscriptionStatus || "inactive"
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET || "supersecretkey", { expiresIn: '1h' });
+
+    res
+      .cookie('token', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Strict',
+        maxAge: 60 * 60 * 1000,
+      })
+      .json({ message: "Google login successful ✅" });
+
+  } catch (err) {
+    console.error("Google login error:", err.message);
+    res.status(500).json({ message: "Google login failed ❌" });
+  }
+});
+
 
 // ✅ Login with Cookie (Live Subscription Check)
 // ✅ Login with Cookie (Live Subscription Check)
