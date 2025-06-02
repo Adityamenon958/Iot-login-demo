@@ -159,6 +159,108 @@
     pointer-events: none;
     filter: grayscale(0.3);
   }
+
+
+  /* PreLoginPage */
+
+  .main2 {
+    background-color: #EEF6F8;
+    height: 100vh;
+    overflow-y: auto;
+    width: 100vw;
+  }
+  
+  /* --- Updated Subscription Card --- */
+  .subscriptionCard2 {
+    width: 100%;
+    max-width: 500px;
+    min-height: 360px;
+    max-height: 600px;
+    height: 100%;
+    padding: 28px 24px;
+    border-radius: 20px;
+    background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(0); /* optional */
+    color: #212529;
+    position: relative;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    overflow: hidden;
+    border: 1px solid rgba(200, 200, 200, 0.3);
+  }
+  
+  
+  .subscriptionCard2::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, #4db3b3 0%, transparent 70%);
+    transform: scale(0);
+    transition: transform 0.6s ease;
+    z-index: 0;
+  }
+  
+  .subscriptionCard2:hover::before {
+    transform: scale(1.5);
+    opacity: 0.15;
+  }
+  
+  .subscriptionCard2:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 35px rgba(77, 179, 179, 0.25);
+    background: linear-gradient(to bottom right, #f9fbff, #f0f4f8);
+  }
+  
+  .subscriptionCard2 .card-body {
+    position: relative;
+    z-index: 1;
+  }
+  
+  .subscriptionTitle2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #343a40;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+  }
+  
+  .subscriptionPrice2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 20px 0;
+    color: #555;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+  }
+  
+  .main2 h1 {
+    font-weight: 700;
+    color: #343a40;
+  }
+  
+  .main2 p {
+    font-size: 1.1rem;
+    color: #6c757d;
+  }
+  
+  /* Mobile tweaks */
+  @media (max-width: 576px) {
+    .subscriptionCard2 {
+      min-height: 320px;
+      padding: 20px 16px;
+    }
+  
+    .subscriptionTitle2 {
+      font-size: 1.6rem;
+    }
+  
+    .subscriptionPrice2 {
+      font-size: 1.1rem;
+    }
+  }
+  
   
   /* Optional: control spacing and avoid layout shift on small screens */
   @media (max-width: 400px) {

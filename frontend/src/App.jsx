@@ -11,7 +11,8 @@ import AddUser2 from './pages/AddUser2';
 import DashboardHome2 from './pages/DashboardHome2';
 import AddDevice from './pages/AddDevices';
 import Subscription from './pages/Subscription';
-import FullPageSpinner from './components/FullPageSpinner'; // 👈 import this
+import FullPageSpinner from './components/FullPageSpinner';
+import LoginCarousel from './components/LoginCarousel';
 import './App.css';
 
 function App() {
@@ -30,7 +31,8 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<LoginPage />} />
+      <Route path="/" element={<LoginCarousel />} />
+
 
       <Route path="/dashboard" element={<Dashboard />}>
         <Route index element={<DashboardHome2 />} />

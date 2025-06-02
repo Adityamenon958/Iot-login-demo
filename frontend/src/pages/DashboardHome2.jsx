@@ -24,6 +24,9 @@ const DashboardHome2 = () => {
   const [totalDevicesByCompany, setTotalDevicesByCompany] = useState(0);
   const [selectedRows, setSelectedRows] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [searchColumn, setSearchColumn] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortByDateAsc, setSortByDateAsc] = useState(false);
 
   const fetchUserInfo = async () => {
     try {
@@ -41,25 +44,49 @@ const DashboardHome2 = () => {
     try {
       const userInfo = await fetchUserInfo();
       if (!userInfo) return;
-
+  
       const { companyName, role } = userInfo;
-
-      const [deviceRes, sensorRes] = await Promise.all([
-        axios.get('/api/devices', { params: { companyName } }),
-        axios.get('/api/levelsensor')
-      ]);
-
-      const devicesData = deviceRes.data || [];
+  
+      let devicesData = [];
+      if (companyName === "Gsn Soln") {
+        const allDevicesRes = await axios.get('/api/devices');
+        devicesData = allDevicesRes.data || [];
+      } else if (!companyName || companyName.trim() === "") {
+        setDevices([]);
+        setFilteredSensorData([]);
+        setSensorData([]);
+        setLoading(false);
+        return;
+      } else {
+        const deviceRes = await axios.get('/api/devices', { params: { companyName } });
+        devicesData = deviceRes.data || [];
+      }
+  
+      const sensorRes = await axios.get('/api/levelsensor');
       const sensorDataRaw = sensorRes.data || [];
-
+  
       const deviceUids = devicesData.map(dev => dev.uid);
       const allowedUids = new Set(deviceUids);
-      const filtered = sensorDataRaw.filter(s => allowedUids.has(s.uid));
+  
+      let filtered = [];
 
+      if (companyName === "Gsn Soln") {
+        filtered = sensorDataRaw;
+      } else if (!companyName || companyName.trim() === "") {
+        filtered = [];
+      } else {
+        filtered = sensorDataRaw.filter(s => allowedUids.has(s.uid));
+      }
+      
+      setFilteredSensorData(filtered);
+        
       setDevices(devicesData);
       setSensorData(sensorDataRaw);
-      setFilteredSensorData(filtered);
-
+      setFilteredSensorData(companyName === "Gsn Soln" ? sensorDataRaw : filtered);
+      if (sensorDataRaw.length > 0) {
+        console.log("📅 Example sensor date:", sensorDataRaw[0].D);
+      }
+      // Metrics
       if (role === 'superadmin' && companyName === 'Gsn Soln') {
         const [companyRes, userRes, deviceRes] = await Promise.all([
           axios.get('/api/companies/count'),
@@ -70,7 +97,7 @@ const DashboardHome2 = () => {
         setTotalUsers(userRes.data.totalUsers);
         setTotalDevices(deviceRes.data.totalDevices);
       }
-
+  
       if (role === 'admin') {
         const [usersRes, devicesRes] = await Promise.all([
           axios.get('/api/users/count/by-company', { params: { companyName } }),
@@ -79,30 +106,62 @@ const DashboardHome2 = () => {
         setTotalUsersByCompany(usersRes.data.totalUsersByCompany);
         setTotalDevicesByCompany(devicesRes.data.totalDevicesByCompany);
       }
-
+  
       if (role === 'user') {
         const devicesRes = await axios.get('/api/devices/count/by-company', {
           params: { companyName }
         });
         setTotalDevicesByCompany(devicesRes.data.totalDevicesByCompany);
       }
-
+  
       setLoading(false);
     } catch (err) {
       console.error("❌ Data fetching error:", err);
       setLoading(false);
     }
   };
+  
 
   useEffect(() => {
     fetchAll();
   }, []);
 
+  const displayedSensorData = filteredSensorData
+  .filter((item) => {
+    if (!searchTerm) return true;
+    const lowerTerm = searchTerm.toLowerCase();
+
+    if (searchColumn) {
+      return item[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
+    }
+
+    return Object.values(item).some(val =>
+      val?.toString().toLowerCase().includes(lowerTerm)
+    );
+  })
+  .sort((a, b) => {
+    const parseCustomDate = (str) => {
+      if (!str) return new Date(0); // fallback
+  
+      const [datePart, timePart] = str.split(' ');
+      const [day, month, year] = datePart.split('/').map(Number);
+      const [hour, minute, second] = timePart.split(':').map(Number);
+  
+      return new Date(year, month - 1, day, hour, minute, second);
+    };
+  
+    const dateA = parseCustomDate(a.D);
+    const dateB = parseCustomDate(b.D);
+  
+    return sortByDateAsc ? dateA - dateB : dateB - dateA;
+  });
+
+
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
       <div className="p-3 mt-2">
         <Row className="g-4">
-          {role === 'superadmin' && companyName === 'Gsn Soln' && (
+          {role === 'superadmin'  && (
             <Col xs={12} sm={4} md={4}>
               <Card className={`${styles.deviceCard} text-center`}>
                 <Card.Body>
@@ -114,7 +173,7 @@ const DashboardHome2 = () => {
             </Col>
           )}
 
-          {(role === 'superadmin' && companyName === 'Gsn Soln') || role === 'admin' ? (
+          {(role === 'superadmin') || role === 'admin' ? (
             <Col xs={12} sm={4} md={4}>
               <Card className={`${styles.deviceCard} text-center`}>
                 <Card.Body>
@@ -128,7 +187,7 @@ const DashboardHome2 = () => {
             </Col>
           ) : null}
 
-          {(role === 'superadmin' && companyName === 'Gsn Soln') || role === 'admin' || role === 'user' ? (
+          {(role === 'superadmin') || role === 'admin' || role === 'user' ? (
             <Col xs={12} sm={4} md={4}>
               <Card className={`${styles.deviceCard} text-center`}>
                 <Card.Body>
@@ -165,6 +224,31 @@ const DashboardHome2 = () => {
 
         {!loading && (
           <div className='tableScroll'>
+            <Row className="mb-3">
+  <Col md={4}>
+    <Form.Select
+      value={searchColumn}
+      onChange={(e) => setSearchColumn(e.target.value)}
+      className="custom_input1"
+    >
+      <option value="">All Columns</option>
+      <option value="D">Date</option>
+      <option value="address">Location</option>
+      <option value="vehicleNo">Vehicle Number</option>
+      <option value="data">Data</option>
+    </Form.Select>
+  </Col>
+  <Col md={8}>
+    <Form.Control
+      type="text"
+      placeholder="Search..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      className="custom_input1"
+    />
+  </Col>
+</Row>
+
             <Table striped bordered hover responsive>
   <thead>
     <tr>
@@ -184,7 +268,9 @@ const DashboardHome2 = () => {
           }}
         />
       </th>
-      <th>Date</th>
+      <th onClick={() => setSortByDateAsc(!sortByDateAsc)} style={{ cursor: "pointer" }}>
+  Date {sortByDateAsc ? "↑" : "↓"}
+</th>
       <th>Location</th>
       <th>Data</th>
       <th>Vehicle Number</th>
@@ -196,7 +282,7 @@ const DashboardHome2 = () => {
         <td colSpan="5" className="text-center">No sensor data found</td>
       </tr>
     ) : (
-      filteredSensorData.map((item) => (
+      displayedSensorData.map((item) => (
         <tr key={item._id}>
           <td>
             <Form.Check

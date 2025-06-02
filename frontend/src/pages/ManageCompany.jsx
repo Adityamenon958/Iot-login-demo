@@ -15,6 +15,8 @@ const AddUser = () => {
   });
 
   const [users, setUsers] = useState([]);
+  const [companyName, setCompanyName] = useState('');
+  const [role, setRole] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchColumn, setSearchColumn] = useState('');
@@ -22,20 +24,33 @@ const AddUser = () => {
   const [sortByDateAsc, setSortByDateAsc] = useState(false); // newest first by default
 
   useEffect(() => {
-    fetchUsers();
+    const fetchAuthAndUsers = async () => {
+      try {
+        const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
+        const { companyName, role } = res.data;
+        setCompanyName(companyName);
+        setRole(role);
+  
+        if (!companyName || companyName.trim() === "") {
+          setUsers([]);
+          setLoading(false);
+          return;
+        }
+  
+        // Fetch all users if superadmin of Gsn Soln, else filter by company
+        const params = companyName === "Gsn Soln" ? {} : { companyName };
+        const userRes = await axios.get('/api/users', { params });
+        setUsers(userRes.data);
+      } catch (err) {
+        console.error("Auth/User fetch failed:", err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+  
+    fetchAuthAndUsers();
   }, []);
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get('/api/users');
-      setUsers(res.data);
-    } catch (err) {
-      console.error("Failed to fetch users:", err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   const handleChange = (e) => {
     setFormData(prev => ({

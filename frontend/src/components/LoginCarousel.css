@@ -1,0 +1,44 @@
+.carousel-wrapper {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  .carousel-slider {
+    display: flex;
+    width: 200vw; /* 2 full screens */
+    height: 100vh;
+    transition: transform 0.6s ease-in-out;
+  }
+  
+  .carousel-slide {
+    width: 100vw;
+    height: 100vh;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  
+  .dot-pagination {
+    position: absolute;
+    bottom: 20px;
+    left: 49%;
+    transform: translateX(-50%);
+    z-index: 100;
+  }
+  
+  .dot {
+    height: 12px;
+    width: 12px;
+    margin: 0 6px;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  
+  .dot.active {
+    background-color: #4db3b3;
+  }
+  

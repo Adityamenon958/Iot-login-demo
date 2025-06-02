@@ -32,14 +32,22 @@ export default function AddDevice() {
         setRole(role);
         setCompanyName(companyName);
 
-        const isAuthorized = (role === "admin" || (role === "superadmin" && companyName === "Gsn Soln"));
+        const isAuthorized = (role === "admin" || (role === "superadmin"));
         const hasSubscription = subscriptionStatus === "active";
 
         if (!isAuthorized || !hasSubscription) {
           console.warn("Unauthorized or inactive subscription ❌");
           navigate('/dashboard');
         } else {
-          fetchDevices(companyName);
+          // 👉 Decide what to fetch based on companyName
+          if (companyName === "Gsn Soln") {
+            fetchDevices(null); // all devices
+          } else if (!companyName || companyName.trim() === "") {
+            setDevices([]); // show nothing
+            setLoading(false);
+          } else {
+            fetchDevices(companyName); // filtered
+          }
         }
       } catch (err) {
         console.error("Auth fetch failed:", err.message);
@@ -50,11 +58,12 @@ export default function AddDevice() {
     fetchAuth();
   }, [navigate]);
 
+
   const fetchDevices = async (company) => {
     setLoading(true);
     try {
       const response = await axios.get('/api/devices', {
-        params: { companyName: company }
+        params: company ? { companyName: company } : {}
       });
       setDevices(response.data);
     } catch (error) {
