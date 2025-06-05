@@ -164,11 +164,20 @@
   /* PreLoginPage */
 
   .main2 {
+    background-image: url('../assets/subscriptionlogin.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
     background-color: #EEF6F8;
+    background-attachment: fixed;
     height: 100vh;
-    overflow-y: auto;
     width: 100vw;
+    overflow: hidden;
   }
+  
+  
+  
+  
   
   /* --- Updated Subscription Card --- */
   .subscriptionCard2 {
@@ -179,15 +188,20 @@
     height: 100%;
     padding: 28px 24px;
     border-radius: 20px;
-    background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
+  
+    /* ✅ Glass-like background with semi-transparency */
+    background: rgba(255, 255, 255, 0.35); /* Semi-transparent white */
+    backdrop-filter: blur(10px); /* Smooth blur effect */
+    -webkit-backdrop-filter: blur(10px); /* Safari support */
+  
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(0); /* optional */
     color: #212529;
     position: relative;
     transition: transform 0.4s ease, box-shadow 0.4s ease;
     overflow: hidden;
     border: 1px solid rgba(200, 200, 200, 0.3);
   }
+  
   
   
   .subscriptionCard2::before {

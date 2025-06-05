@@ -4,7 +4,7 @@ import styles from "./MainContent.module.css";
 
 export default function PreLoginSubscription() {
   const plans = [
-    { name: "Free", price: "₹0", desc: "Basic access with limited features." },
+    { name: "Free", price: "₹0", desc: "Free plan always available for testing and demo." },
     { name: "Standard", price: "₹99", desc: "Standard plan with core features." },
     { name: "Premium", price: "₹199", desc: "All features unlocked with premium support." }
   ];
@@ -12,7 +12,7 @@ export default function PreLoginSubscription() {
   return (
     <Col xs={12} md={12} className={`${styles.main2} p-5`}>
       <div className="mt-5 text-center">
-        <h1>Choose Your Plan</h1>
+        <h1>Power Up Your Dashboard Experience</h1>
         <p className="text-muted">Start with a free plan or upgrade anytime</p>
       </div>
 
