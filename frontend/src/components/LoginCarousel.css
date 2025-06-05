@@ -7,8 +7,9 @@
   
   .carousel-slider {
     display: flex;
-    width: 200vw; /* 2 full screens */
-    height: 100vh;
+    flex-direction: column;
+    width: 100vw; /* 2 full screens */
+    height: 200vh;
     transition: transform 0.6s ease-in-out;
   }
   
@@ -21,10 +22,13 @@
   
   .dot-pagination {
     position: absolute;
-    bottom: 20px;
-    left: 49%;
-    transform: translateX(-50%);
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
     z-index: 100;
+    
   }
   
   .dot {
@@ -36,6 +40,7 @@
     display: inline-block;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    margin-bottom: 10px;
   }
   
   .dot.active {

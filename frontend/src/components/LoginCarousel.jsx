@@ -21,7 +21,7 @@ export default function LoginCarousel() {
     <div className="carousel-wrapper">
       <div
         className="carousel-slider"
-        style={{ transform: `translateX(-${currentPage * 100}vw)` }}
+        style={{ transform: `translateY(-${currentPage * 100}vw)` }}
       >
         <div className="carousel-slide">
           <LoginPage />
