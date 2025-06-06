@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import LoginPage from './LoginPage';
 import Dashboard from './pages/Dashboard';
+import DbFuelMonitoring from './pages/DbFuelMonitoring';
 import ReportsPage from './pages/ReportsPage';
 import Settings from './pages/Settings';
 import ManageCompany from './pages/ManageCompany';
@@ -36,6 +37,7 @@ function App() {
 
       <Route path="/dashboard" element={<Dashboard />}>
         <Route index element={<DashboardHome2 />} />
+        <Route path="dbfuelmonitoring" element={<DbFuelMonitoring />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
         <Route
