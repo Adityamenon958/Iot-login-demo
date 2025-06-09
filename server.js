@@ -369,28 +369,51 @@ app.delete('/api/devices/:id', async (req, res) => {
 });
 
 // ✅ Level Sensor
+// ✅ POST: Store sensor data from TRB245
+// ✅ POST  /api/levelsensor  — store sensor data
 app.post('/api/levelsensor', async (req, res) => {
-  console.log("📡 Incoming sensor data:", req.body);
   try {
-    const { D, UID, LEVEL, TS, vehicleNo, address, data } = req.body;
+    console.log('📡 Incoming sensor data (raw):', req.body);
 
+    // 🛡️ Basic validation: make sure at least level or data exists
+    if (!req.body || (req.body.level === undefined && !Array.isArray(req.body.data))) {
+      return res.status(400).json({ message: 'Payload missing required sensor fields' });
+    }
+
+    // 📝 Destructure with safe fallbacks
+    const {
+      D       = null,
+      uid     = null,
+      level   = null,
+      ts      = null,
+      data    = null,
+      address = null,
+      vehicleNo = null         // might be absent
+    } = req.body;
+
+    // 🚀 Create and save document
     const newSensorData = new LevelSensor({
-      D: D || null,
-      uid: UID || null,
-      level: LEVEL !== undefined ? LEVEL : null,
-      ts: TS || null,
-      vehicleNo: vehicleNo || null,
-      address: address !== undefined ? address : null,
-      data: Array.isArray(data) ? data : (data !== undefined ? [data] : null)
+      D,
+      uid,
+      level,
+      ts,
+      address,
+      vehicleNo,
+      data: Array.isArray(data) ? data :
+            (data !== null && data !== undefined ? [data] : null)
     });
 
     await newSensorData.save();
-    res.status(201).json({ message: "Sensor data saved successfully ✅" });
+    console.log('✅ Saved sensor entry →', newSensorData._id);
+    res.status(201).json({ message: 'Sensor data saved successfully ✅' });
+
   } catch (err) {
-    console.error("❌ Sensor save error:", err);
-    res.status(500).json({ message: "Internal Server Error 💥" });
+    console.error('❌ Sensor save error:', err);
+    res.status(500).json({ message: 'Internal Server Error 💥' });
   }
 });
+
+
 
 app.get('/api/levelsensor', async (req, res) => {
   try {
