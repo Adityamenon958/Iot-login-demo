@@ -404,6 +404,11 @@ app.post('/api/levelsensor', async (req, res) => {
     });
 
     await newSensorData.save();
+    // 👇 simple console audit
+console.log(
+  `📥  ${new Date().toISOString()}  uid=${newSensorData.uid}  ` +
+  `level=${newSensorData.level}  address=${newSensorData.address}`
+);
     console.log('✅ Saved sensor entry →', newSensorData._id);
     res.status(201).json({ message: 'Sensor data saved successfully ✅' });
 

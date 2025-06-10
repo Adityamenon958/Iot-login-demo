@@ -127,34 +127,47 @@ const DashboardHome2 = () => {
   }, []);
 
   const displayedSensorData = filteredSensorData
+  /* ─────────────────────────── SEARCH ─────────────────────────── */
   .filter((item) => {
     if (!searchTerm) return true;
+
     const lowerTerm = searchTerm.toLowerCase();
 
     if (searchColumn) {
-      return item[searchColumn]?.toString().toLowerCase().includes(lowerTerm);
+      // ① catch undefined / null and convert to string safely
+      const cell = item?.[searchColumn];
+      return (cell ?? 'N/A').toString().toLowerCase().includes(lowerTerm);
     }
 
-    return Object.values(item).some(val =>
-      val?.toString().toLowerCase().includes(lowerTerm)
+    return Object.values(item).some((val) =>
+      (val ?? 'N/A').toString().toLowerCase().includes(lowerTerm)
     );
   })
+  /* ───────────────────────────  SORT  ─────────────────────────── */
   .sort((a, b) => {
     const parseCustomDate = (str) => {
-      if (!str) return new Date(0); // fallback
-  
+      // ② guard against null, undefined, wrong format
+      if (typeof str !== 'string' || !str.includes(' ')) return null;
+
       const [datePart, timePart] = str.split(' ');
       const [day, month, year] = datePart.split('/').map(Number);
       const [hour, minute, second] = timePart.split(':').map(Number);
-  
-      return new Date(year, month - 1, day, hour, minute, second);
+
+      const date = new Date(year, month - 1, day, hour, minute, second);
+      return isNaN(date) ? null : date;          // ③ invalid date → null
     };
-  
+
     const dateA = parseCustomDate(a.D);
     const dateB = parseCustomDate(b.D);
-  
+
+    // ④ Treat nulls as the “oldest” so they sort to the end
+    if (!dateA && !dateB) return 0;
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+
     return sortByDateAsc ? dateA - dateB : dateB - dateA;
   });
+
 
 
   return (
