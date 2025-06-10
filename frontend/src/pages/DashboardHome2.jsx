@@ -131,7 +131,11 @@ const DashboardHome2 = () => {
   
 
   useEffect(() => {
+    const intervalId = setInterval(() => {
     fetchAll();
+    }, 60000); // Auto refresh every 60 sec
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const displayedSensorData = filteredSensorData
