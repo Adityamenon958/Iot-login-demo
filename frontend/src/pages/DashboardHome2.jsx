@@ -27,6 +27,9 @@ const DashboardHome2 = () => {
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortByDateAsc, setSortByDateAsc] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
 
   const fetchUserInfo = async () => {
     try {
@@ -42,6 +45,7 @@ const DashboardHome2 = () => {
 
   const fetchAll = async () => {
     try {
+      setRefreshing(true);
       const userInfo = await fetchUserInfo();
       if (!userInfo) return;
   
@@ -115,8 +119,12 @@ const DashboardHome2 = () => {
       }
   
       setLoading(false);
+
+      setLastUpdated(new Date()); // store timestamp
+      setRefreshing(false); // hide spinner
     } catch (err) {
       console.error("❌ Data fetching error:", err);
+      setRefreshing(false);
       setLoading(false);
     }
   };
@@ -218,7 +226,26 @@ const DashboardHome2 = () => {
 
       {/* Sensor Data Table */}
       <div className="mt-3 ms-3" style={{ position: 'relative', minHeight: '200px' }}>
-        <h5>Sensor Data Logs</h5>
+        <div className="d-flex align-items-center justify-content-between">
+  <h5 className="mb-0">Sensor Data Logs</h5>
+  {lastUpdated && (
+    <small className="text-muted d-flex align-items-center">
+      Last updated:{" "}
+      <span style={{ fontWeight: "bold", margin: "0 4px" }}>
+        {lastUpdated.toLocaleTimeString()}
+      </span>
+      {refreshing && (
+        <Spinner
+          animation="border"
+          variant="secondary"
+          size="sm"
+          style={{ marginLeft: '6px' }}
+        />
+      )}
+    </small>
+  )}
+</div>
+
 
         {loading && (
           <div style={{
