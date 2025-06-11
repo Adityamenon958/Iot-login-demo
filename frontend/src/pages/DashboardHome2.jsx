@@ -29,6 +29,10 @@ const DashboardHome2 = () => {
   const [sortByDateAsc, setSortByDateAsc] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 9;
+
+  
 
 
   const fetchUserInfo = async () => {
@@ -180,6 +184,11 @@ const DashboardHome2 = () => {
     return sortByDateAsc ? dateA - dateB : dateB - dateA;
   });
 
+  const totalPages = Math.ceil(displayedSensorData.length / rowsPerPage);
+  const paginatedData = displayedSensorData.slice(
+  (currentPage - 1) * rowsPerPage,
+  currentPage * rowsPerPage
+);
 
 
   return (
@@ -293,7 +302,7 @@ const DashboardHome2 = () => {
   </Col>
 </Row>
 
-            <Table striped bordered hover responsive>
+            <Table striped bordered hover responsive className='db1_table'>
   <thead>
     <tr>
       <th>
@@ -326,7 +335,7 @@ const DashboardHome2 = () => {
         <td colSpan="5" className="text-center">No sensor data found</td>
       </tr>
     ) : (
-      displayedSensorData.map((item) => (
+      paginatedData.map((item) => (
         <tr key={item._id}>
           <td>
             <Form.Check
@@ -352,6 +361,56 @@ const DashboardHome2 = () => {
     )}
   </tbody>
 </Table>
+<div className="d-flex justify-content-center mt-3 me-3">
+  <nav>
+    <ul className="pagination modern-pagination">
+      <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+        <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)}>
+          Prev
+        </button>
+      </li>
+
+      {(() => {
+        const pages = [];
+        if (totalPages <= 5) {
+          for (let i = 1; i <= totalPages; i++) {
+            pages.push(i);
+          }
+        } else {
+          if (currentPage <= 3) {
+            pages.push(1, 2, 3, 4, '...', totalPages);
+          } else if (currentPage >= totalPages - 2) {
+            pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+          } else {
+            pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+          }
+        }
+
+        return pages.map((page, index) => (
+          <li
+            key={index}
+            className={`page-item ${page === currentPage ? 'active' : ''} ${page === '...' ? 'disabled' : ''}`}
+          >
+            {page === '...'
+              ? <span className="page-link">...</span>
+              : (
+                <button className="page-link" onClick={() => setCurrentPage(page)}>
+                  {page}
+                </button>
+              )}
+          </li>
+        ));
+      })()}
+
+      <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+        <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)}>
+          Next
+        </button>
+      </li>
+    </ul>
+  </nav>
+</div>
+
 
           </div>
         )}

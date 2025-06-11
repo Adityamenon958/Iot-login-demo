@@ -5,9 +5,10 @@
     
   }
 
+
   .tableScroll{
-    max-height: 520px;
     overflow-y: auto;
+    max-height: 525px;
   }
 
   .table2Scroll{
@@ -54,4 +55,31 @@
 .signIn1{
   height: 40px;
   border-radius: 30px;
+}
+
+/* Modern Pagination Styling */
+.modern-pagination .page-link {
+  background-color: #EEF6F8;
+  border: none;
+  margin: 0 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #333;
+  font-weight: 500;
+  transition: background 0.3s ease;
+}
+
+.modern-pagination .page-link:hover {
+  background-color: #d9eef2;
+}
+
+.modern-pagination .page-item.active .page-link {
+  background-color: #3c8dbc;
+  color: #fff;
+}
+
+.modern-pagination .page-item.disabled .page-link {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f0f0f0;
 }
