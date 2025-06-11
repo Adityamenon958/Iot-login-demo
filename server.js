@@ -11,7 +11,6 @@ const cookieParser = require('cookie-parser');
 const Razorpay = require('razorpay');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
-
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -370,65 +369,110 @@ app.delete('/api/devices/:id', async (req, res) => {
 
 // ✅ Level Sensor
 // ✅ POST: Store sensor data from TRB245
-// ✅ POST  /api/levelsensor  — store sensor data
+
+/* 🚀 INSERT SENSOR DATA */
 app.post('/api/levelsensor', async (req, res) => {
   try {
-    console.log('📡 Incoming sensor data (raw):', req.body);
+    if (!req.body) return res.status(400).json({ message: 'Empty payload' });
 
-    // 🛡️ Basic validation: make sure at least level or data exists
-    if (!req.body || (req.body.level === undefined && !Array.isArray(req.body.data))) {
-      return res.status(400).json({ message: 'Payload missing required sensor fields' });
-    }
-
-    // 📝 Destructure with safe fallbacks
     const {
-      D       = null,
-      uid     = null,
-      level   = null,
-      ts      = null,
-      data    = null,
-      address = null,
-      vehicleNo = null         // might be absent
+      D        = null,
+      uid      = null,
+      level    = null,
+      ts       = null,
+      data     = null,
+      address  = null,
+      vehicleNo = null
     } = req.body;
 
-    // 🚀 Create and save document
-    const newSensorData = new LevelSensor({
+    /* ⭐ 1. Convert “DD/MM/YYYY HH:mm:ss” → ISO Date for indexing */
+    let dateISO = null;
+    if (typeof D === 'string' && D.includes('/')) {
+      const [datePart, timePart = '00:00:00'] = D.split(' ');
+      const [day, month, year] = datePart.split('/').map(Number);
+      const [h, m, s] = timePart.split(':').map(Number);
+      dateISO = new Date(year, month - 1, day, h, m, s);
+    }
+
+    /* ⭐ 2. Store company name for this uid (used in GET filtering) */
+    let companyUid = null;
+    const dev = await Device.findOne({ uid }).lean();
+    if (dev) companyUid = dev.companyName || null;
+
+    /* ⭐ 3. Save the document */
+    const sensorDoc = new LevelSensor({
       D,
       uid,
       level,
       ts,
       address,
       vehicleNo,
-      data: Array.isArray(data) ? data :
-            (data !== null && data !== undefined ? [data] : null)
+      data: Array.isArray(data) ? data : data === undefined ? [] : [data],
+      dateISO,
+      companyUid
     });
 
-    await newSensorData.save();
-    // 👇 simple console audit
-console.log(
-  `📥  ${new Date().toISOString()}  uid=${newSensorData.uid}  ` +
-  `level=${newSensorData.level}  address=${newSensorData.address}`
-);
-    console.log('✅ Saved sensor entry →', newSensorData._id);
-    res.status(201).json({ message: 'Sensor data saved successfully ✅' });
-
+    await sensorDoc.save();
+    res.status(201).json({ message: 'Sensor data saved ✅' });
   } catch (err) {
-    console.error('❌ Sensor save error:', err);
-    res.status(500).json({ message: 'Internal Server Error 💥' });
+    console.error('Sensor save error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
-
-
-app.get('/api/levelsensor', async (req, res) => {
+/* 🚀 SERVER-SIDE PAGINATION / SEARCH / SORT
+ * GET /api/levelsensor?page=1&limit=9&search=&column=&sort=asc|desc
+ */
+app.get('/api/levelsensor', authenticateToken, async (req, res) => {
   try {
-    const allData = await LevelSensor.find().sort({ D: -1 });
-    res.json(allData);
+    /* 1. Query params */
+    const page   = parseInt(req.query.page  || '1', 10);
+    const limit  = parseInt(req.query.limit || '10', 10);
+    const skip   = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
+    const column = (req.query.column || '').trim();          // e.g. “vehicleNo”
+    const sort   = req.query.sort === 'asc' ? 1 : -1;        // default newest→oldest
+
+    /* 2. Role / company from JWT */
+    const { role, companyName } = req.user;
+
+    /* 3. Base filter — admins/users limited to their own devices */
+    const mongoFilter = {};
+    if (role !== 'superadmin') {
+      const devs = await Device.find({ companyName }).select('uid -_id').lean();
+      const uids = devs.map(d => d.uid);
+      mongoFilter.uid = { $in: uids.length ? uids : ['__none__'] };  // empty fallback
+    }
+
+    /* 4. Search filter */
+    if (search) {
+      const rx = new RegExp(search, 'i');
+      if (column) {
+        mongoFilter[column] = rx;
+      } else {
+        mongoFilter.$or = [
+          { D: rx },
+          { address: rx },
+          { vehicleNo: rx },
+          { uid: rx }
+        ];
+      }
+    }
+
+    /* 5. Sort & fetch one page */
+    const sortObj = { dateISO: sort };
+    const [data, total] = await Promise.all([
+      LevelSensor.find(mongoFilter).sort(sortObj).skip(skip).limit(limit).lean(),
+      LevelSensor.countDocuments(mongoFilter)
+    ]);
+
+    res.json({ data, total });
   } catch (err) {
-    console.error("Error fetching sensor data:", err);
-    res.status(500).json({ message: "Internal Server Error 💥" });
+    console.error('LevelSensor GET error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+/* ------------------------------------------------------------------ */
 
 // Google Login 
 const { OAuth2Client } = require('google-auth-library');

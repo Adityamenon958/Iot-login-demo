@@ -1,201 +1,143 @@
 // DashboardHome2.jsx
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Col, Row, Card, Table, Form, Spinner } from 'react-bootstrap';
 import styles from './MainContent.module.css';
 import './MainContent.css';
 
-const DashboardHome2 = () => {
-  const [activeDevices, setActiveDevices] = useState(0);
-  const [inactiveDevices, setInactiveDevices] = useState(0);
-  const [alarms, setAlarms] = useState(0);
-  const [sensorData, setSensorData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filteredSensorData, setFilteredSensorData] = useState([]);
-  const [devices, setDevices] = useState([]);
+const rowsPerPage = 9;        // 🔧 tweak any time
 
-  const [role, setRole] = useState('');
+export default function DashboardHome2() {
+  /* ─────────── state ─────────── */
+  const [role,   setRole]   = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [totalCompanies, setTotalCompanies] = useState(0);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [totalDevices, setTotalDevices] = useState(0);
-  const [totalUsersByCompany, setTotalUsersByCompany] = useState(0);
-  const [totalDevicesByCompany, setTotalDevicesByCompany] = useState(0);
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [selectAll, setSelectAll] = useState(false);
-  const [searchColumn, setSearchColumn] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortByDateAsc, setSortByDateAsc] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+
+  const [sensorData, setSensorData] = useState([]);
+  const [totalPages, setTotalPages]   = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 9;
 
-  
+  const [searchColumn, setSearchColumn] = useState('');
+  const [searchTerm,   setSearchTerm]   = useState('');
+  const [sortAsc, setSortAsc] = useState(false);
 
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
+  const [selectAll,     setSelectAll]   = useState(false);
+  const [selectedRows,  setSelectedRows]= useState([]);
+
+  /* Card metrics (unchanged piece of your code, shortened here) */
+  const [totalCompanies, setTotalCompanies] = useState(0);
+  const [totalUsers,     setTotalUsers]     = useState(0);
+  const [totalDevices,   setTotalDevices]   = useState(0);
+  const [totalUsersByCompany,   setTotalUsersByCompany]   = useState(0);
+  const [totalDevicesByCompany, setTotalDevicesByCompany] = useState(0);
+
+  /* ─────────── helpers ─────────── */
   const fetchUserInfo = async () => {
-    try {
-      const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
-      setRole(res.data.role);
-      setCompanyName(res.data.companyName);
-      return res.data;
-    } catch (err) {
-      console.error("Failed to fetch user info:", err);
-      return null;
-    }
+    const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
+    setRole(res.data.role);
+    setCompanyName(res.data.companyName);
+    return res.data;
   };
 
-  const fetchAll = async () => {
-    try {
-      setRefreshing(true);
-      const userInfo = await fetchUserInfo();
-      if (!userInfo) return;
-  
-      const { companyName, role } = userInfo;
-  
-      let devicesData = [];
-      if (companyName === "Gsn Soln") {
-        const allDevicesRes = await axios.get('/api/devices');
-        devicesData = allDevicesRes.data || [];
-      } else if (!companyName || companyName.trim() === "") {
-        setDevices([]);
-        setFilteredSensorData([]);
-        setSensorData([]);
-        setLoading(false);
-        return;
-      } else {
-        const deviceRes = await axios.get('/api/devices', { params: { companyName } });
-        devicesData = deviceRes.data || [];
+  /* ---------------- SENSOR PAGE FETCH ---------------- */
+  const fetchSensorPage = async (page = 1) => {
+    setRefreshing(true);
+    const res = await axios.get('/api/levelsensor', {
+      withCredentials: true,
+      params: {
+        page,
+        limit: rowsPerPage,
+        search: searchTerm,
+        column: searchColumn,
+        sort: sortAsc ? 'asc' : 'desc'
       }
-  
-      const sensorRes = await axios.get('/api/levelsensor');
-      const sensorDataRaw = sensorRes.data || [];
-  
-      const deviceUids = devicesData.map(dev => dev.uid);
-      const allowedUids = new Set(deviceUids);
-  
-      let filtered = [];
+    });
 
-      if (companyName === "Gsn Soln") {
-        filtered = sensorDataRaw;
-      } else if (!companyName || companyName.trim() === "") {
-        filtered = [];
-      } else {
-        filtered = sensorDataRaw.filter(s => allowedUids.has(s.uid));
-      }
-      
-      setFilteredSensorData(filtered);
-        
-      setDevices(devicesData);
-      setSensorData(sensorDataRaw);
-      setFilteredSensorData(companyName === "Gsn Soln" ? sensorDataRaw : filtered);
-      if (sensorDataRaw.length > 0) {
-        console.log("📅 Example sensor date:", sensorDataRaw[0].D);
-      }
-      // Metrics
+    setSensorData(res.data.data);
+    setTotalPages(Math.max(1, Math.ceil(res.data.total / rowsPerPage)));
+    setLastUpdated(new Date());
+    setRefreshing(false);
+  };
+
+  /* ---------------- METRICS (unchanged) ------------- */
+  const fetchMetrics = async (info) => {
+    const { role, companyName } = info;
+    try {
       if (role === 'superadmin' && companyName === 'Gsn Soln') {
-        const [companyRes, userRes, deviceRes] = await Promise.all([
+        const [cRes, uRes, dRes] = await Promise.all([
           axios.get('/api/companies/count'),
           axios.get('/api/users/count'),
           axios.get('/api/devices/count'),
         ]);
-        setTotalCompanies(companyRes.data.totalCompanies);
-        setTotalUsers(userRes.data.totalUsers);
-        setTotalDevices(deviceRes.data.totalDevices);
-      }
-  
-      if (role === 'admin') {
-        const [usersRes, devicesRes] = await Promise.all([
-          axios.get('/api/users/count/by-company', { params: { companyName } }),
+        setTotalCompanies(cRes.data.totalCompanies);
+        setTotalUsers(uRes.data.totalUsers);
+        setTotalDevices(dRes.data.totalDevices);
+      } else if (role === 'admin') {
+        const [uRes, dRes] = await Promise.all([
+          axios.get('/api/users/count/by-company',   { params: { companyName } }),
           axios.get('/api/devices/count/by-company', { params: { companyName } }),
         ]);
-        setTotalUsersByCompany(usersRes.data.totalUsersByCompany);
-        setTotalDevicesByCompany(devicesRes.data.totalDevicesByCompany);
+        setTotalUsersByCompany(uRes.data.totalUsersByCompany);
+        setTotalDevicesByCompany(dRes.data.totalDevicesByCompany);
+      } else if (role === 'user') {
+        const dRes = await axios.get('/api/devices/count/by-company', { params: { companyName } });
+        setTotalDevicesByCompany(dRes.data.totalDevicesByCompany);
       }
-  
-      if (role === 'user') {
-        const devicesRes = await axios.get('/api/devices/count/by-company', {
-          params: { companyName }
-        });
-        setTotalDevicesByCompany(devicesRes.data.totalDevicesByCompany);
-      }
-  
-      setLoading(false);
-
-      setLastUpdated(new Date()); // store timestamp
-      setRefreshing(false); // hide spinner
     } catch (err) {
-      console.error("❌ Data fetching error:", err);
-      setRefreshing(false);
-      setLoading(false);
+      console.error('Metric fetch error', err);
     }
   };
-  
 
+  /* ---------------- INITIAL LOAD ---------------- */
   useEffect(() => {
-    const intervalId = setInterval(() => {
-    fetchAll();
-    }, 60000); // Auto refresh every 60 sec
-
-    return () => clearInterval(intervalId);
+    (async () => {
+      const info = await fetchUserInfo();
+      await fetchMetrics(info);
+      await fetchSensorPage(1);
+      setLoading(false);
+    })();
   }, []);
 
-  const displayedSensorData = filteredSensorData
-  /* ─────────────────────────── SEARCH ─────────────────────────── */
-  .filter((item) => {
-    if (!searchTerm) return true;
+  /* ---------------- PARAM-CHANGE FETCH ------------- */
+  useEffect(() => {
+    /* debounce 400 ms so typing doesn’t spam */
+    const t = setTimeout(() => fetchSensorPage(1), 400);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, searchColumn, sortAsc]);
 
-    const lowerTerm = searchTerm.toLowerCase();
+  /* ------------- PAGE CHANGE ------------- */
+  useEffect(() => { fetchSensorPage(currentPage); },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentPage]);
 
-    if (searchColumn) {
-      // ① catch undefined / null and convert to string safely
-      const cell = item?.[searchColumn];
-      return (cell ?? 'N/A').toString().toLowerCase().includes(lowerTerm);
-    }
+  /* ------------- AUTO-REFRESH every minute ---------- */
+  useEffect(() => {
+    const id = setInterval(() => fetchSensorPage(currentPage), 60000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
-    return Object.values(item).some((val) =>
-      (val ?? 'N/A').toString().toLowerCase().includes(lowerTerm)
+  /* ─────────── UI ─────────── */
+  if (loading) {
+    return (
+      <Col className={styles.main}>
+        <div className="d-flex justify-content-center mt-5">
+          <Spinner animation="border" />
+        </div>
+      </Col>
     );
-  })
-  /* ───────────────────────────  SORT  ─────────────────────────── */
-  .sort((a, b) => {
-    const parseCustomDate = (str) => {
-      // ② guard against null, undefined, wrong format
-      if (typeof str !== 'string' || !str.includes(' ')) return null;
-
-      const [datePart, timePart] = str.split(' ');
-      const [day, month, year] = datePart.split('/').map(Number);
-      const [hour, minute, second] = timePart.split(':').map(Number);
-
-      const date = new Date(year, month - 1, day, hour, minute, second);
-      return isNaN(date) ? null : date;          // ③ invalid date → null
-    };
-
-    const dateA = parseCustomDate(a.D);
-    const dateB = parseCustomDate(b.D);
-
-    // ④ Treat nulls as the “oldest” so they sort to the end
-    if (!dateA && !dateB) return 0;
-    if (!dateA) return 1;
-    if (!dateB) return -1;
-
-    return sortByDateAsc ? dateA - dateB : dateB - dateA;
-  });
-
-  const totalPages = Math.ceil(displayedSensorData.length / rowsPerPage);
-  const paginatedData = displayedSensorData.slice(
-  (currentPage - 1) * rowsPerPage,
-  currentPage * rowsPerPage
-);
-
+  }
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main}>
+      {/* --------- TOP METRIC CARDS (unchanged markup) ---------- */}
       <div className="p-3 mt-2">
         <Row className="g-4">
-          {role === 'superadmin'  && (
+          {role === 'superadmin' && (
             <Col xs={12} sm={4} md={4}>
               <Card className={`${styles.deviceCard} text-center`}>
                 <Card.Body>
@@ -206,8 +148,7 @@ const DashboardHome2 = () => {
               </Card>
             </Col>
           )}
-
-          {(role === 'superadmin') || role === 'admin' ? (
+          {(role === 'superadmin' || role === 'admin') && (
             <Col xs={12} sm={4} md={4}>
               <Card className={`${styles.deviceCard} text-center`}>
                 <Card.Body>
@@ -219,9 +160,8 @@ const DashboardHome2 = () => {
                 </Card.Body>
               </Card>
             </Col>
-          ) : null}
-
-          {(role === 'superadmin') || role === 'admin' || role === 'user' ? (
+          )}
+          {(role === 'superadmin' || role === 'admin' || role === 'user') && (
             <Col xs={12} sm={4} md={4}>
               <Card className={`${styles.deviceCard} text-center`}>
                 <Card.Body>
@@ -233,190 +173,148 @@ const DashboardHome2 = () => {
                 </Card.Body>
               </Card>
             </Col>
-          ) : null}
+          )}
         </Row>
       </div>
 
-      {/* Sensor Data Table */}
-      <div className="mt-3 ms-3" style={{ position: 'relative', minHeight: '200px' }}>
+      {/* -------- SENSOR TABLE -------- */}
+      <div className="mt-3 ms-3" style={{ position: 'relative', minHeight: 200 }}>
         <div className="d-flex align-items-center justify-content-between">
-  <h5 className="mb-0">Sensor Data Logs</h5>
-  {lastUpdated && (
-    <small className="text-muted d-flex align-items-center">
-      Last updated:{" "}
-      <span style={{ fontWeight: "bold", margin: "0 4px" }}>
-        {lastUpdated.toLocaleTimeString()}
-      </span>
-      {refreshing && (
-        <Spinner
-          animation="border"
-          variant="secondary"
-          size="sm"
-          style={{ marginLeft: '6px' }}
-        />
-      )}
-    </small>
-  )}
-</div>
-
-
-        {loading && (
-          <div style={{
-            position: 'absolute',
-            top: '90%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 10,
-            backgroundColor: 'rgba(255,255,255,0.8)',
-            padding: '2rem',
-            borderRadius: '0.5rem'
-          }}>
-            <Spinner animation="border" role="status" variant="primary" />
-          </div>
-        )}
-
-        {!loading && (
-          <div className='tableScroll'>
-            <Row className="mb-3">
-  <Col md={4}>
-    <Form.Select
-      value={searchColumn}
-      onChange={(e) => setSearchColumn(e.target.value)}
-      className="custom_input1"
-    >
-      <option value="">All Columns</option>
-      <option value="D">Date</option>
-      <option value="address">Location</option>
-      <option value="vehicleNo">Vehicle Number</option>
-      <option value="data">Data</option>
-    </Form.Select>
-  </Col>
-  <Col md={8}>
-    <Form.Control
-      type="text"
-      placeholder="Search..."
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-      className="custom_input1"
-    />
-  </Col>
-</Row>
-
-            <Table striped bordered hover responsive className='db1_table'>
-  <thead>
-    <tr>
-      <th>
-        <Form.Check
-          type="checkbox"
-          checked={selectAll}
-          onChange={(e) => {
-            const isChecked = e.target.checked;
-            setSelectAll(isChecked);
-            if (isChecked) {
-              const allIds = filteredSensorData.map(item => item._id);
-              setSelectedRows(allIds);
-            } else {
-              setSelectedRows([]);
-            }
-          }}
-        />
-      </th>
-      <th onClick={() => setSortByDateAsc(!sortByDateAsc)} style={{ cursor: "pointer" }}>
-  Date {sortByDateAsc ? "↑" : "↓"}
-</th>
-      <th>Location</th>
-      <th>Data</th>
-      <th>Vehicle Number</th>
-    </tr>
-  </thead>
-  <tbody>
-    {filteredSensorData.length === 0 ? (
-      <tr>
-        <td colSpan="5" className="text-center">No sensor data found</td>
-      </tr>
-    ) : (
-      paginatedData.map((item) => (
-        <tr key={item._id}>
-          <td>
-            <Form.Check
-              type="checkbox"
-              checked={selectedRows.includes(item._id)}
-              onChange={(e) => {
-                const isChecked = e.target.checked;
-                if (isChecked) {
-                  setSelectedRows(prev => [...prev, item._id]);
-                } else {
-                  setSelectedRows(prev => prev.filter(id => id !== item._id));
-                  setSelectAll(false); // uncheck header if one is deselected
-                }
-              }}
-            />
-          </td>
-          <td>{item.D}</td>
-          <td>{item.address}</td>
-          <td>{item.data} mm</td>
-          <td>{item.vehicleNo}</td>
-        </tr>
-      ))
-    )}
-  </tbody>
-</Table>
-<div className="d-flex justify-content-center mt-3 me-3">
-  <nav>
-    <ul className="pagination modern-pagination">
-      <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-        <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)}>
-          Prev
-        </button>
-      </li>
-
-      {(() => {
-        const pages = [];
-        if (totalPages <= 5) {
-          for (let i = 1; i <= totalPages; i++) {
-            pages.push(i);
-          }
-        } else {
-          if (currentPage <= 3) {
-            pages.push(1, 2, 3, 4, '...', totalPages);
-          } else if (currentPage >= totalPages - 2) {
-            pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-          } else {
-            pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-          }
-        }
-
-        return pages.map((page, index) => (
-          <li
-            key={index}
-            className={`page-item ${page === currentPage ? 'active' : ''} ${page === '...' ? 'disabled' : ''}`}
-          >
-            {page === '...'
-              ? <span className="page-link">...</span>
-              : (
-                <button className="page-link" onClick={() => setCurrentPage(page)}>
-                  {page}
-                </button>
+          <h5 className="mb-0">Sensor Data Logs</h5>
+          {lastUpdated && (
+            <small className="text-muted d-flex align-items-center">
+              Last updated:&nbsp;<strong>{lastUpdated.toLocaleTimeString()}</strong>
+              {refreshing && (
+                <Spinner animation="border" variant="secondary" size="sm" className="ms-2" />
               )}
-          </li>
-        ));
-      })()}
+            </small>
+          )}
+        </div>
 
-      <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-        <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)}>
-          Next
-        </button>
-      </li>
-    </ul>
-  </nav>
-</div>
+        <div className="tableScroll mt-3">
+          {/* -------- SEARCH BAR -------- */}
+          <Row className="mb-3">
+            <Col md={4}>
+              <Form.Select
+                value={searchColumn}
+                onChange={(e) => setSearchColumn(e.target.value)}
+                className="custom_input1"
+              >
+                <option value="">All Columns</option>
+                <option value="D">Date</option>
+                <option value="address">Location</option>
+                <option value="vehicleNo">Vehicle Number</option>
+                <option value="data">Data</option>
+              </Form.Select>
+            </Col>
+            <Col md={8}>
+              <Form.Control
+                placeholder="Search…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="custom_input1"
+              />
+            </Col>
+          </Row>
 
+          {/* -------- TABLE -------- */}
+          <Table striped bordered hover responsive className="db1_table">
+            <thead>
+              <tr>
+                <th>
+                  <Form.Check
+                    checked={selectAll}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setSelectAll(isChecked);
+                      setSelectedRows(isChecked ? sensorData.map((d) => d._id) : []);
+                    }}
+                  />
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => setSortAsc(!sortAsc)}>
+                  Date {sortAsc ? '↑' : '↓'}
+                </th>
+                <th>Location</th>
+                <th>Data</th>
+                <th>Vehicle No.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sensorData.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center">No sensor data found</td>
+                </tr>
+              ) : (
+                sensorData.map((row) => (
+                  <tr key={row._id}>
+                    <td>
+                      <Form.Check
+                        checked={selectedRows.includes(row._id)}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setSelectedRows((prev) =>
+                            isChecked ? [...prev, row._id] : prev.filter((id) => id !== row._id)
+                          );
+                          if (!isChecked) setSelectAll(false);
+                        }}
+                      />
+                    </td>
+                    <td>{row.D}</td>
+                    <td>{row.address}</td>
+                    <td>{Array.isArray(row.data) ? row.data.join(', ') : row.data} mm</td>
+                    <td>{row.vehicleNo}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
 
+          {/* -------- PAGINATION -------- */}
+          <div className="d-flex justify-content-center mt-3 me-3">
+            <nav>
+              <ul className="pagination modern-pagination">
+                <li className={`page-item ${currentPage === 1 && 'disabled'}`}>
+                  <button className="page-link" onClick={() => setCurrentPage((p) => p - 1)}>
+                    Prev
+                  </button>
+                </li>
+
+                {(() => {
+                  const pages = [];
+                  if (totalPages <= 5) {
+                    for (let i = 1; i <= totalPages; i++) pages.push(i);
+                  } else {
+                    if (currentPage <= 3) pages.push(1, 2, 3, 4, '…', totalPages);
+                    else if (currentPage >= totalPages - 2)
+                      pages.push(1, '…', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+                    else pages.push(1, '…', currentPage - 1, currentPage, currentPage + 1, '…', totalPages);
+                  }
+                  return pages.map((pg, idx) => (
+                    <li
+                      key={idx}
+                      className={`page-item ${pg === currentPage ? 'active' : ''} ${pg === '…' && 'disabled'}`}
+                    >
+                      {pg === '…' ? (
+                        <span className="page-link">…</span>
+                      ) : (
+                        <button className="page-link" onClick={() => setCurrentPage(pg)}>
+                          {pg}
+                        </button>
+                      )}
+                    </li>
+                  ));
+                })()}
+
+                <li className={`page-item ${currentPage === totalPages && 'disabled'}`}>
+                  <button className="page-link" onClick={() => setCurrentPage((p) => p + 1)}>
+                    Next
+                  </button>
+                </li>
+              </ul>
+            </nav>
           </div>
-        )}
+        </div>
       </div>
     </Col>
   );
-};
-
-export default DashboardHome2;
+}
