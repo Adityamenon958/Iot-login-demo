@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route,Navigate } from 'react-router-dom';
 import LoginPage from './LoginPage';
 import Dashboard from './pages/Dashboard';
-import DbFuelMonitoring from './pages/DbFuelMonitoring';
 import ReportsPage from './pages/ReportsPage';
 import Settings from './pages/Settings';
 import ManageCompany from './pages/ManageCompany';
@@ -15,6 +14,7 @@ import Subscription from './pages/Subscription';
 import FullPageSpinner from './components/FullPageSpinner';
 import LoginCarousel from './components/LoginCarousel';
 import './App.css';
+import DynamicDb from './components/DynamicDb';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,9 @@ function App() {
 
       <Route path="/dashboard" element={<Dashboard />}>
         <Route index element={<DashboardHome2 />} />
-        <Route path="dbfuelmonitoring" element={<DbFuelMonitoring />} />
+        {/* <Route path="dynamicdb" element={<DynamicDb />} /> */}
+        <Route path="device" element={<Navigate to="TRB245-SAMPLE" replace />} />
+        <Route path="device/:deviceId" element={<DynamicDb />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
         <Route

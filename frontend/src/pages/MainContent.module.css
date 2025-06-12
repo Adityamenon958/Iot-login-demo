@@ -6,6 +6,9 @@
     width: calc(100vw - 14rem);
   }
 
+  
+  
+
   .deviceCard {
     border-radius: 1.625rem;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
@@ -258,6 +261,102 @@
     font-size: 1.1rem;
     color: #6c757d;
   }
+
+/* keeps .main, .toprow, .bottomrow exactly as you had */
+.main3 {
+  background-color: #EEF6F8;
+  height: calc(100vh - 4.5rem);
+  overflow-y: auto;
+  border-top-left-radius: 1.625rem;
+  width: calc(100vw - 14rem);
+  padding: 1rem;
+  padding-left: 20px;
+}
+
+.toprow   { height: 250px; }
+.bottomrow{ height: calc(100vh - 350px); 
+  margin-top: 2px;
+}
+
+/* 🔹 New, sleeker “card” style */
+.panel {
+  background: #ffffff;
+  border: 1px solid #d1d9e6;          /* slightly darker than before */
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05); /* soft shadow */
+  display: flex;                      /* lets inner content stretch */
+  flex-direction: column;
+  overflow: hidden;                   /* clip child overflow nicely */
+}
+
+.panel1,
+.panel2 {
+  background: #ffffff;
+  border: 1px solid #d1d9e6;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* ❌ remove the fixed widths
+  width: 25%;
+  width: 75%;
+  */
+}
+
+
+/* Inner padding helper so you control spacing per component */
+.panelInner {
+  padding: 1rem 1.25rem;
+}
+
+/* Stretch helpers (unchanged) */
+.fullHeight { height: 100%; }
+
+
+/* For Bars */
+
+/* sensor bar wrapper */
+.barWrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  overflow-x: auto;        /* enables scroll when bars overflow */
+  padding-bottom: 6px;
+}
+
+/* each bar */
+.sensorBar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* container gives the bar its outline */
+.barContainer {
+  position: relative;      /* NEW: allows fill to be absolute */
+  width: 100%;
+  height: 140px;
+  background: #f1f5f9;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* coloured fill grows upward now */
+.barFill {
+  position: absolute;      /* NEW */
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: linear-gradient(180deg, #38bdf8 0%, #3b82f6 100%);
+}
+
+/* text below bar */
+.barLabel { font-size: 0.75rem; margin-top: 4px; color: #64748b; }
+.barValue { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
+
+
   
   /* Mobile tweaks */
   @media (max-width: 576px) {

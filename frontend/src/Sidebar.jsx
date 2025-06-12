@@ -85,7 +85,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             Dashboard
           </Button>
 
-          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/dbfuelmonitoring' ? styles.active : ''}`} onClick={() => navigate('/dashboard/dbfuelmonitoring')}>
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/device' ? styles.active : ''}`} onClick={() => navigate('/dashboard/device')}>
             <FileText size={20} className={`${styles.navText} me-2`} />
             Fuel Monitoring
           </Button>

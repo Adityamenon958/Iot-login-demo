@@ -270,49 +270,57 @@ export default function DashboardHome2() {
           </Table>
 
           {/* -------- PAGINATION -------- */}
-          <div className="d-flex justify-content-center mt-3 me-3">
-            <nav>
-              <ul className="pagination modern-pagination">
-                <li className={`page-item ${currentPage === 1 && 'disabled'}`}>
-                  <button className="page-link" onClick={() => setCurrentPage((p) => p - 1)}>
-                    Prev
-                  </button>
-                </li>
+{totalPages > 1 && (
+  <div className="d-flex justify-content-center mt-3 me-3">
+    <nav>
+      <ul className="pagination modern-pagination">
+        {/* Prev button */}
+        <li className={`page-item ${currentPage === 1 && 'disabled'}`}>
+          <button className="page-link" onClick={() => setCurrentPage(p => p - 1)}>
+            Prev
+          </button>
+        </li>
 
-                {(() => {
-                  const pages = [];
-                  if (totalPages <= 5) {
-                    for (let i = 1; i <= totalPages; i++) pages.push(i);
-                  } else {
-                    if (currentPage <= 3) pages.push(1, 2, 3, 4, '…', totalPages);
-                    else if (currentPage >= totalPages - 2)
-                      pages.push(1, '…', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-                    else pages.push(1, '…', currentPage - 1, currentPage, currentPage + 1, '…', totalPages);
-                  }
-                  return pages.map((pg, idx) => (
-                    <li
-                      key={idx}
-                      className={`page-item ${pg === currentPage ? 'active' : ''} ${pg === '…' && 'disabled'}`}
-                    >
-                      {pg === '…' ? (
-                        <span className="page-link">…</span>
-                      ) : (
-                        <button className="page-link" onClick={() => setCurrentPage(pg)}>
-                          {pg}
-                        </button>
-                      )}
-                    </li>
-                  ));
-                })()}
+        {(() => {
+          const pages = [];
+          if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+          } else {
+            if (currentPage <= 3) pages.push(1, 2, 3, 4, '…', totalPages);
+            else if (currentPage >= totalPages - 2)
+              pages.push(1, '…', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+            else
+              pages.push(1, '…', currentPage - 1, currentPage, currentPage + 1, '…', totalPages);
+          }
+          return pages.map((pg, idx) => (
+            <li
+              key={idx}
+              className={`page-item ${
+                pg === currentPage ? 'active' : ''
+              } ${pg === '…' && 'disabled'}`}
+            >
+              {pg === '…' ? (
+                <span className="page-link">…</span>
+              ) : (
+                <button className="page-link" onClick={() => setCurrentPage(pg)}>
+                  {pg}
+                </button>
+              )}
+            </li>
+          ));
+        })()}
 
-                <li className={`page-item ${currentPage === totalPages && 'disabled'}`}>
-                  <button className="page-link" onClick={() => setCurrentPage((p) => p + 1)}>
-                    Next
-                  </button>
-                </li>
-              </ul>
-            </nav>
-          </div>
+        {/* Next button */}
+        <li className={`page-item ${currentPage === totalPages && 'disabled'}`}>
+          <button className="page-link" onClick={() => setCurrentPage(p => p + 1)}>
+            Next
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+)}
+
         </div>
       </div>
     </Col>
