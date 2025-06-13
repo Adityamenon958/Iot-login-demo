@@ -7,6 +7,7 @@ import styles from "../pages/MainContent.module.css";
 import SensorGaugeStrip from "../components/SensorGaugeStrip";
 import SensorTable from "../components/SensorTable";
 import LineChartPanel from "../components/LineChartPanel";
+import AlarmHistoryTable from "../components/AlarmHistoryTable";
 
 /* ─── component ─── */
 export default function DynamicDb() {
@@ -168,7 +169,7 @@ useEffect(() => {
             </div>
           </div>
           <div className={styles.panel} style={{ minHeight: 250 }}>
-            <div className={styles.panelInner}>Alarm history</div>
+            <div className={styles.panelInner}><AlarmHistoryTable uid={selectedUid} /></div>
           </div>
         </Col>
       </Row>

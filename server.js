@@ -10,7 +10,7 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const Razorpay = require('razorpay');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
-
+const Alarm = require("./backend/models/Alarm"); 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -412,6 +412,37 @@ app.post('/api/levelsensor', async (req, res) => {
       companyUid
     });
 
+    const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
+
+const alarmsToInsert = [];
+
+if (Array.isArray(data)) {
+  data.forEach((raw, idx) => {
+    const deg = raw / 10;              // 270 → 27 °C
+    let level = null;
+    if (deg >= TH.highHigh) level = "HIGH HIGH";
+    else if (deg >= TH.high) level = "HIGH";
+    else if (deg <= TH.lowLow) level = "LOW LOW";
+    else if (deg <= TH.low) level = "LOW";
+    if (level) {
+      alarmsToInsert.push({
+        uid,
+        sensorId: `T${idx + 1}`,
+        value: deg,
+        level,
+        vehicleNo,
+        dateISO: dateISO || new Date(),
+        D,
+      });
+      console.log("🚨 will insert", alarmsToInsert.length, "alarm(s)");
+    }
+  });
+}
+
+if (alarmsToInsert.length) {
+  await Alarm.insertMany(alarmsToInsert);
+}
+
     await sensorDoc.save();
     res.status(201).json({ message: 'Sensor data saved ✅' });
   } catch (err) {
@@ -481,6 +512,29 @@ app.get('/api/levelsensor/latest', authenticateToken, async (req, res) => {
     .lean();
   if (!doc) return res.status(404).json({ message: 'No data' });
   res.json(doc);
+});
+
+// GET /api/alarms?uid=GS-1234&page=1&limit=20
+app.get("/api/alarms", authenticateToken, async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page  || "1", 10);
+    const limit = parseInt(req.query.limit || "20", 10);
+    const skip  = (page - 1) * limit;
+    const uid   = req.query.uid;
+
+    const filter = {};
+    if (uid) filter.uid = uid;
+
+    const [data, total] = await Promise.all([
+      Alarm.find(filter).sort({ dateISO: -1 }).skip(skip).limit(limit).lean(),
+      Alarm.countDocuments(filter),
+    ]);
+
+    res.json({ data, total });
+  } catch (err) {
+    console.error("Alarm GET error:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
 

@@ -182,7 +182,7 @@ export default function SensorTable({ deviceId }) {
                   <td>{row.address}</td>
                   <td>
                     {Array.isArray(row.data) ? row.data.join(", ") : row.data}{" "}
-                    {/* adjust unit as needed */}
+                    {/* adjust unit as needed */}°C
                   </td>
                   <td>{row.vehicleNo}</td>
                 </tr>

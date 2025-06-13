@@ -38,7 +38,7 @@ function App() {
       <Route path="/dashboard" element={<Dashboard />}>
         <Route index element={<DashboardHome2 />} />
         {/* <Route path="dynamicdb" element={<DynamicDb />} /> */}
-        <Route path="device" element={<Navigate to="TRB245-SAMPLE" replace />} />
+        <Route path="device" element={<Navigate to="GS-1234" replace />} />
         <Route path="device/:deviceId" element={<DynamicDb />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
