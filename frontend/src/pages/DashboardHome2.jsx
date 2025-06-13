@@ -116,7 +116,7 @@ export default function DashboardHome2() {
 
   /* ------------- AUTO-REFRESH every minute ---------- */
   useEffect(() => {
-    const id = setInterval(() => fetchSensorPage(currentPage), 60000);
+    const id = setInterval(() => fetchSensorPage(currentPage), 30000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);

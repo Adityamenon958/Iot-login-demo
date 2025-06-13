@@ -472,6 +472,18 @@ app.get('/api/levelsensor', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+// GET /api/levelsensor/latest?uid=TRB245-01
+app.get('/api/levelsensor/latest', authenticateToken, async (req, res) => {
+  const { uid } = req.query;
+  const doc = await LevelSensor.findOne({ uid })
+    .sort({ dateISO: -1 })
+    .lean();
+  if (!doc) return res.status(404).json({ message: 'No data' });
+  res.json(doc);
+});
+
+
 /* ------------------------------------------------------------------ */
 
 // Google Login 

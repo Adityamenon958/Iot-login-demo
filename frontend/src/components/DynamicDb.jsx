@@ -1,97 +1,170 @@
-import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Col, Row, Form } from "react-bootstrap";
+/* ─── imports ─── */
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Col, Row, Form, Spinner } from "react-bootstrap";
+import axios from "axios";
 import styles from "../pages/MainContent.module.css";
-import SensorBars from "../components/SensorBars";
+import SensorGaugeStrip from "../components/SensorGaugeStrip";
+import SensorTable from "../components/SensorTable";
 
-
+/* ─── component ─── */
 export default function DynamicDb() {
   const navigate = useNavigate();
-  const { deviceId } = useParams();            // URL param
-  const devices = ["TRB245-01", "TRB245-02", "TRB245-03"]; // mock list
-  const [selected, setSelected] = useState(deviceId ?? devices[0]);
-  const mockSensors = [
-  { id: "T1", label: "T1",        level: 34 },
-  { id: "T2", label: "T2",        level: 33.8 },
-  { id: "T3", label: "T3",        level: 35.1 },
-  { id: "T4", label: "T4",        level: 34.9 },
-  { id: "H",  label: "Humidity",  level: 62  },
-  { id: "T3", label: "T3",        level: 35.1 },
-  { id: "T4", label: "T4",        level: 34.9 },
-  { id: "H",  label: "Humidity",  level: 62  },
-  // add more to test scrolling
-];
 
+  /* devices & selection */
+  const [devices,     setDevices]     = useState([]);   // [{ uid, deviceId, location }]
+  const [selectedUid, setSelectedUid] = useState("");   // current UID
 
+  /* gauge state */
+  const [sensors,      setSensors]      = useState([]);
+  const [gaugeLoading, setGaugeLoading] = useState(true);
+  const [initLoading,  setInitLoading]  = useState(true); // first load spinner
 
-  const handleChange = (e) => {
-    const newId = e.target.value;
-    setSelected(newId);
-    navigate(`/dashboard/device/${newId}`);    // redirect
+  /* ─── 1. fetch device list on mount ─── */
+  useEffect(() => {
+    (async () => {
+      try {
+        /* who am I? */
+        const info = await axios.get("/api/auth/userinfo", { withCredentials: true });
+        const company = info.data.companyName;
+
+        /* devices I’m allowed to see */
+        const devRes = await axios.get("/api/devices", {
+          params: { companyName: company },
+          withCredentials: true,
+        });
+
+        setDevices(devRes.data);                 // [{uid, ...}, …]
+        if (devRes.data.length) setSelectedUid(devRes.data[0].uid);
+      } catch (err) {
+        console.error("Init fetch error", err);
+      } finally {
+        setInitLoading(false);
+      }
+    })();
+  }, []);
+
+  /* ─── 2. fetch latest sensor row when UID changes ─── */
+  /* ---------- Gauge fetch (initial + 30-sec auto-refresh) ---------- */
+useEffect(() => {
+  if (!selectedUid) return;
+
+  // ⬇︎ one-shot fetch wrapped in a helper
+  const fetchLatestGauge = async () => {
+    try {
+      setGaugeLoading(true);
+
+      const res = await axios.get("/api/levelsensor/latest", {
+        params: { uid: selectedUid },
+        withCredentials: true,
+      });
+
+      const latest = res.data;
+      if (!latest) {
+        setSensors([]);
+        return;
+      }
+
+      const parsed = latest.data.map((raw, i) => ({
+        id:    `S${i + 1}`,
+        label: `T${i + 1}`,
+        level: raw / 10,   // 270 → 27 °C
+      }));
+      setSensors(parsed);
+    } catch (err) {
+      console.error("Gauge fetch error", err);
+      setSensors([]);
+    } finally {
+      setGaugeLoading(false);
+    }
   };
+
+  /* 1️⃣ run immediately */
+  fetchLatestGauge();
+
+  /* 2️⃣ refresh every 30 000 ms */
+  const id = setInterval(fetchLatestGauge, 30_000);
+
+  /* cleanup when uid changes or component unmounts */
+  return () => clearInterval(id);
+}, [selectedUid]);
+
+
+  /* ─── render ─── */
+  if (initLoading) {
+    return (
+      <Col className="d-flex justify-content-center align-items-center" style={{ height: "100vh" }}>
+        <Spinner animation="border" />
+      </Col>
+    );
+  }
+
+  const activeDev = devices.find((d) => d.uid === selectedUid);
+
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={styles.main3}>
-      {/* ─── Row 1 ─── */}
-     <Row className={`w-100 gx-3 ${styles.toprow}`}>
-        {/* Device-info panel */}
+      {/* Row 1 */}
+      <Row className={`w-100 gx-3 ${styles.toprow}`}>
+        {/* Device info */}
         <Col xs={12} lg={4} className={styles.panel}>
           <div className={styles.panelInner}>
             <h5 className="fw-bold mb-3">Device Overview</h5>
 
             <Form.Select
               size="sm"
-              value={selected}
-              onChange={handleChange}
+              value={selectedUid}
+              onChange={(e) => {
+                setSelectedUid(e.target.value);
+                navigate(`/dashboard/device/${e.target.value}`);
+              }}
               className="mb-3"
             >
               {devices.map((d) => (
-                <option key={d} value={d}>
-                  {d}
+                <option key={d.uid} value={d.uid}>
+                  {d.uid /* show uid for now */}
                 </option>
               ))}
             </Form.Select>
 
             <ul className="list-unstyled mb-0">
               <li className="mb-2">
-                <span className="text-muted">Name:&nbsp;</span>
-                <span className="fw-semibold">L%T</span>
-              </li>
-              <li className="mb-2">
-                <span className="text-muted">Device:&nbsp;</span>
-                <span className="fw-semibold">{selected}</span>
+                <span className="text-muted">Device UID:&nbsp;</span>
+                <span className="fw-semibold">{selectedUid}</span>
               </li>
               <li className="mb-2">
                 <span className="text-muted">Location:&nbsp;</span>
-                <span className="fw-semibold">400007</span>
-              </li>
-              <li>
-                <span className="text-muted">Active Alarms:&nbsp;</span>
-                <span className="fw-semibold text-success">0</span>
+                <span className="fw-semibold">
+                  {activeDev?.location || "—"}
+                </span>
               </li>
             </ul>
           </div>
         </Col>
 
-
-        {/* top-right panel */}
-<Col xs={12} lg={8} className={styles.panel}>
-<div className={styles.panelInner}>
-  <SensorBars sensors={mockSensors} />
-  </div>
-</Col>
+        {/* Gauge strip */}
+        <Col xs={12} lg={8} className={styles.panel}>
+          <div className={styles.panelInner}>
+            {gaugeLoading ? (
+              <div className="d-flex justify-content-center py-4">
+                <Spinner animation="border" />
+              </div>
+            ) : (
+              <SensorGaugeStrip sensors={sensors} />
+            )}
+          </div>
+        </Col>
       </Row>
 
-      {/* ─── Row 2 ─── */}
+      {/* Row 2 */}
       <Row className={`w-100 gx-3 gy-3 ${styles.bottomrow} p-0`}>
-        <Col xs={12} lg={5} className={` ${styles.panel} `}>
-          <div className={styles.panelInner}>Live data table</div>
+        <Col xs={12} lg={5} className={styles.panel1}>
+          <SensorTable deviceId={selectedUid} />
         </Col>
-
         <Col xs={12} lg={7} className="d-flex flex-column gap-3">
           <div className={`${styles.panel} flex-grow-1`}>
-            <div className={` ${styles.panelInner}`}>Line chart</div>
+            <div className={styles.panelInner}>Line chart</div>
           </div>
-          <div className={styles.panel} style={{ minHeight: "250px" }}>
+          <div className={styles.panel} style={{ minHeight: 250 }}>
             <div className={styles.panelInner}>Alarm history</div>
           </div>
         </Col>

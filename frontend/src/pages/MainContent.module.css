@@ -273,10 +273,12 @@
   padding-left: 20px;
 }
 
-.toprow   { height: 250px; }
-.bottomrow{ height: calc(100vh - 350px); 
-  margin-top: 2px;
+.toprow   { height: 230px;}
+.bottomrow{ height: calc(100vh - 320px); 
+  
 }
+
+
 
 /* 🔹 New, sleeker “card” style */
 .panel {
@@ -286,7 +288,8 @@
   box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05); /* soft shadow */
   display: flex;                      /* lets inner content stretch */
   flex-direction: column;
-  overflow: hidden;                   /* clip child overflow nicely */
+  overflow: hidden; 
+  height: 225px;                  /* clip child overflow nicely */
 }
 
 .panel1,
@@ -307,6 +310,7 @@
 
 /* Inner padding helper so you control spacing per component */
 .panelInner {
+  height: 225px;
   padding: 1rem 1.25rem;
 }
 
@@ -323,6 +327,7 @@
   gap: 12px;
   overflow-x: auto;        /* enables scroll when bars overflow */
   padding-bottom: 6px;
+  width: 900px;
 }
 
 /* each bar */
