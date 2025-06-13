@@ -6,6 +6,7 @@ import axios from "axios";
 import styles from "../pages/MainContent.module.css";
 import SensorGaugeStrip from "../components/SensorGaugeStrip";
 import SensorTable from "../components/SensorTable";
+import LineChartPanel from "../components/LineChartPanel";
 
 /* ─── component ─── */
 export default function DynamicDb() {
@@ -162,7 +163,9 @@ useEffect(() => {
         </Col>
         <Col xs={12} lg={7} className="d-flex flex-column gap-3">
           <div className={`${styles.panel} flex-grow-1`}>
-            <div className={styles.panelInner}>Line chart</div>
+            <div className={styles.panelInner}>
+          <LineChartPanel uid={selectedUid} />
+            </div>
           </div>
           <div className={styles.panel} style={{ minHeight: 250 }}>
             <div className={styles.panelInner}>Alarm history</div>
