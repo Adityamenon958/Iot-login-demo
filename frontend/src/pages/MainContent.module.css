@@ -362,7 +362,6 @@
 .barValue { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
 
 
-  
   /* Mobile tweaks */
   @media (max-width: 576px) {
     .subscriptionCard2 {

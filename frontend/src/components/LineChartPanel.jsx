@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { Form, Spinner } from "react-bootstrap";
 import { format, parse, subMinutes, subHours, subDays } from "date-fns";
+import styles from "../pages/MainContent.module.css";
 
 const ranges = [
   { label: "15 min", key: "15m", from: () => subMinutes(new Date(), 15) },
@@ -37,7 +38,7 @@ export default function LineChartPanel({ uid }) {
           params: {
             page: 1,
             limit: 500,
-            sort: "asc",
+            sort: "desc",
             column: "uid",
             search: uid,
           },
@@ -55,8 +56,8 @@ export default function LineChartPanel({ uid }) {
             doc.data.forEach((raw, i) => (row[`S${i + 1}`] = raw / 10));
             return row;
           })
-          .filter(Boolean);
-
+          .filter(Boolean)
+          .reverse(); 
         setData(rows);
       } catch (err) {
         console.error("LineChart fetch err", err);
@@ -82,7 +83,7 @@ export default function LineChartPanel({ uid }) {
   const safeFmt = (d, fmt) => (isNaN(d) ? "" : format(d, fmt));
 
   return (
-    <div ref={chartRef}>
+    <div ref={chartRef} className={`${styles.chartPanel}`}>
       <Form.Select
         size="sm"
         value={rangeKey}
@@ -102,7 +103,7 @@ export default function LineChartPanel({ uid }) {
           <Spinner animation="border" />
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={270}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis

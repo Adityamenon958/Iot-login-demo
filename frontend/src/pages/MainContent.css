@@ -7,8 +7,8 @@
 
 
   .tableScroll{
-    overflow-y: auto;
-    max-height: 525px;
+    overflow-y: none;
+    max-height: 530px;
   }
 
   .table2Scroll{
