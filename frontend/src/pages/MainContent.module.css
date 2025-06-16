@@ -314,6 +314,11 @@
   padding: 1rem 1.25rem;
 }
 
+.panelInnertable {
+  height: 225px;
+  padding: 1rem 1.25rem ;
+}
+
 /* Stretch helpers (unchanged) */
 .fullHeight { height: 100%; }
 

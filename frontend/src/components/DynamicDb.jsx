@@ -169,7 +169,7 @@ useEffect(() => {
             </div>
           </div>
           <div className={styles.panel} style={{ minHeight: 250 }}>
-            <div className={styles.panelInner}><AlarmHistoryTable uid={selectedUid} /></div>
+            <div className={styles.panelInnertable}><AlarmHistoryTable uid={selectedUid} /></div>
           </div>
         </Col>
       </Row>

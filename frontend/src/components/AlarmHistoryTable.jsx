@@ -1,3 +1,4 @@
+// AlarmHistoryTable.jsx  – fixed scrolling header + latest-10
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Table, Spinner } from "react-bootstrap";
@@ -6,23 +7,28 @@ export default function AlarmHistoryTable({ uid }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  /* fetch newest 10 */
+  const fetchAlarms = async () => {
+    if (!uid) return;
+    try {
+      const res = await axios.get("/api/alarms", {
+        params: { uid, page: 1, limit: 10 },   // ← newest 10
+        withCredentials: true,
+      });
+      setRows(res.data.data);
+    } catch (err) {
+      console.error("Alarm fetch", err);
+      setRows([]);
+    }
+  };
+
+  /* initial + auto-refresh */
   useEffect(() => {
     if (!uid) return;
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get("/api/alarms", {
-          params: { uid, page: 1, limit: 50 },
-          withCredentials: true,
-        });
-        setRows(res.data.data);
-      } catch (err) {
-        console.error("Alarm fetch", err);
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    fetchAlarms().finally(() => setLoading(false));
+    const id = setInterval(fetchAlarms, 30_000);
+    return () => clearInterval(id);
   }, [uid]);
 
   if (loading)
@@ -33,35 +39,47 @@ export default function AlarmHistoryTable({ uid }) {
     );
 
   return (
-    <Table size="sm" striped hover responsive>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Sensor</th>
-          <th>Value (°C)</th>
-          <th>Level</th>
-          <th>Vehicle</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 ? (
+    /* ① scroll-box */
+    <div style={{ maxHeight: 220, overflowY: "auto" }}>
+      <Table size="sm" striped hover responsive className="mb-0">
+        <thead>
           <tr>
-            <td colSpan="5" className="text-center">
-              No alarms
-            </td>
+            <th style={sticky}>Date</th>
+            <th style={sticky}>Sensor</th>
+            <th style={sticky}>Value (°C)</th>
+            <th style={sticky}>Level</th>
+            <th style={sticky}>Vehicle</th>
           </tr>
-        ) : (
-          rows.map((r) => (
-            <tr key={r._id}>
-              <td>{new Date(r.dateISO).toLocaleString()}</td>
-              <td>{r.sensorId}</td>
-              <td>{r.value.toFixed(1)}</td>
-              <td>{r.level}</td>
-              <td>{r.vehicleNo}</td>
+        </thead>
+
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan="5" className="text-center">
+                No alarms
+              </td>
             </tr>
-          ))
-        )}
-      </tbody>
-    </Table>
+          ) : (
+            rows.map((r) => (
+              <tr key={r._id}>
+                <td>{new Date(r.dateISO).toLocaleString()}</td>
+                <td>{r.sensorId}</td>
+                <td>{r.value.toFixed(1)}</td>
+                <td>{r.level}</td>
+                <td>{r.vehicleNo}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </Table>
+    </div>
   );
 }
+
+/* sticky header cell style */
+const sticky = {
+  position: "sticky",
+  top: 0,
+  background: "#fff",
+  zIndex: 1,
+};
