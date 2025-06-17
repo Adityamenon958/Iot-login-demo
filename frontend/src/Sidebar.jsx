@@ -82,12 +82,12 @@ export default function Sidebar({ isOpen, closeSidebar }) {
         <Nav className="flex-column align-items-start px-3">
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard' ? styles.active : ''}`} onClick={() => navigate('/dashboard')}>
             <LayoutDashboard size={20} className="me-2" />
-            Dashboard
+            Home
           </Button>
 
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/device' ? styles.active : ''}`} onClick={() => navigate('/dashboard/device')}>
             <FileText size={20} className={`${styles.navText} me-2`} />
-            Fuel Monitoring
+            Dasboard
           </Button>
 
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/reports' ? styles.active : ''}`} onClick={() => navigate('/dashboard/reports')}>

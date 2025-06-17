@@ -391,7 +391,7 @@ app.post('/api/levelsensor', async (req, res) => {
       const [datePart, timePart = '00:00:00'] = D.split(' ');
       const [day, month, year] = datePart.split('/').map(Number);
       const [h, m, s] = timePart.split(':').map(Number);
-      dateISO = new Date(year, month - 1, day, h, m, s);
+dateISO = new Date(Date.UTC(year, month - 1, day, h, m, s));
     }
 
     /* ⭐ 2. Store company name for this uid (used in GET filtering) */

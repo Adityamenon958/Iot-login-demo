@@ -1,4 +1,4 @@
-// LineChartPanel.jsx  (patched)
+// LineChartPanel.jsx  – with 30-second auto-refresh
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
@@ -8,6 +8,7 @@ import { Form, Spinner } from "react-bootstrap";
 import { format, parse, subMinutes, subHours, subDays } from "date-fns";
 import styles from "../pages/MainContent.module.css";
 
+/* ---- range presets ---- */
 const ranges = [
   { label: "15 min", key: "15m", from: () => subMinutes(new Date(), 15) },
   { label: "30 min", key: "30m", from: () => subMinutes(new Date(), 30) },
@@ -19,56 +20,65 @@ const colors = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
 
 export default function LineChartPanel({ uid }) {
   const [rangeKey, setRangeKey] = useState("15m");
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [soloKey, setSoloKey] = useState(null);
+  const [data,     setData]     = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [soloKey,  setSoloKey]  = useState(null);
   const chartRef = useRef(null);
 
-  /* fetch rows */
-  useEffect(() => {
+  /* ------------ data fetch helper ------------ */
+  const fetchRows = async () => {
     if (!uid) return;
     const { from } = ranges.find((r) => r.key === rangeKey);
 
-    (async () => {
-      try {
-        setLoading(true);
+    try {
+      setLoading(true);
 
-        const res = await axios.get("/api/levelsensor", {
-          withCredentials: true,
-          params: {
-            page: 1,
-            limit: 500,
-            sort: "desc",
-            column: "uid",
-            search: uid,
-          },
-        });
+      const res = await axios.get("/api/levelsensor", {
+        withCredentials: true,
+        params: {
+          page: 1,
+          limit: 500,
+          sort: "desc",
+          column: "uid",
+          search: uid,
+        },
+      });
 
-        const rows = res.data.data
-   .filter((doc) => doc.D)                           // keep rows that have D
-   .map((doc) => {
-     /* 1️⃣ parse “24/07/2024 13:45:55” as *local* Date               */
-     const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
-     /* 2️⃣ skip if outside the selected range                        */
-     if (ts < from()) return null;
+      const rows = res.data.data
+        .filter((doc) => doc.D)
+        .map((doc) => {
+          const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
+          if (ts < from()) return null;          // outside selected window
 
-     const row = { ts };
-            doc.data.forEach((raw, i) => (row[`S${i + 1}`] = raw / 10));
-            return row;
-          })
-          .filter(Boolean)
-          .reverse(); 
-        setData(rows);
-      } catch (err) {
-        console.error("LineChart fetch err", err);
-        setData([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+          const row = { ts };
+          doc.data.forEach((raw, i) => (row[`S${i + 1}`] = raw / 10));
+          return row;
+        })
+        .filter(Boolean)
+        .reverse();                              // oldest → newest
+
+      setData(rows);
+    } catch (err) {
+      console.error("LineChart fetch err", err);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ------------ initial + range/uid change + auto-refresh ------------ */
+  useEffect(() => {
+    if (!uid) return;
+
+    /* 1️⃣ immediate load */
+    fetchRows();
+
+    /* 2️⃣ 30-second polling */
+    const id = setInterval(fetchRows, 30_000);
+    return () => clearInterval(id);
   }, [uid, rangeKey]);
 
-  /* click–outside resets solo */
+  /* ------------ click outside clears solo selection ------------ */
   useEffect(() => {
     const h = (e) => {
       if (chartRef.current && !chartRef.current.contains(e.target)) setSoloKey(null);
@@ -77,13 +87,13 @@ export default function LineChartPanel({ uid }) {
     return () => window.removeEventListener("click", h);
   }, []);
 
+  /* ------------ helpers ------------ */
   const seriesKeys = data[0] ? Object.keys(data[0]).filter((k) => k !== "ts") : [];
-
-  /* helper to avoid format() on invalid date */
   const safeFmt = (d, fmt) => (isNaN(d) ? "" : format(d, fmt));
 
+  /* ------------ UI ------------ */
   return (
-    <div ref={chartRef} className={`${styles.chartPanel}`}>
+    <div ref={chartRef} className={styles.chartPanel}>
       <Form.Select
         size="sm"
         value={rangeKey}
@@ -112,9 +122,7 @@ export default function LineChartPanel({ uid }) {
             />
             <YAxis />
             <Tooltip
-              labelFormatter={(t) =>
-                safeFmt(new Date(t), "dd MMM, HH:mm:ss")
-              }
+              labelFormatter={(t) => safeFmt(new Date(t), "dd MMM, HH:mm:ss")}
             />
             <Legend
               onClick={(e) => setSoloKey((prev) => (prev === e.value ? null : e.value))}

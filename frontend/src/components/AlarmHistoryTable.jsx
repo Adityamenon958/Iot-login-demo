@@ -62,8 +62,8 @@ export default function AlarmHistoryTable({ uid }) {
           ) : (
             rows.map((r) => (
               <tr key={r._id}>
-                <td>{new Date(r.dateISO).toLocaleString()}</td>
-                <td>{r.sensorId}</td>
+ <td>{r.D || r.dateISO}</td>
+              <td>{r.sensorId}</td>
                 <td>{r.value.toFixed(1)}</td>
                 <td>{r.level}</td>
                 <td>{r.vehicleNo}</td>
