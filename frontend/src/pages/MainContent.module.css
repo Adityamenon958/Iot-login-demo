@@ -367,6 +367,21 @@
 .barValue { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
 
 
+/* Gauge */
+/* gauge base colours */
+.gauge-blue { color: #3b82f6; }       /* normal */
+.gauge-red  { color: #dc2626; }       /* alarm high */
+.gauge-pink { color: #f472b6; }       /* alarm low  */
+
+/* blink animation */
+@keyframes pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+.blink { animation: pulse 1.2s ease-in-out infinite; }
+
+
   /* Mobile tweaks */
   @media (max-width: 576px) {
     .subscriptionCard2 {

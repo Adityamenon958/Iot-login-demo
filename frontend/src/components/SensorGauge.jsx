@@ -1,14 +1,35 @@
 // SensorGauge.jsx
 import React from "react";
 import { RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
+import clsx from "clsx";      
 
-const SensorGauge = ({ value, label, min = 0, max = 60 }) => {
-  const pct = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
-  const data = [{ name: label, uv: pct, fill: "#3b82f6" }];
+const SensorGauge = ({
+  value,
+  label,
+  alertLevel = null,          // NEW ("HIGH", "LOW LOW", … or null)
+  min = 0,
+  max = 60,
+}) => {  const pct = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
+  // choose colour class
+  const colourClass =
+    alertLevel === "HIGH" || alertLevel === "HIGH HIGH"
+      ? "gauge-red"
+      : alertLevel === "LOW" || alertLevel === "LOW LOW"
+      ? "gauge-pink"
+      : "gauge-blue";
+
+  const blinkClass =
+    alertLevel === "HIGH HIGH" || alertLevel === "LOW LOW"
+      ? "blink"
+      : "";
+
+  const data = [{ name: label, uv: pct, fill: "currentColor" }];
 
   return (
-    <div className="flex flex-col " style={{ width: 140, textAlign: "center" }}>
-      <RadialBarChart
+<div
+      className={clsx("flex flex-col items-center", colourClass, blinkClass)}
+      style={{ width: 140, textAlign: "center" }}
+    >      <RadialBarChart
         width={140}
         height={140}
         innerRadius="80%"

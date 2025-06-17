@@ -1,0 +1,12 @@
+/* ==== Gauge colours – global ==== */
+.gauge-blue { color:#3b82f6; }     /* normal */
+.gauge-red  { color:#dc2626; }     /* HIGH / HIGH HIGH */
+.gauge-pink { color:#f472b6; }     /* LOW  / LOW LOW */
+
+/* ==== Blink when HIGH HIGH or LOW LOW ==== */
+@keyframes pulse{
+  0%{opacity:1}
+  50%{opacity:.35}
+  100%{opacity:1}
+}
+.blink{animation:pulse 1.2s ease-in-out infinite}
