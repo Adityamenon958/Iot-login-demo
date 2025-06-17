@@ -476,19 +476,40 @@ app.get('/api/levelsensor', authenticateToken, async (req, res) => {
     }
 
     /* 4. Search filter */
-    if (search) {
-      const rx = new RegExp(search, 'i');
-      if (column) {
-        mongoFilter[column] = rx;
+    /* 4. Search filter -------------------------------------------------- */
+if (search) {
+  const rx       = new RegExp(search, "i");
+  const numeric  = Number(search);                 // NaN if not a number
+  const isNumber = !isNaN(numeric);
+
+  if (column) {
+    if (column === "data") {
+      /* ── user chose the “Data” column ── */
+      if (isNumber) {
+        // in DB the value is stored ×10 (27 °C → 270)
+        mongoFilter.data = { $elemMatch: { $eq: Math.round(numeric * 10) } };
       } else {
-        mongoFilter.$or = [
-          { D: rx },
-          { address: rx },
-          { vehicleNo: rx },
-          { uid: rx }
-        ];
+        // if user typed non-numeric, no match for data column
+        mongoFilter.data = { $exists: false };     // will return empty set
       }
+    } else {
+      /* D, address, vehicleNo, uid */
+      mongoFilter[column] = rx;
     }
+  } else {
+    /* ── “All Columns” search ── */
+    mongoFilter.$or = [
+      { D:         rx },
+      { address:   rx },
+      { vehicleNo: rx },
+      { uid:       rx },
+      isNumber && {
+        data: { $elemMatch: { $eq: Math.round(numeric * 10) } }
+      }
+    ].filter(Boolean);                            // remove false entry if NaN
+  }
+}
+
 
     /* 5. Sort & fetch one page */
     const sortObj = { dateISO: sort };
