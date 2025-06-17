@@ -84,3 +84,12 @@
   background-color: #f0f0f0;
 }
 
+/* paste anywhere in one of your global CSS files (or in App.css) */
+.row-high     { background: rgba(252,165,165,.25); }   /* light red  */
+.row-highHigh { background: rgba(239, 68, 68 ,.25); }  /* deeper red */
+.row-low      { background: rgba(249,168,212,.25); }   /* light pink */
+.row-lowLow   { background: rgba(236, 72,153 ,.25); }  /* deeper pink */
+
+@keyframes pulse { 0%{opacity:1} 50%{opacity:.35} 100%{opacity:1} }
+.blink { animation: pulse 1.2s ease-in-out infinite; }
+

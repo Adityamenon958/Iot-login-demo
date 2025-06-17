@@ -1,35 +1,40 @@
 // SensorGauge.jsx
-import React from "react";
+import React, { useMemo } from "react";
 import { RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
-import clsx from "clsx";      
 
-const SensorGauge = ({
-  value,
-  label,
-  alertLevel = null,          // NEW ("HIGH", "LOW LOW", … or null)
-  min = 0,
-  max = 60,
-}) => {  const pct = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
-  // choose colour class
+/* 🚩 hard-coded thresholds for now – will come from
+   company settings later */
+const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
+
+const SensorGauge = ({ value, label, min = 0, max = 60 }) => {
+  /* %-fill for the arc */
+  const pct = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
+  const data = useMemo(() => [{ uv: pct }], [pct]);
+
+  /* decide alarm level */
+  let alert = null;
+  if (value >= TH.highHigh) alert = "HIGH HIGH";
+  else if (value >= TH.high) alert = "HIGH";
+  else if (value <= TH.lowLow) alert = "LOW LOW";
+  else if (value <= TH.low) alert = "LOW";
+
+  /* map to global CSS classes */
   const colourClass =
-    alertLevel === "HIGH" || alertLevel === "HIGH HIGH"
+    alert === "HIGH" || alert === "HIGH HIGH"
       ? "gauge-red"
-      : alertLevel === "LOW" || alertLevel === "LOW LOW"
+      : alert === "LOW" || alert === "LOW LOW"
       ? "gauge-pink"
       : "gauge-blue";
 
   const blinkClass =
-    alertLevel === "HIGH HIGH" || alertLevel === "LOW LOW"
-      ? "blink"
-      : "";
-
-  const data = [{ name: label, uv: pct, fill: "currentColor" }];
+    alert === "HIGH HIGH" || alert === "LOW LOW" ? "blink" : "";
 
   return (
-<div
-      className={clsx("flex flex-col items-center", colourClass, blinkClass)}
+    <div
+      className={`d-flex flex-column align-items-center ${colourClass} ${blinkClass}`}
       style={{ width: 140, textAlign: "center" }}
-    >      <RadialBarChart
+    >
+      <RadialBarChart
         width={140}
         height={140}
         innerRadius="80%"
@@ -38,19 +43,21 @@ const SensorGauge = ({
         startAngle={180}
         endAngle={0}
       >
-        {/* FIX: tell Recharts what 0 – 100 % means */}
         <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-
+        {/* 🖌️ inherit the container colour */}
         <RadialBar
           dataKey="uv"
+          fill="currentColor"
           background
-          clockWise
-          cornerRadius={10}
+          clockWisenerRadiu
+          cors={10}
           minAngle={2}
         />
       </RadialBarChart>
 
-      <div style={{ fontSize: 20, fontWeight: 600 }}>{value}°C</div>
+      <div style={{ fontSize: 20, fontWeight: 600 }}>
+        {value.toFixed(1)}°C
+      </div>
       <div style={{ fontSize: 16, color: "#64748b" }}>{label}</div>
     </div>
   );

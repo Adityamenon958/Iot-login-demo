@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from "recharts";
+   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+   Legend, ResponsiveContainer, ReferenceLine          /* ← NEW */
+ } from "recharts";
 import { Form, Spinner } from "react-bootstrap";
 import { format, parse, subMinutes, subHours, subDays } from "date-fns";
 import styles from "../pages/MainContent.module.css";
@@ -17,6 +18,8 @@ const ranges = [
   { label: "Weekly", key: "7d", from: () => subDays(new Date(), 7) },
 ];
 const colors = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
+/* same four numbers the gauges use – later we’ll load these per-company */
+const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
 
 export default function LineChartPanel({ uid }) {
   const [rangeKey, setRangeKey] = useState("15m");
@@ -24,11 +27,12 @@ export default function LineChartPanel({ uid }) {
   const [loading,  setLoading]  = useState(true);
   const [soloKey,  setSoloKey]  = useState(null);
   const chartRef = useRef(null);
+  
 
   /* ------------ data fetch helper ------------ */
   const fetchRows = async () => {
     if (!uid) return;
-    const { from } = ranges.find((r) => r.key === rangeKey);
+ const fromDate = ranges.find((r) => r.key === rangeKey).from();   // eval once
 
     try {
       setLoading(true);
@@ -48,7 +52,7 @@ export default function LineChartPanel({ uid }) {
         .filter((doc) => doc.D)
         .map((doc) => {
           const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
-          if (ts < from()) return null;          // outside selected window
+ if (ts < fromDate) return null;
 
           const row = { ts };
           doc.data.forEach((raw, i) => (row[`S${i + 1}`] = raw / 10));
@@ -56,6 +60,22 @@ export default function LineChartPanel({ uid }) {
         })
         .filter(Boolean)
         .reverse();                              // oldest → newest
+
+      /* ── evaluate ONLY the latest reading ── */
+      let latestVals = [];
+      if (rows.length) {
+        const newest = rows[rows.length - 1];          // newest == last
+        latestVals = Object.keys(newest)
+          .filter(k => k !== "ts")
+          .map(k => newest[k]);
+      }
+
+      setAlarmLines({
+        highHigh: latestVals.some(v => v >= TH.highHigh),
+        high:     latestVals.some(v => v >= TH.high && v < TH.highHigh),
+        lowLow:   latestVals.some(v => v <= TH.lowLow),
+        low:      latestVals.some(v => v <= TH.low && v > TH.lowLow)
+      });
 
       setData(rows);
     } catch (err) {
@@ -65,6 +85,10 @@ export default function LineChartPanel({ uid }) {
       setLoading(false);
     }
   };
+
+  const [alarmLines, setAlarmLines] = useState({
+  highHigh:false, high:false, low:false, lowLow:false
+});
 
   /* ------------ initial + range/uid change + auto-refresh ------------ */
   useEffect(() => {
@@ -127,9 +151,53 @@ export default function LineChartPanel({ uid }) {
             <Legend
               onClick={(e) => setSoloKey((prev) => (prev === e.value ? null : e.value))}
             />
+
+            {/* dashed threshold guides */}
+{alarmLines.highHigh && (
+  <ReferenceLine
+    y={TH.highHigh}
+    stroke="#dc2626"
+    strokeDasharray="6 4"
+    strokeWidth={2}
+    label={{ value: "HIGH HIGH", position: "insideTopRight", fontSize: 11, fill: "#dc2626" }}
+  />
+)}
+
+{alarmLines.high && !alarmLines.highHigh && (
+  <ReferenceLine
+    y={TH.high}
+    stroke="#f87171"
+    strokeDasharray="6 4"
+    strokeWidth={2}
+    label={{ value: "HIGH", position: "insideTopRight", fontSize: 11, fill: "#f87171" }}
+  />
+)}
+
+{alarmLines.lowLow && (
+  <ReferenceLine
+    y={TH.lowLow}
+    stroke="#ec4899"
+    strokeDasharray="6 4"
+    strokeWidth={2}
+    label={{ value: "LOW LOW", position: "insideTopRight", fontSize: 11, fill: "#ec4899" }}
+  />
+)}
+
+{alarmLines.low && !alarmLines.lowLow && (
+  <ReferenceLine
+    y={TH.low}
+    stroke="#f9a8d4"
+    strokeDasharray="6 4"
+    strokeWidth={2}
+    label={{ value: "LOW", position: "insideTopRight", fontSize: 11, fill: "#f9a8d4" }}
+  />
+)}
+
+
             {seriesKeys.map(
               (k, idx) =>
                 (!soloKey || soloKey === k) && (
+                  
                   <Line
                     key={k}
                     type="monotone"

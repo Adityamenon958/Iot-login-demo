@@ -3,8 +3,21 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Table, Row, Col, Form, Spinner } from "react-bootstrap";
 import styles from "../pages/MainContent.module.css";
+import "../pages/MainContent.css";
 
 const rowsPerPage = 9;          // keep identical to old dashboard
+
+const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };   // °C thresholds
+
+const getLevel = (vals) => {
+  const hi = Math.max(...vals);
+  const lo = Math.min(...vals);
+  if (hi >= TH.highHigh) return "highHigh";
+  if (hi >= TH.high)     return "high";
+  if (lo <= TH.lowLow)   return "lowLow";
+  if (lo <= TH.low)      return "low";
+  return "normal";
+};
 
 export default function SensorTable({ deviceId }) {
   /* -------- state -------- */
@@ -25,6 +38,8 @@ export default function SensorTable({ deviceId }) {
 
   const [selectAll,    setSelectAll]   = useState(false);
   const [selectedRows, setSelectedRows]= useState([]);
+  const [fetchTime, setFetchTime] = useState(new Date());
+
 
   /* -------- helpers -------- */
   const fetchUserInfo = async () => {
@@ -53,6 +68,7 @@ export default function SensorTable({ deviceId }) {
     setSensorData(res.data.data);
     setTotalPages(Math.max(1, Math.ceil(res.data.total / rowsPerPage)));
     setLastUpdated(new Date());
+    setFetchTime(new Date());
     setRefreshing(false);
   };
 
@@ -157,40 +173,52 @@ export default function SensorTable({ deviceId }) {
             </tr>
           </thead>
           <tbody>
-            {sensorData.length === 0 ? (
-              <tr>
-                <td colSpan="5" className="text-center">
-                  No sensor data found
-                </td>
-              </tr>
-            ) : (
-              sensorData.map((row) => (
-                <tr key={row._id}>
-                  <td>
-                    <Form.Check
-                      checked={selectedRows.includes(row._id)}
-                      onChange={(e) => {
-                        const isChecked = e.target.checked;
-                        setSelectedRows((prev) =>
-                          isChecked ? [...prev, row._id] : prev.filter((id) => id !== row._id)
-                        );
-                        if (!isChecked) setSelectAll(false);
-                      }}
-                    />
-                  </td>
-                  <td>{row.D}</td>
-                  <td>{row.address}</td>
-                  <td>
-   {Array.isArray(row.data)
-     ? row.data.map((v) => (v / 10).toFixed(1)).join(", ")
-     : (row.data / 10).toFixed(1)}{" "}
-   °C
- </td>
-                  <td>{row.vehicleNo}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
+  {sensorData.length === 0 ? (
+    <tr>
+      <td colSpan="5" className="text-center">No sensor data found</td>
+    </tr>
+  ) : (
+    sensorData.map((row, idx) => {
+      const vals   = Array.isArray(row.data) ? row.data.map(v => v / 10) : [row.data / 10];
+      const level  = getLevel(vals);                        // high / low / normal
+      const tint   = level !== "normal" ? `row-${level}` : "";
+      const recent = Date.now() - fetchTime.getTime() < 30_000;
+      const blink  = idx === 0 && level !== "normal" && recent ? "blink" : "";
+
+      return (
+        <tr
+  key={row._id}
+  className={blink}                         // keep blink animation
+  style={{
+    background:
+      level === "highHigh" ? "rgba(239,68,68,.25)"  :      // deep red
+      level === "high"     ? "rgba(252,165,165,.25)" :      // light red
+      level === "lowLow"   ? "rgba(236,72,153,.25)"  :      // deep pink
+      level === "low"      ? "rgba(249,168,212,.25)" :      // light pink
+      "transparent"
+  }}
+>
+
+          <td>
+            <Form.Check
+              checked={selectedRows.includes(row._id)}
+              onChange={e => {
+                const chk = e.target.checked;
+                setSelectedRows(prev => chk ? [...prev, row._id] : prev.filter(id => id !== row._id));
+                if (!chk) setSelectAll(false);
+              }}
+            />
+          </td>
+          <td>{row.D}</td>
+          <td>{row.address}</td>
+          <td>{vals.map(v => v.toFixed(1)).join(", ")} °C</td>
+          <td>{row.vehicleNo}</td>
+        </tr>
+      );
+    })
+  )}
+</tbody>
+
         </Table>
       </div>
 
