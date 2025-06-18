@@ -493,8 +493,12 @@ if (search) {
         mongoFilter.data = { $exists: false };     // will return empty set
       }
     } else {
-      /* D, address, vehicleNo, uid */
-      mongoFilter[column] = rx;
+     if (column === 'uid') {
+     /* exact (case-insensitive) match → returns only that UID */
+     mongoFilter.uid = { $regex: `^${search}$`, $options: 'i' };
+   } else {
+     mongoFilter[column] = rx;
+   }
     }
   } else {
     /* ── “All Columns” search ── */
