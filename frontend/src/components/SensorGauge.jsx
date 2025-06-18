@@ -32,16 +32,16 @@ const SensorGauge = ({ value, label, min = 0, max = 60 }) => {
   return (
     <div
       className={`d-flex flex-column align-items-center ${colourClass} ${blinkClass}`}
-      style={{ width: 140, textAlign: "center" }}
+      style={{ width: 140, textAlign: "center", marginTop: 25 }}
     >
       <RadialBarChart
         width={140}
         height={140}
-        innerRadius="80%"
-        outerRadius="100%"
+        innerRadius="90%"
+        outerRadius="130%"
         data={data}
-        startAngle={180}
-        endAngle={0}
+        startAngle={190}
+        endAngle={-10}
       >
         <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
         {/* 🖌️ inherit the container colour */}
@@ -51,11 +51,12 @@ const SensorGauge = ({ value, label, min = 0, max = 60 }) => {
           background
           clockWisenerRadiu
           cors={10}
+          cornerRadius="50%" 
           minAngle={2}
         />
       </RadialBarChart>
 
-      <div style={{ fontSize: 20, fontWeight: 600 }}>
+      <div style={{ fontSize: 20, fontWeight: 600, marginTop: -40 }}>
         {value.toFixed(1)}°C
       </div>
       <div style={{ fontSize: 16, color: "#64748b" }}>{label}</div>
