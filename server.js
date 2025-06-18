@@ -692,10 +692,10 @@ if (razorSub.status !== 'active' || now > oneMonthLater) {
 }
 
       } catch (err) {
-        console.warn("⚠️ Failed to fetch Razorpay subscription:", err.message);
-        user.subscriptionStatus = 'inactive';
-        await user.save();
-      }
+   console.warn("⚠️ Razorpay API call failed – leaving existing subscriptionStatus untouched:", err.message);
+   // NOTE: do NOT overwrite status on pure network / auth errors
+   //       Only log and continue.
+ }
     }
 
     // ✅ Re-fetch updated user after saving
@@ -710,7 +710,7 @@ if (razorSub.status !== 'active' || now > oneMonthLater) {
         subscriptionStatus: user.subscriptionStatus || "inactive"
       },
       process.env.JWT_SECRET || "supersecretkey",
-      { expiresIn: '1h' }
+      { expiresIn: '2h' }
     );
 
     res
@@ -718,7 +718,7 @@ if (razorSub.status !== 'active' || now > oneMonthLater) {
         httpOnly: true,
         secure: true,
         sameSite: 'Strict',
-        maxAge: 60 * 60 * 1000,
+        maxAge: 8 * 60 * 60 * 1000,
       })
       .json({
         message: "Login successful ✅",
