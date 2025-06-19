@@ -43,8 +43,7 @@ export default function LineChartPanel({ uid }) {
           page: 1,
           limit: 500,
           sort: "desc",
-          column: "uid",
-          search: uid,
+          uid: uid, 
         },
       });
 

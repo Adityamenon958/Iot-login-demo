@@ -14,6 +14,9 @@ const Alarm = require("./backend/models/Alarm");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+const isProd = process.env.NODE_ENV === 'production';
+
+
 // ✅ Middleware
 app.use(cors({
   origin: true,
@@ -21,6 +24,8 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+
 
 // ✅ JWT Authentication Middleware (fixed)
 function authenticateToken(req, res, next) {
@@ -95,8 +100,10 @@ app.post('/api/auth/update-subscription', authenticateToken, async (req, res) =>
     res
       .cookie('token', token, {
         httpOnly: true,
-        secure: true,
-        sameSite: 'None',
+        // secure: true,
+        secure   : isProd,          // ← localhost will now get a non-secure cookie
+        // sameSite: 'None',
+        sameSite : isProd ? 'None' : 'Lax',   // 'None' + secure for prod, 'Lax' for dev
         maxAge: 7 * 24 * 60 * 60 * 1000,
       })
       .json({ message: "Subscription info updated" });
@@ -186,8 +193,10 @@ const updatedToken = jwt.sign({
 res
   .cookie('token', updatedToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: 'None',
+    // secure: true,
+    secure   : isProd,
+    // sameSite: 'None',
+    sameSite : isProd ? 'None' : 'Lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   })
   .json({ message: "Subscription activated and token updated ✅" });
@@ -209,22 +218,30 @@ app.get('/api/auth/userinfo', authenticateToken, async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // 🔄 Live check with Razorpay if subscriptionId exists
-    if (user.subscriptionId) {
-      const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
+        if (user.subscriptionId) {
+      try {
+        const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
 
-      // ❌ If cancelled or not active
-      const now = new Date();
-      const oneMonthLater = new Date(user.subscriptionStart);
-      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        const now          = new Date();
+        const oneMonthLater= new Date(user.subscriptionStart);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
-      if (
-        razorSub.status !== 'active' ||
-        now > oneMonthLater
-      ) {
-        user.subscriptionStatus = 'inactive';
-        await user.save();
+        if (
+          razorSub.status !== 'active' ||
+          now > oneMonthLater
+        ) {
+          user.subscriptionStatus = 'inactive';
+          await user.save();
+        }
+      } catch (err) {
+        console.warn(
+          "⚠️ Razorpay check failed – keeping existing subscriptionStatus:",
+          err.message
+        );
+        // Network/auth error → do NOT flip the status, just log and proceed
       }
     }
+
 
     res.json({
       role: user.role,
@@ -475,6 +492,10 @@ app.get('/api/levelsensor', authenticateToken, async (req, res) => {
       mongoFilter.uid = { $in: uids.length ? uids : ['__none__'] };  // empty fallback
     }
 
+    if (req.query.uid) {
+      mongoFilter.uid = req.query.uid;   // no regex ⇒ no prefix collisions
+    }
+    
     /* 4. Search filter */
     /* 4. Search filter -------------------------------------------------- */
 if (search) {
@@ -635,8 +656,10 @@ app.post('/api/auth/google-login', async (req, res) => {
     res
       .cookie('token', token, {
         httpOnly: true,
-        secure: true,
-        sameSite: 'Strict',
+        secure   : isProd, 
+        // secure: true,
+        sameSite : isProd ? 'None' : 'Lax',
+        // sameSite: 'Strict',
         maxAge: 60 * 60 * 1000,
       })
       .json({ message: "Google login successful ✅" });
@@ -716,8 +739,10 @@ if (razorSub.status !== 'active' || now > oneMonthLater) {
     res
       .cookie('token', token, {
         httpOnly: true,
-        secure: true,
-        sameSite: 'Strict',
+        secure   : isProd,
+        // secure: true,
+        sameSite : isProd ? 'None' : 'Lax',
+        // sameSite: 'Strict',
         maxAge: 8 * 60 * 60 * 1000,
       })
       .json({
@@ -739,8 +764,10 @@ if (razorSub.status !== 'active' || now > oneMonthLater) {
 app.post('/api/logout', (req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    secure: true,
-    sameSite: 'Strict',
+    secure: isProd,
+    // secure: true,
+      sameSite: isProd ? 'None' : 'Lax'
+    // sameSite: 'Strict',
   });
   res.json({ message: 'Logged out successfully ✅' });
 });
