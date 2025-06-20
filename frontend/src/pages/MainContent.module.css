@@ -273,7 +273,11 @@
   padding-left: 20px;
 }
 
-.toprow   { height: 230px;}
+.toprow   { 
+  height: auto;
+  margin-bottom: 5px;
+  
+}
 .bottomrow{ height: calc(100vh - 320px); 
   
 }
@@ -281,7 +285,7 @@
 
 
 /* 🔹 New, sleeker “card” style */
-.panel {
+.panelDO {
   background: #ffffff;
   border: 1px solid #d1d9e6;          /* slightly darker than before */
   border-radius: 0.75rem;
@@ -292,8 +296,45 @@
   height: 225px;                  /* clip child overflow nicely */
 }
 
-.panel1,
-.panel2 {
+.panelSG {
+  background: #ffffff;
+  border: 1px solid #d1d9e6;          /* slightly darker than before */
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05); /* soft shadow */
+  display: flex;                      /* lets inner content stretch */
+  flex-direction: column;
+  overflow: hidden; 
+  height: 225px;                  /* clip child overflow nicely */
+}
+
+.panelLCAT{
+  margin-left: -2px;
+}
+
+.panelLC {
+  background: #ffffff;
+  border: 1px solid #d1d9e6;          /* slightly darker than before */
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05); /* soft shadow */
+  display: flex;                      /* lets inner content stretch */
+  flex-direction: column;
+  overflow: hidden; 
+  height: 225px;  
+  margin-bottom: -10px;                /* clip child overflow nicely */
+}
+
+.panelAT {
+  background: #ffffff;
+  border: 1px solid #d1d9e6;          /* slightly darker than before */
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05); /* soft shadow */
+  display: flex;                      /* lets inner content stretch */
+  flex-direction: column;
+  overflow: hidden; 
+  height: 225px;                  /* clip child overflow nicely */
+}
+
+.panelST{
   background: #ffffff;
   border: 1px solid #d1d9e6;
   border-radius: 0.75rem;
@@ -421,6 +462,20 @@
     .main{
       width: 100%;
     }
+    .main3{
+      width: 100%;
+    }
   }
+
+    @media (max-width: 992px) {
+      .panelLCAT{
+        margin-top: 6px;
+      }
+    }
   
+  
+
+
+
+
   

@@ -108,7 +108,7 @@ useEffect(() => {
       {/* Row 1 */}
       <Row className={`w-100 gx-3 ${styles.toprow}`}>
         {/* Device info */}
-        <Col xs={12} lg={4} className={styles.panel}>
+        <Col xs={12} lg={4} className={styles.panelDO}>
           <div className={styles.panelInner}>
             <h5 className="fw-bold mb-3">Device Overview</h5>
 
@@ -144,7 +144,7 @@ useEffect(() => {
         </Col>
 
         {/* Gauge strip */}
-        <Col xs={12} lg={8} className={styles.panel}>
+        <Col xs={12} lg={8} className={styles.panelSG}>
           <div className={styles.panelInner}>
             {gaugeLoading ? (
               <div className="d-flex justify-content-center py-4">
@@ -159,17 +159,19 @@ useEffect(() => {
 
       {/* Row 2 */}
       <Row className={`w-100 gx-3 gy-3 ${styles.bottomrow} p-0`}>
-        <Col xs={12} lg={5} className={styles.panel1}>
+        <Col xs={12} lg={5} className={styles.panelST}>
           <SensorTable deviceId={selectedUid} />
         </Col>
-        <Col xs={12} lg={7} className="d-flex flex-column gap-3">
-          <div className={`${styles.panel} flex-grow-1`}>
+        <Col xs={12} lg={7} className={` d-flex flex-column gap-3 ${styles.panelLCAT} `}>
+          <div className={`${styles.panelLC} flex-grow-1`}>
             <div className={styles.panelInner}>
           <LineChartPanel uid={selectedUid} />
             </div>
           </div>
-          <div className={styles.panel} style={{ minHeight: 250 }}>
-            <div className={styles.panelInnertable}><AlarmHistoryTable uid={selectedUid} /></div>
+          <div className={styles.panelAT} style={{ minHeight: 250 }}>
+            <div className={styles.panelInnertable}>
+              <AlarmHistoryTable uid={selectedUid} />
+              </div>
           </div>
         </Col>
       </Row>
