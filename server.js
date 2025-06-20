@@ -500,7 +500,7 @@ try {
       ? await User.find({
           companyName: deviceDoc.companyName,
           email: { $exists: true, $ne: "" },
-          subscriptionStatus: "active"            // optional filter
+          // subscriptionStatus: "active"            // optional filter
           // role: { $in: ["admin", "superadmin"] } // uncomment if needed
         }).select("email -_id").lean()
       : [];
