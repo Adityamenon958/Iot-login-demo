@@ -4,7 +4,6 @@
 //  2.  testEmail()               ── plain function used for
 //                                 /api/test-email
 // -------------------------------------------------------------
-import logo from '../../frontend/src/assets/gsn_logo_200x60.png';
 
 const brand = {
   name : 'GSN IoT',
