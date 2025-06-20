@@ -1,4 +1,6 @@
 require('dotenv').config();
+console.log('SMTP vars:', process.env.GMAIL_USER, process.env.GMAIL_PASS?.length);
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -13,6 +15,10 @@ const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fet
 const Alarm = require("./backend/models/Alarm"); 
 const app = express();
 const PORT = process.env.PORT || 8080;
+/**  In-memory latch: { uid: true | false }  */
+const alarmLatch = Object.create(null);
+const sendEmail = require("./backend/utils/sendEmail");
+const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -156,6 +162,20 @@ app.get('/api/subscription/status', async (req, res) => {
   } catch (err) {
     console.error("Subscription check error:", err.message);
     res.status(500).json({ message: "Failed to check subscription" });
+  }
+});
+
+app.get('/api/test-email', async (req, res) => {
+  try {
+    await sendEmail({
+      to: process.env.GMAIL_USER,          // send to yourself for the test
+      subject: 'Test mail from IoT app',
+      html: '<p>If you are reading this, SMTP works 🎉</p>'
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('✉️  TEST MAIL FAILED:', err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -390,33 +410,35 @@ app.delete('/api/devices/:id', async (req, res) => {
 /* 🚀 INSERT SENSOR DATA */
 app.post('/api/levelsensor', async (req, res) => {
   try {
+    /* 0️⃣ sanity */
     if (!req.body) return res.status(400).json({ message: 'Empty payload' });
 
+    /** ---------- unpack & prep ---------- **/
     const {
-      D        = null,
-      uid      = null,
-      level    = null,
-      ts       = null,
-      data     = null,
-      address  = null,
+      D         = null,                    // "DD/MM/YYYY HH:mm:ss"
+      uid       = null,
+      level     = null,
+      ts        = null,
+      data      = null,                    // array OR single number
+      address   = null,                    // keep as plain string
       vehicleNo = null
     } = req.body;
 
-    /* ⭐ 1. Convert “DD/MM/YYYY HH:mm:ss” → ISO Date for indexing */
+    /* 1️⃣ ISO timestamp for sorting / querying */
     let dateISO = null;
     if (typeof D === 'string' && D.includes('/')) {
-      const [datePart, timePart = '00:00:00'] = D.split(' ');
-      const [day, month, year] = datePart.split('/').map(Number);
-      const [h, m, s] = timePart.split(':').map(Number);
-dateISO = new Date(Date.UTC(year, month - 1, day, h, m, s));
+      const [date, time = '00:00:00']   = D.split(' ');
+      const [dd, mm, yyyy]              = date.split('/').map(Number);
+      const [h,  m,  s]                 = time.split(':').map(Number);
+      dateISO = new Date(Date.UTC(yyyy, mm - 1, dd, h, m, s));
     }
 
-    /* ⭐ 2. Store company name for this uid (used in GET filtering) */
+    /* 2️⃣ which company does this UID belong to? */
     let companyUid = null;
     const dev = await Device.findOne({ uid }).lean();
     if (dev) companyUid = dev.companyName || null;
 
-    /* ⭐ 3. Save the document */
+    /* 3️⃣ build sensor doc */
     const sensorDoc = new LevelSensor({
       D,
       uid,
@@ -424,42 +446,77 @@ dateISO = new Date(Date.UTC(year, month - 1, day, h, m, s));
       ts,
       address,
       vehicleNo,
-      data: Array.isArray(data) ? data : data === undefined ? [] : [data],
+      data  : Array.isArray(data) ? data : data === undefined ? [] : [data],
       dateISO,
       companyUid
     });
 
+    /** ---------- alarm evaluation ---------- **/
     const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
+    const alarmsToInsert = [];
 
-const alarmsToInsert = [];
+    (Array.isArray(data) ? data : []).forEach((raw, idx) => {
+      const deg = raw / 10;            // e.g. 380 → 38 °C
+      let level = null;
+      if (deg >= TH.highHigh) level = 'HIGH HIGH';
+      else if (deg >= TH.high) level = 'HIGH';
+      else if (deg <= TH.lowLow) level = 'LOW LOW';
+      else if (deg <= TH.low) level = 'LOW';
 
-if (Array.isArray(data)) {
-  data.forEach((raw, idx) => {
-    const deg = raw / 10;              // 270 → 27 °C
-    let level = null;
-    if (deg >= TH.highHigh) level = "HIGH HIGH";
-    else if (deg >= TH.high) level = "HIGH";
-    else if (deg <= TH.lowLow) level = "LOW LOW";
-    else if (deg <= TH.low) level = "LOW";
-    if (level) {
-      alarmsToInsert.push({
-        uid,
-        sensorId: `T${idx + 1}`,
-        value: deg,
-        level,
-        vehicleNo,
-        dateISO: dateISO || new Date(),
-        D,
-      });
-      console.log("🚨 will insert", alarmsToInsert.length, "alarm(s)");
+      if (level) {
+        alarmsToInsert.push({
+          uid,
+          sensorId : `T${idx + 1}`,
+          value    : deg,
+          level,
+          vehicleNo,
+          dateISO  : dateISO || new Date(),
+          D
+        });
+      }
+    });
+
+    /* 4️⃣ store alarms (if any) */
+    if (alarmsToInsert.length) {
+      await Alarm.insertMany(alarmsToInsert);
+      console.log(`🚨 stored ${alarmsToInsert.length} alarm(s) for ${uid}`);
     }
-  });
-}
 
-if (alarmsToInsert.length) {
-  await Alarm.insertMany(alarmsToInsert);
-}
+    /* 5️⃣ e-mail once per “alarm episode” using latch */
+    try {
+      const hasAlarm = alarmsToInsert.length > 0;
+      const latched  = alarmLatch[uid] === true;
 
+      console.log(`Latch for ${uid} at start →`, latched);
+
+      /* 5.a first alarm ► send mail & latch ON */
+      if (hasAlarm && !latched) {
+        alarmLatch[uid] = true;                       // latch ON
+
+        /* pick a recipient: first user in same company */
+        const recipient =
+          dev && (await User.findOne({ companyName: dev.companyName }).lean());
+
+        if (recipient?.email) {
+          const { subject, html } = alarmEmail({ uid, alarms: alarmsToInsert });
+          await sendEmail({ to: recipient.email, subject, html });
+          console.log(`✉️  mail sent to ${recipient.email} for ${uid}`);
+        } else {
+          console.warn('✉️  no recipient found for', uid);
+        }
+      }
+
+      /* 5.b values back to normal ► latch OFF  */
+      if (!hasAlarm && latched) {
+        alarmLatch[uid] = false;
+        console.log(`✅ values normal – latch for ${uid} cleared`);
+      }
+    } catch (mailErr) {
+      console.error('✉️  mail send failed:', mailErr.message);
+      /* do NOT throw – we still want to save the sensor doc */
+    }
+
+    /* 6️⃣ finally save the sensor reading itself */
     await sensorDoc.save();
     res.status(201).json({ message: 'Sensor data saved ✅' });
   } catch (err) {
@@ -467,6 +524,7 @@ if (alarmsToInsert.length) {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
 
 /* 🚀 SERVER-SIDE PAGINATION / SEARCH / SORT
  * GET /api/levelsensor?page=1&limit=9&search=&column=&sort=asc|desc
