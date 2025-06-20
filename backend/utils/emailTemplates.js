@@ -4,11 +4,12 @@
 //  2.  testEmail()               ── plain function used for
 //                                 /api/test-email
 // -------------------------------------------------------------
+import logo from '../../frontend/src/assets/gsn_logo_200x60.png';
 
 const brand = {
   name : 'GSN IoT',
-  url  : 'https://gsn-iot.com',          // <- change if you have a real site
-  logo : 'https://i.imgur.com/5aNw4tb.png'  // 200×60 transparent PNG works best
+  url  : 'https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net',          // <- change if you have a real site
+  logo : 'https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/gsn_logo_200x60.png'  // 200×60 transparent PNG works best
 };
 
 const baseStyles = `
@@ -18,6 +19,7 @@ const baseStyles = `
     .card{background:#1e293b!important}
     .btn  {background:#3b82f6!important;color:#fff!important}
   }
+  .center   {text-align:center}   
   a      {color:#3b82f6;text-decoration:none}
   .btn   {display:inline-block;padding:10px 18px;border-radius:6px;
           background:#3b82f6;color:#fff;font-weight:600;font-size:14px}
@@ -28,7 +30,7 @@ const baseStyles = `
 
 function alarmRows(alarms){
   return alarms.map(a=>`
-    <tr>
+    <tr class="center">
       <td>${a.sensorId}</td>
       <td>${a.value.toFixed(1)} °C</td>
       <td>${a.level}</td>
@@ -45,22 +47,21 @@ function alarmEmail({ uid, alarms }){
   <body style="margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
       <tr><td align="center" style="padding:25px">
-        <table class="card" role="presentation" width="540" cellspacing="0" cellpadding="0">
-          <tr><td align="center" style="padding-bottom:18px">
+<table class="card center" role="presentation" width="540" cellspacing="0" cellpadding="0">          <tr><td align="center" style="padding-bottom:18px">
               <img src="${brand.logo}" alt="${brand.name}" height="48" />
           </td></tr>
           
-          <tr><td>
+          <tr><td class="center">
             <h2 style="margin:0 0 12px 0;color:#ef4444">Alarm triggered on ${uid}</h2>
             <p style="margin:0 0 18px 0">
               One or more sensors have crossed the configured thresholds.
             </p>
 
             <table width="100%" cellspacing="0" cellpadding="0">
-              <thead>
+              <thead class="center">
                 <tr><th>Sensor</th><th>Value</th><th>Status</th></tr>
               </thead>
-              <tbody>${alarmRows(alarms)}</tbody>
+              <tbody class="center">${alarmRows(alarms)}</tbody>
             </table>
 
             <p style="margin:22px 0 0 0">
@@ -69,7 +70,7 @@ function alarmEmail({ uid, alarms }){
               </a>
             </p>
 
-            <p class="small" style="margin:28px 0 0 0">
+<p class="small center" style="margin:28px 0 0 0">
               This mail was generated automatically by ${brand.name}.<br/>
               You’re receiving it because you belong to the same company as the device.
             </p>
