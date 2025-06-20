@@ -483,38 +483,50 @@ app.post('/api/levelsensor', async (req, res) => {
     }
 
     /* 5️⃣ e-mail once per “alarm episode” using latch */
-    try {
-      const hasAlarm = alarmsToInsert.length > 0;
-      const latched  = alarmLatch[uid] === true;
+try {
+  const hasAlarm = alarmsToInsert.length > 0;
+  const latched  = alarmLatch[uid] === true;
 
-      console.log(`Latch for ${uid} at start →`, latched);
+  console.log(`Latch for ${uid} at start →`, latched);
 
-      /* 5.a first alarm ► send mail & latch ON */
-      if (hasAlarm && !latched) {
-        alarmLatch[uid] = true;                       // latch ON
+  /* ─── first alarm of an episode ── */
+  if (hasAlarm && !latched) {
+    alarmLatch[uid] = true;                       // latch ON
 
-        /* pick a recipient: first user in same company */
-        const recipient =
-          dev && (await User.findOne({ companyName: dev.companyName }).lean());
+    /* ─── find all active users of the same company ── */
+    const deviceDoc = await Device.findOne({ uid }).lean();
 
-        if (recipient?.email) {
-          const { subject, html } = alarmEmail({ uid, alarms: alarmsToInsert });
-          await sendEmail({ to: recipient.email, subject, html });
-          console.log(`✉️  mail sent to ${recipient.email} for ${uid}`);
-        } else {
-          console.warn('✉️  no recipient found for', uid);
-        }
+    const recipients = deviceDoc
+      ? await User.find({
+          companyName: deviceDoc.companyName,
+          email: { $exists: true, $ne: "" },
+          subscriptionStatus: "active"            // optional filter
+          // role: { $in: ["admin", "superadmin"] } // uncomment if needed
+        }).select("email -_id").lean()
+      : [];
+
+    if (recipients.length) {
+      const { subject, html } = alarmEmail({ uid, alarms: alarmsToInsert });
+
+      for (const { email } of recipients) {
+        await sendEmail({ to: email, subject, html });
+        console.log(`✉️  Alarm mail sent to ${email} for ${uid}`);
       }
-
-      /* 5.b values back to normal ► latch OFF  */
-      if (!hasAlarm && latched) {
-        alarmLatch[uid] = false;
-        console.log(`✅ values normal – latch for ${uid} cleared`);
-      }
-    } catch (mailErr) {
-      console.error('✉️  mail send failed:', mailErr.message);
-      /* do NOT throw – we still want to save the sensor doc */
+    } else {
+      console.warn("✉️  No recipients found for uid", uid);
     }
+  }
+
+  /* ─── clear latch when readings return to normal ── */
+  if (!hasAlarm && latched) {
+    alarmLatch[uid] = false;
+    console.log(`✅ values normal – latch for ${uid} cleared`);
+  }
+} catch (mailErr) {
+  console.error("✉️  Mail send failed:", mailErr.message);
+  // do NOT throw – we still want the sensor data saved
+}
+
 
     /* 6️⃣ finally save the sensor reading itself */
     await sensorDoc.save();
