@@ -11,7 +11,13 @@ const levelSensorSchema = new mongoose.Schema(
     level: Number,
     ts:   String,           // if TRB245 sends ISO – keep as String
 
-    data:   [Number],       // array of readings
+    data:   [Number],  
+    readings: {
+      type: Object,         // structured map: { T1: 32.7, T2: 44.1 }
+      default: {}
+    },
+    
+    
     address: Number,
     vehicleNo: String,
 

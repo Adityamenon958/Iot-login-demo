@@ -1,0 +1,73 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+✅ 2. Authentication Handling
+JWT tokens are now stored in HTTP-only cookies.
+
+Do not use localStorage for any sensitive data.
+
+Use /api/auth/userinfo to retrieve role, companyName, and subscriptionStatus.
+
+✅ 3. Role-Based Access
+Roles in increasing order of privilege:
+
+user
+
+admin (only within own company)
+
+superadmin (full system access)
+
+Logic like form visibility, route guards, and sidebar buttons should follow this.
+
+✅ 4. Subscription Logic
+After payment via Razorpay, subscriptionStatus becomes active for 1 month.
+
+Controlled via backend + real-time sync from Razorpay.
+
+AddUser and AddDevice are disabled when inactive, but visible.
+
+✅ 5. Database Models
+User, Device, LevelSensor
+
+UID = unique ID based on companyName prefix + device ID
+
+LevelSensor data includes timestamp (dateISO) for sorting and pagination
+
+✅ 6. Frontend Patterns
+Use axios with withCredentials: true
+
+All forms use Bootstrap + CSS Modules
+
+Use useEffect() to fetch protected data after login
+
+Avoid over-complicated Redux unless absolutely required
+
+✅ 7. API Usage Rules
+GET /api/devices → device list
+
+POST /api/levelsensors → receive sensor data
+
+GET /api/dashboard → card stats
+
+All protected endpoints require valid token in cookie
+
+✅ 8. Debugging & Suggestions
+AI should:
+
+Explain exact file names and changes
+
+Provide full updated code snippets, not diffs
+
+Highlight risky changes or areas that need testing
+
+Use clear, beginner-friendly comments
+
+✅ 9. Deployment Rules
+Project is deployed on Azure App Service (Linux)
+
+Use git push to deploy changes
+
+Backend + Frontend are merged in same repo
+

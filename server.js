@@ -439,17 +439,32 @@ app.post('/api/levelsensor', async (req, res) => {
     if (dev) companyUid = dev.companyName || null;
 
     /* 3️⃣ build sensor doc */
-    const sensorDoc = new LevelSensor({
-      D,
-      uid,
-      level,
-      ts,
-      address,
-      vehicleNo,
-      data  : Array.isArray(data) ? data : data === undefined ? [] : [data],
-      dateISO,
-      companyUid
-    });
+    const parsedData = Array.isArray(data)
+  ? data.map(d => Math.round(Number(d))) // ensure numeric
+  : data === undefined
+    ? []
+    : [Math.round(Number(data))];
+
+// 🌡️ readings object: { T1: 32.5, T2: 45.6, ... }
+const readings = {};
+parsedData.forEach((val, idx) => {
+  readings[`T${idx + 1}`] = val / 10; // convert 327 → 32.7 °C
+});
+
+// 🧾 Store all sensor readings with mapping
+const sensorDoc = new LevelSensor({
+  D,
+  uid,
+  level,
+  ts,
+  address,
+  vehicleNo,
+  data: parsedData,
+  readings,
+  dateISO,
+  companyUid
+});
+
 
     /** ---------- alarm evaluation ---------- **/
     const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };

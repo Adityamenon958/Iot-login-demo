@@ -211,7 +211,9 @@ export default function SensorTable({ deviceId }) {
           </td>
           <td>{row.D}</td>
           <td>{row.address}</td>
-          <td>{vals.map(v => v.toFixed(1)).join(", ")} °C</td>
+<td>
+  {vals.map((v, i) => `T${i + 1}: ${v.toFixed(1)}°C`).join(" | ")}
+</td>
           <td>{row.vehicleNo}</td>
         </tr>
       );

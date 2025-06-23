@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+General Context
+The project is a full-stack IoT Dashboard to monitor devices and sensor data.
+
+Stack:
+Frontend: React (with Vite), Bootstrap, CSS Modules
+
+Backend: Node.js + Express
+
+Database: MongoDB Atlas
+
+Auth: Google OAuth + Email/Password (JWT, now via HTTP-only cookies)
+
+Hosting: Azure App Service (Linux)

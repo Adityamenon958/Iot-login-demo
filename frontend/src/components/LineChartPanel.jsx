@@ -50,11 +50,24 @@ export default function LineChartPanel({ uid }) {
       const rows = res.data.data
         .filter((doc) => doc.D)
         .map((doc) => {
-          const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
- if (ts < fromDate) return null;
+const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
+if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
+//  if (ts < fromDate) return null;
 
           const row = { ts };
-          doc.data.forEach((raw, i) => (row[`S${i + 1}`] = raw / 10));
+          if (doc.readings) {
+  Object.entries(doc.readings).forEach(([key, val]) => {
+    row[key] = val;
+  });
+} else if (Array.isArray(doc.data)) {
+  doc.data.forEach((raw, i) => {
+    row[`T${i + 1}`] = raw / 10;
+  });
+}
+
+
+     // 🐞 Debug log – shows what each chart row looks like
+    console.log("📊 Parsed row:", row);
           return row;
         })
         .filter(Boolean)
@@ -112,6 +125,8 @@ export default function LineChartPanel({ uid }) {
 
   /* ------------ helpers ------------ */
   const seriesKeys = data[0] ? Object.keys(data[0]).filter((k) => k !== "ts") : [];
+  console.log("📈 seriesKeys:", seriesKeys);
+
   const safeFmt = (d, fmt) => (isNaN(d) ? "" : format(d, fmt));
 
   /* ------------ UI ------------ */

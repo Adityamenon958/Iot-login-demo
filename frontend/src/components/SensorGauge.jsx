@@ -2,36 +2,24 @@
 import React, { useMemo } from "react";
 import { RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 
-/* 🚩 hard-coded thresholds for now – will come from
-   company settings later */
 const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
 
-const SensorGauge = ({ value, label, min = 0, max = 60 }) => {
-  /* %-fill for the arc */
+const SensorGauge = ({ value, label, min = 0, max = 60, color = "#3b82f6" }) => {
   const pct = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
   const data = useMemo(() => [{ uv: pct }], [pct]);
 
-  /* decide alarm level */
   let alert = null;
   if (value >= TH.highHigh) alert = "HIGH HIGH";
   else if (value >= TH.high) alert = "HIGH";
   else if (value <= TH.lowLow) alert = "LOW LOW";
   else if (value <= TH.low) alert = "LOW";
 
-  /* map to global CSS classes */
-  const colourClass =
-    alert === "HIGH" || alert === "HIGH HIGH"
-      ? "gauge-red"
-      : alert === "LOW" || alert === "LOW LOW"
-      ? "gauge-pink"
-      : "gauge-blue";
-
   const blinkClass =
     alert === "HIGH HIGH" || alert === "LOW LOW" ? "blink" : "";
 
   return (
     <div
-      className={`d-flex flex-column align-items-center ${colourClass} ${blinkClass}`}
+      className={`d-flex flex-column align-items-center ${blinkClass}`}
       style={{ width: 140, textAlign: "center", marginTop: 25 }}
     >
       <RadialBarChart
@@ -44,19 +32,16 @@ const SensorGauge = ({ value, label, min = 0, max = 60 }) => {
         endAngle={-10}
       >
         <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-        {/* 🖌️ inherit the container colour */}
         <RadialBar
           dataKey="uv"
-          fill="currentColor"
+          fill={color}                // 🎨 Custom color from prop
           background
-          clockWisenerRadiu
-          cors={10}
-          cornerRadius="50%" 
+          cornerRadius="50%"
           minAngle={2}
         />
       </RadialBarChart>
 
-      <div style={{ fontSize: 20, fontWeight: 600, marginTop: -40 }}>
+      <div style={{ fontSize: 20, fontWeight: 600, marginTop: -40, color }}>
         {value.toFixed(1)}°C
       </div>
       <div style={{ fontSize: 16, color: "#64748b" }}>{label}</div>
