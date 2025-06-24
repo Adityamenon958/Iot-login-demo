@@ -40,6 +40,10 @@ export default function SensorTable({ deviceId }) {
   const [selectedRows, setSelectedRows]= useState([]);
   const [fetchTime, setFetchTime] = useState(new Date());
 
+  const [selectedUID, setSelectedUID] = useState("All Devices");
+  const [allUIDs, setAllUIDs] = useState([]);
+
+
 
   /* -------- helpers -------- */
   const fetchUserInfo = async () => {
@@ -51,43 +55,52 @@ export default function SensorTable({ deviceId }) {
 
   /* -------- page fetch -------- */
   const fetchSensorPage = async (page = 1) => {
-    setRefreshing(true);
-    const res = await axios.get("/api/levelsensor", {
-      withCredentials: true,
-      params: {
-        page,
-        limit: rowsPerPage,
-        search: searchTerm,
-        column: searchColumn,
-        sort: sortAsc ? "asc" : "desc",
-        /* ⭐ TODO (router filter) – when backend supports it, add: */
-        // deviceId
-      },
-    });
+  setRefreshing(true);
 
-    setSensorData(res.data.data);
-    setTotalPages(Math.max(1, Math.ceil(res.data.total / rowsPerPage)));
-    setLastUpdated(new Date());
-    setFetchTime(new Date());
-    setRefreshing(false);
-  };
+  const res = await axios.get("/api/levelsensor", {
+    withCredentials: true,
+    params: {
+      page,
+      limit: rowsPerPage,
+      search: searchTerm,
+      column: searchColumn,
+      sort: sortAsc ? "asc" : "desc",
+      uid: selectedUID !== "All Devices" ? selectedUID : undefined,
+    },
+  });
+
+  setSensorData(res.data.data);
+  setTotalPages(Math.max(1, Math.ceil(res.data.total / rowsPerPage)));
+
+ 
+
+  setLastUpdated(new Date());
+  setFetchTime(new Date());
+  setRefreshing(false);
+};
+
+  
 
   /* -------- initial load -------- */
   useEffect(() => {
     (async () => {
       await fetchUserInfo();
-      await fetchSensorPage(1);
+      await fetchSensorPage(currentPage); // use current state
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* -------- search / sort change -------- */
-  useEffect(() => {
-    const t = setTimeout(() => fetchSensorPage(1), 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, searchColumn, sortAsc]);
+useEffect(() => {
+  const delay = setTimeout(() => {
+    if (!loading) {
+      fetchSensorPage(1);
+    }
+  }, 300);
+  return () => clearTimeout(delay);
+}, [searchTerm, searchColumn, sortAsc, selectedUID, loading]);
+
 
   /* -------- page change -------- */
   useEffect(() => { fetchSensorPage(currentPage); },
@@ -96,10 +109,45 @@ export default function SensorTable({ deviceId }) {
 
   /* -------- auto-refresh -------- */
   useEffect(() => {
-    const id = setInterval(() => fetchSensorPage(currentPage), 30000);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  const id = setInterval(() => {
+    fetchSensorPage(currentPage); // already respects selectedUID and searchTerm
+  }, 30000);
+  return () => clearInterval(id);
+}, [currentPage, selectedUID, searchColumn, searchTerm, sortAsc]);
+
+
+  useEffect(() => {
+  const init = async () => {
+    try {
+      const user = await fetchUserInfo(); // sets role and companyName
+
+      // Fetch UIDs AFTER we have role/company
+      const uidRes = await axios.get("/api/levelsensor/uids", {
+        withCredentials: true,
+      });
+
+      const deviceUIDs = uidRes.data || [];
+      setAllUIDs(["All Devices", ...deviceUIDs]);
+
+      // ✅ Only update UID if not already selected
+setSelectedUID((prev) =>
+  prev === "All Devices" && deviceUIDs.length > 0 ? deviceUIDs[0] : prev
+);
+
+
+      // await fetchSensorPage(currentPage);
+      setLoading(false);
+    } catch (err) {
+      console.error("Initialization error:", err);
+      setAllUIDs(["All Devices"]);
+      setLoading(false);
+    }
+  };
+
+  init();
+}, []);
+
+
 
   /* -------- UI -------- */
   if (loading) {
@@ -126,28 +174,45 @@ export default function SensorTable({ deviceId }) {
 
       {/* search bar */}
       <Row className="mb-3 mt-2">
-        <Col md={4}>
-          <Form.Select
-            value={searchColumn}
-            onChange={(e) => setSearchColumn(e.target.value)}
-            className="custom_input1"
-          >
-            <option value="">All Columns</option>
-            <option value="D">Date</option>
-            <option value="address">Location</option>
-            <option value="vehicleNo">Vehicle No.</option>
-            <option value="data">Data</option>
-          </Form.Select>
-        </Col>
-        <Col md={8}>
-          <Form.Control
-            placeholder="Search…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="custom_input1"
-          />
-        </Col>
-      </Row>
+  <Col md={3}>
+    <Form.Select
+      value={selectedUID}
+      onChange={(e) => {
+        setSelectedUID(e.target.value);
+        setCurrentPage(1);
+      }}
+      className="custom_input1"
+    >
+      {allUIDs.map((uid, idx) => (
+        <option key={idx} value={uid}>
+          {uid}
+        </option>
+      ))}
+    </Form.Select>
+  </Col>
+  <Col md={3}>
+    <Form.Select
+      value={searchColumn}
+      onChange={(e) => setSearchColumn(e.target.value)}
+      className="custom_input1"
+    >
+      <option value="">All Columns</option>
+      <option value="D">Date</option>
+      <option value="address">Location</option>
+      <option value="vehicleNo">Vehicle No.</option>
+      <option value="data">Data</option>
+    </Form.Select>
+  </Col>
+  <Col md={6}>
+    <Form.Control
+      placeholder="Search…"
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      className="custom_input1"
+    />
+  </Col>
+</Row>
+
 
       {/* table */}
       <div className="tableScroll">

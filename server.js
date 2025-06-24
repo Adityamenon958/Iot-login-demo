@@ -843,6 +843,37 @@ if (razorSub.status !== 'active' || now > oneMonthLater) {
   }
 });
 
+// ✅ Get unique UIDs for dropdown (All sensor devices)
+app.get("/api/levelsensor/uids", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+
+    let filter = {};
+
+    if (role !== "superadmin") {
+      // Only get devices belonging to the logged-in user's company
+      const devs = await Device.find({ companyName }).select("uid -_id").lean();
+      const uids = devs.map((d) => d.uid);
+
+      // If no matching devices, return early
+      if (uids.length === 0) {
+        return res.json([]);
+      }
+
+      filter.uid = { $in: uids };
+    }
+
+    const distinctUIDs = await LevelSensor.distinct("uid", filter);
+    return res.json(distinctUIDs);
+  } catch (err) {
+    console.error("UID Fetch Error:", err);
+    return res.status(500).json({ message: "Failed to fetch device UIDs" });
+  }
+});
+
+
+
+
 
 
 // ✅ Logout

@@ -52,7 +52,7 @@ export default function LineChartPanel({ uid }) {
         .map((doc) => {
 const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
 if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
-//  if (ts < fromDate) return null;
+ if (ts < fromDate) return null;
 
           const row = { ts };
           if (doc.readings) {
