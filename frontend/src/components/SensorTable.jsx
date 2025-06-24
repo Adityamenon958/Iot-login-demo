@@ -4,6 +4,7 @@ import axios from "axios";
 import { Table, Row, Col, Form, Spinner } from "react-bootstrap";
 import styles from "../pages/MainContent.module.css";
 import "../pages/MainContent.css";
+import { Tooltip as ReactTooltip } from 'react-tooltip';
 
 const rowsPerPage = 9;          // keep identical to old dashboard
 
@@ -234,7 +235,7 @@ setSelectedUID((prev) =>
               </th>
               <th>Location</th>
               <th>Data</th>
-              <th>Vehicle No.</th>
+              <th>Located</th>
             </tr>
           </thead>
           <tbody>
@@ -276,9 +277,14 @@ setSelectedUID((prev) =>
           </td>
           <td>{row.D}</td>
           <td>{row.address}</td>
-<td>
+<td
+  className="fixed-height-cell"
+  data-tooltip-id="sensor-tooltip"
+  data-tooltip-content={vals.map((v, i) => `T${i + 1}: ${v.toFixed(1)}°C`).join(" | ")}
+>
   {vals.map((v, i) => `T${i + 1}: ${v.toFixed(1)}°C`).join(" | ")}
 </td>
+
           <td>{row.vehicleNo}</td>
         </tr>
       );
@@ -288,6 +294,9 @@ setSelectedUID((prev) =>
 
         </Table>
       </div>
+
+      <ReactTooltip id="sensor-tooltip" place="top" />
+
 
       {/* pagination */}
       {totalPages > 1 && (

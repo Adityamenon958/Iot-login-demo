@@ -5,6 +5,17 @@
     
   }
 
+  .fixed-height-cell {
+  max-width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+  /* .db1_table{
+    max-height: 10px;
+  } */
 
   .tableScroll{
     overflow-y: none;
