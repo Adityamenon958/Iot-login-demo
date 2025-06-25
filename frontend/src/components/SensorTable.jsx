@@ -245,7 +245,10 @@ setSelectedUID((prev) =>
     </tr>
   ) : (
     sensorData.map((row, idx) => {
-      const vals   = Array.isArray(row.data) ? row.data.map(v => v / 10) : [row.data / 10];
+      const readings = row.readings || {};
+const keys = Object.keys(readings);
+const vals = keys.map((k) => readings[k]);
+
       const level  = getLevel(vals);                        // high / low / normal
       const tint   = level !== "normal" ? `row-${level}` : "";
       const recent = Date.now() - fetchTime.getTime() < 30_000;
@@ -280,9 +283,9 @@ setSelectedUID((prev) =>
 <td
   className="fixed-height-cell"
   data-tooltip-id="sensor-tooltip"
-  data-tooltip-content={vals.map((v, i) => `T${i + 1}: ${v.toFixed(1)}°C`).join(" | ")}
+data-tooltip-content={keys.map((k) => `${k}: ${readings[k]}°C`).join(" | ")}
 >
-  {vals.map((v, i) => `T${i + 1}: ${v.toFixed(1)}°C`).join(" | ")}
+{keys.map((k) => `${k}: ${readings[k].toFixed(1)}°C`).join(" | ")}
 </td>
 
           <td>{row.vehicleNo}</td>

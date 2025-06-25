@@ -57,8 +57,9 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
           const row = { ts };
           if (doc.readings) {
   Object.entries(doc.readings).forEach(([key, val]) => {
-    row[key] = val;
-  });
+  row[key] = val / 10;  // ✅ Convert to °C here
+});
+
 } else if (Array.isArray(doc.data)) {
   doc.data.forEach((raw, i) => {
     row[`T${i + 1}`] = raw / 10;

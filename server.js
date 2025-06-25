@@ -421,7 +421,8 @@ app.post('/api/levelsensor', async (req, res) => {
       ts        = null,
       data      = null,                    // array OR single number
       address   = null,                    // keep as plain string
-      vehicleNo = null
+      vehicleNo = null,
+      mapKey    = null
     } = req.body;
 
     /* 1️⃣ ISO timestamp for sorting / querying */
@@ -445,11 +446,17 @@ app.post('/api/levelsensor', async (req, res) => {
     ? []
     : [Math.round(Number(data))];
 
-// 🌡️ readings object: { T1: 32.5, T2: 45.6, ... }
+// 🌡️ readings object from mapKey (dynamic mapping)
 const readings = {};
-parsedData.forEach((val, idx) => {
-  readings[`T${idx + 1}`] = val / 10; // convert 327 → 32.7 °C
-});
+if (typeof mapKey === 'string' && Array.isArray(parsedData)) {
+  const keys = mapKey.split('_');
+  keys.forEach((label, idx) => {
+    const rawVal = parsedData[idx];
+    if (label && rawVal !== undefined) {
+      readings[label] = rawVal / 10; // e.g. 327 → 32.7
+    }
+  });
+}
 
 // 🧾 Store all sensor readings with mapping
 const sensorDoc = new LevelSensor({
@@ -461,6 +468,7 @@ const sensorDoc = new LevelSensor({
   vehicleNo,
   data: parsedData,
   readings,
+  mapKey,
   dateISO,
   companyUid
 });
@@ -470,26 +478,33 @@ const sensorDoc = new LevelSensor({
     const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
     const alarmsToInsert = [];
 
-    (Array.isArray(data) ? data : []).forEach((raw, idx) => {
-      const deg = raw / 10;            // e.g. 380 → 38 °C
-      let level = null;
-      if (deg >= TH.highHigh) level = 'HIGH HIGH';
-      else if (deg >= TH.high) level = 'HIGH';
-      else if (deg <= TH.lowLow) level = 'LOW LOW';
-      else if (deg <= TH.low) level = 'LOW';
+    if (Array.isArray(parsedData) && typeof mapKey === 'string') {
+  const keys = mapKey.split('_');
+  parsedData.forEach((raw, idx) => {
+    const deg = raw / 10;
+    let level = null;
 
-      if (level) {
-        alarmsToInsert.push({
-          uid,
-          sensorId : `T${idx + 1}`,
-          value    : deg,
-          level,
-          vehicleNo,
-          dateISO  : dateISO || new Date(),
-          D
-        });
-      }
-    });
+    if (deg >= TH.highHigh) level = 'HIGH HIGH';
+    else if (deg >= TH.high) level = 'HIGH';
+    else if (deg <= TH.lowLow) level = 'LOW LOW';
+    else if (deg <= TH.low) level = 'LOW';
+
+    const sensorId = keys[idx] || `S${idx + 1}`; // fallback label
+
+    if (level) {
+      alarmsToInsert.push({
+        uid,
+        sensorId,
+        value: deg,
+        level,
+        vehicleNo,
+        dateISO: dateISO || new Date(),
+        D,
+      });
+    }
+  });
+}
+
 
     /* 4️⃣ store alarms (if any) */
     if (alarmsToInsert.length) {

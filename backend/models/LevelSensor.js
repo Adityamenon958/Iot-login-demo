@@ -16,6 +16,8 @@ const levelSensorSchema = new mongoose.Schema(
       type: Object,         // structured map: { T1: 32.7, T2: 44.1 }
       default: {}
     },
+
+    mapKey: String,
     
     
     address: Number,
