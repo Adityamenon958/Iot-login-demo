@@ -20,7 +20,7 @@ const SensorGauge = ({ value, label, min = 0, max = 60, color = "#3b82f6" }) => 
   return (
     <div
       className={`d-flex flex-column align-items-center  ${blinkClass} `}
-      style={{ width: 170, height: 150, textAlign: "center", marginTop: 20 , paddingTop: 10 }}
+      style={{ width: 170, height: 150, textAlign: "center", marginTop: 10 , paddingTop: 10 }}
     >
       <RadialBarChart
         width={170}
@@ -42,7 +42,7 @@ const SensorGauge = ({ value, label, min = 0, max = 60, color = "#3b82f6" }) => 
         />
       </RadialBarChart>
 
-      <div style={{ fontSize: 20, fontWeight: 600, marginTop: -40, color }}>
+      <div style={{ fontSize: 20, fontWeight: 600, marginTop: -60, color }}>
         {value.toFixed(1)}°C
       </div>
       <div style={{ fontSize: 16, color: "#64748b" }}>{label}</div>

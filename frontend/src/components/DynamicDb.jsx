@@ -22,6 +22,8 @@ export default function DynamicDb() {
   const [gaugeLoading, setGaugeLoading] = useState(true);
   const [initLoading,  setInitLoading]  = useState(true); // first load spinner
 
+  
+
   /* ─── 1. fetch device list on mount ─── */
   useEffect(() => {
     (async () => {
@@ -67,11 +69,13 @@ useEffect(() => {
         return;
       }
 
-      const parsed = latest.data.map((raw, i) => ({
-        id:    `S${i + 1}`,
-        label: `T${i + 1}`,
-        level: raw / 10,   // 270 → 27 °C
-      }));
+      const mapKeyArr = latest.mapKey ? latest.mapKey.split("_") : undefined;
+
+const parsed = latest.data.map((raw, i) => ({
+  id:    mapKeyArr ? mapKeyArr[i] : undefined,
+  label: mapKeyArr ? mapKeyArr[i] : undefined,
+  level: raw / 10,
+}));
       setSensors(parsed);
     } catch (err) {
       console.error("Gauge fetch error", err);
