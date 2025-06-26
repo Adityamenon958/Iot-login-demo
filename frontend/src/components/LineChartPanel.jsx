@@ -57,7 +57,7 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
           const row = { ts };
           if (doc.readings) {
   Object.entries(doc.readings).forEach(([key, val]) => {
-  row[key] = val / 10;  // ✅ Convert to °C here
+  row[key] = val;  // ✅ Convert to °C here
 });
 
 } else if (Array.isArray(doc.data)) {
@@ -152,7 +152,7 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
           <Spinner animation="border" />
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={270}>
+        <ResponsiveContainer width="100%" height={200}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis

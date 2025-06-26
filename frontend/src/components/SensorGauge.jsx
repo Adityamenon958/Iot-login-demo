@@ -19,17 +19,18 @@ const SensorGauge = ({ value, label, min = 0, max = 60, color = "#3b82f6" }) => 
 
   return (
     <div
-      className={`d-flex flex-column align-items-center ${blinkClass}`}
-      style={{ width: 140, textAlign: "center", marginTop: 25 }}
+      className={`d-flex flex-column align-items-center  ${blinkClass} `}
+      style={{ width: 170, height: 150, textAlign: "center", marginTop: 20 , paddingTop: 10 }}
     >
       <RadialBarChart
-        width={140}
-        height={140}
-        innerRadius="90%"
-        outerRadius="130%"
+        width={170}
+        height={150}
+        innerRadius="60%"
+        outerRadius="100%"
         data={data}
         startAngle={190}
         endAngle={-10}
+        
       >
         <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
         <RadialBar

@@ -6,7 +6,7 @@ import styles from "../pages/MainContent.module.css";
 import "../pages/MainContent.css";
 import { Tooltip as ReactTooltip } from 'react-tooltip';
 
-const rowsPerPage = 9;          // keep identical to old dashboard
+const rowsPerPage = 5;          // keep identical to old dashboard
 
 const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };   // °C thresholds
 
@@ -217,7 +217,7 @@ setSelectedUID((prev) =>
 
       {/* table */}
       <div className="tableScroll">
-        <Table striped bordered hover responsive className="db1_table">
+        <Table striped bordered hover  className="db1_table">
           <thead>
             <tr>
               <th>

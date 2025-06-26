@@ -5,7 +5,7 @@ import SensorGauge from "./SensorGauge";
 import { levelFor } from "../../lib/thresholds";
 
 /* Constants */
-const GAUGE_WIDTH = 140;          // px
+const GAUGE_WIDTH = 170;          // px
 const GAP_PX = 30;
 const COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
 
@@ -33,7 +33,7 @@ const SensorGaugeStrip = ({ sensors = [] }) => {
 
   return (
     <div
-      className={`d-flex justify-content-center ${styles.barWrapper}`}
+      className={`d-flex justify-content-center align-items-center w-100 ${styles.barWrapper} `}
       style={{ gap: GAP_PX }}
     >
       {sensors.map((s, idx) => (

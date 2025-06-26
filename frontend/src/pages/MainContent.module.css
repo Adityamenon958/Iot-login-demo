@@ -319,7 +319,7 @@
   display: flex;                      /* lets inner content stretch */
   flex-direction: column;
   overflow: hidden; 
-  height: 225px;  
+  min-height: 270px;  
   margin-bottom: -10px;                /* clip child overflow nicely */
 }
 
@@ -348,7 +348,7 @@
 
 /* Inner padding helper so you control spacing per component */
 .panelInner {
-  height: 225px;
+  min-height: 270px;
   padding: 1rem 1.25rem;
 }
 
