@@ -8,6 +8,7 @@ const connectDB = require('./backend/db');
 const Device = require('./backend/models/Device');
 const User = require('./backend/models/User');
 const LevelSensor = require('./backend/models/LevelSensor');
+const CraneLog = require("./backend/models/CraneLog"); // adjust path if needed
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const Razorpay = require('razorpay');
@@ -401,6 +402,36 @@ app.delete('/api/devices/:id', async (req, res) => {
   } catch (err) {
     console.error("❌ Delete failed:", err.message);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ✅ API endpoint to receive crane log data
+app.post("/api/crane/log", async (req, res) => {
+  try {
+    // Validate required fields
+    const {
+      DeviceID, Timestamp, Date, Time,
+      Longitude, Latitude, DigitalInput1, DigitalInput2
+    } = req.body;
+
+    if (
+      !DeviceID || !Timestamp || !Date || !Time ||
+      !Longitude || !Latitude || !DigitalInput1 || !DigitalInput2
+    ) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Save to DB
+    const log = new CraneLog({
+      DeviceID, Timestamp, Date, Time,
+      Longitude, Latitude, DigitalInput1, DigitalInput2
+    });
+    await log.save();
+
+    res.status(201).json({ message: "Crane log saved successfully" });
+  } catch (err) {
+    console.error("Crane log save error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
