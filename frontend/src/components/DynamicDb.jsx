@@ -108,11 +108,11 @@ const parsed = latest.data.map((raw, i) => ({
   const activeDev = devices.find((d) => d.uid === selectedUid);
 
   return (
-    <Col xs={12} md={9} lg={10} xl={10} className={styles.main3}>
+    <Col xs={12} md={9} lg={10} xl={10} className={styles.dynamicDbMain}>
       {/* Row 1 */}
-      <Row className={`w-100 gx-3 ${styles.toprow}`}>
+      <Row className={`w-100 gx-3 ${styles.dynamicDbTopRow}`}>
         {/* Device info */}
-        <Col xs={12} lg={4} className={styles.panelDO}>
+        <Col xs={12} lg={4} className={`${styles.panelDO} ${styles.dynamicDbPanel}`}>
           <div className={styles.panelInner}>
             <h5 className="fw-bold mb-3">Device Overview</h5>
 
@@ -148,7 +148,7 @@ const parsed = latest.data.map((raw, i) => ({
         </Col>
 
         {/* Gauge strip */}
-        <Col xs={12} lg={8} className={styles.panelSG}>
+        <Col xs={12} lg={8} className={`${styles.panelSG} ${styles.dynamicDbPanel}`}>
           <div className={styles.panelInner}>
             {gaugeLoading ? (
               <div className="d-flex justify-content-center py-4">
@@ -162,17 +162,17 @@ const parsed = latest.data.map((raw, i) => ({
       </Row>
 
       {/* Row 2 */}
-      <Row className={`w-100 gx-3 gy-3 ${styles.bottomrow} p-0`}>
-        <Col xs={12} lg={5} className={styles.panelST}>
+      <Row className={`w-100 gx-3 gy-3 ${styles.dynamicDbBottomRow} p-0`}>
+        <Col xs={12} lg={5} className={`${styles.panelST} ${styles.dynamicDbPanel}`}>
           <SensorTable deviceId={selectedUid} />
         </Col>
-        <Col xs={12} lg={7} className={` d-flex flex-column gap-3 ${styles.panelLCAT} `}>
+        <Col xs={12} lg={7} className={` d-flex flex-column gap-3 ${styles.panelLCAT} ${styles.dynamicDbPanel}`}>
           <div className={`${styles.panelLC} flex-grow-1`}>
             <div className={styles.panelInner}>
           <LineChartPanel uid={selectedUid} />
             </div>
           </div>
-          <div className={styles.panelAT} style={{ minHeight: 250 }}>
+          <div className={`${styles.panelAT} ${styles.dynamicDbPanel}`} style={{ minHeight: 250 }}>
             <div className={styles.panelInnertable}>
               <AlarmHistoryTable uid={selectedUid} />
               </div>

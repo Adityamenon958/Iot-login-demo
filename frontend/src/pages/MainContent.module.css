@@ -284,7 +284,7 @@
 
 
 
-/* 🔹 New, sleeker “card” style */
+/* 🔹 New, sleeker "card" style */
 .panelDO {
   background: #ffffff;
   border: 1px solid #d1d9e6;          /* slightly darker than before */
@@ -469,6 +469,215 @@
         margin-top: 6px;
       }
     }
+  
+  
+
+
+
+
+  
+/* ─── SEPARATE STYLES FOR DYNAMIC DB DASHBOARD ─── */
+
+/* DynamicDb main container */
+.dynamicDbMain {
+  background-color: #EEF6F8;
+  height: calc(100vh - 4.5rem);
+  overflow-y: auto;
+  border-top-left-radius: 1.625rem;
+  width: calc(100vw - 14rem);
+  padding: 1rem;
+  padding-left: 20px;
+}
+
+/* DynamicDb row heights */
+.dynamicDbTopRow {
+  height: auto;
+  margin-bottom: 5px;
+}
+
+.dynamicDbBottomRow {
+  height: calc(100vh - 320px);
+}
+
+/* DynamicDb panels - Original sizes */
+.dynamicDbPanel .panelDO {
+  height: 190px; /* Your custom height */
+}
+
+.dynamicDbPanel .panelSG {
+  height: 190px; /* Your custom height */
+}
+
+.dynamicDbPanel .panelLC {
+  min-height: 270px; /* Original size */
+}
+
+.dynamicDbPanel .panelAT {
+  height: 225px; /* Original size */
+}
+
+.dynamicDbPanel .panelST {
+  max-height: 600px; /* Original size */
+}
+
+/* ─── SEPARATE STYLES FOR CRANE DASHBOARD ─── */
+
+/* Crane main container */
+.craneMain {
+  background-color: #EEF6F8;
+  height: calc(100vh - 4.5rem);
+  overflow-y: auto;
+  border-top-left-radius: 1.625rem;
+  width: calc(100vw - 14rem);
+  padding: 1rem;
+  padding-left: 20px;
+}
+
+/* Crane row heights */
+.craneTopRow {
+  height: auto;
+  min-height: 180px; /* Compact for crane */
+}
+
+.craneBottomRow {
+  height: calc(100vh - 240px); /* Compact for crane */
+}
+
+/* Crane panels - Compact sizes */
+.cranePanel .panelDO {
+  height: 180px; /* Compact for crane */
+}
+
+.panelDO{
+  height: 190px;
+}
+
+.cranePanel .panelSG {
+  height: 180px; /* Compact for crane */
+}
+
+.panelSG{
+  height: 190px;
+}
+
+.cranePanel .panelLC {
+  height: 200px; /* Compact for crane */
+}
+
+.panelLC{
+  max-height: 200px;
+}
+
+.cranePanel .panelAT {
+  max-height: 200px; /* Compact for crane */
+}
+
+.panelAT{
+  max-height: 10px;
+}
+
+.cranePanel .panelST {
+  max-height: 500px; /* Compact for crane */
+}
+
+.panelST{
+  height: 400px;
+}
+
+/* Crane inner padding */
+.cranePanelInner {
+  padding: 0.75rem 1rem; /* Compact padding */
+  min-height: auto;
+}
+
+/* Crane chart area */
+.craneChart {
+  min-height: 160px; /* Compact chart */
+}
+
+/* Crane alarms table */
+.craneAlarms {
+  min-height: 140px; /* Compact alarms */
+}
+
+/* ─── RESPONSIVE BREAKPOINTS FOR CRANE DASHBOARD ─── */
+@media (max-width: 1440px) {
+  .craneTopRow {
+    min-height: 160px;
+  }
+  
+  .craneBottomRow {
+    height: calc(100vh - 220px);
+  }
+  
+  .cranePanel .panelDO,
+  .cranePanel .panelSG,
+  .cranePanel .panelST,
+  .cranePanel .panelAT {
+    height: 160px;
+  }
+  
+  .cranePanel .panelLC {
+    min-height: 180px;
+  }
+  
+  .cranePanelInner {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+@media (max-width: 1366px) {
+  .craneTopRow {
+    min-height: 140px;
+  }
+  
+  .craneBottomRow {
+    height: calc(100vh - 200px);
+  }
+  
+  .cranePanel .panelDO,
+  .cranePanel .panelSG,
+  .cranePanel .panelST,
+  .cranePanel .panelAT {
+    height: 140px;
+  }
+  
+  .cranePanel .panelLC {
+    min-height: 160px;
+  }
+  
+  .craneChart {
+    min-height: 120px;
+  }
+  
+  .craneAlarms {
+    min-height: 120px;
+  }
+}
+
+@media (max-width: 992px) {
+  .craneTopRow {
+    flex-direction: column;
+    min-height: auto;
+  }
+  
+  .craneBottomRow {
+    height: auto;
+    min-height: 400px;
+  }
+  
+  .cranePanel .panelDO,
+  .cranePanel .panelSG,
+  .cranePanel .panelST,
+  .cranePanel .panelAT {
+    height: auto;
+    min-height: 200px;
+  }
+  
+  .cranePanel .panelLC {
+    min-height: 200px;
+  }
+}
   
   
 

@@ -15,6 +15,7 @@ import FullPageSpinner from './components/FullPageSpinner';
 import LoginCarousel from './components/LoginCarousel';
 import './App.css';
 import DynamicDb from './components/DynamicDb';
+import CraneDashboard from './pages/CraneDashboard';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ function App() {
         {/* <Route path="dynamicdb" element={<DynamicDb />} /> */}
         <Route path="device" element={<Navigate to="GS-1234" replace />} />
         <Route path="device/:deviceId" element={<DynamicDb />} />
+        <Route path="crane" element={<CraneDashboard />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
         <Route
@@ -58,6 +60,7 @@ function App() {
             </AddUser2>
           }
         />
+        
         <Route path="adddevice" element={<AddDevice />} />
         <Route path="subscription" element={<Subscription />} />
       </Route>

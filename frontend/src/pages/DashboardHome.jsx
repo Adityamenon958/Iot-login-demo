@@ -14,7 +14,7 @@ const DashboardHome = () => {
 
   const fetchDevices = async () => {
     try {
-      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/devices`);
+      const res = await axios.get(`/api/devices`, { withCredentials: true });
 
       console.log("Devices API response:", res.data);
       
@@ -35,7 +35,7 @@ const DashboardHome = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const res = await axios.get(`https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/api/dashboard`);
+      const res = await axios.get(`/api/dashboard`, { withCredentials: true });
       console.log("Dashboard API response:", res.data);
       setActiveDevices(res.data.activeDevices);
       setInactiveDevices(res.data.inactiveDevices);

@@ -8,6 +8,7 @@ import { UserPlus } from 'lucide-react';
 import { HiOutlineOfficeBuilding } from "react-icons/hi";
 import { PlusSquare } from 'lucide-react';
 import { MdOutlineSubscriptions } from "react-icons/md";
+import { Truck } from 'lucide-react';
 
 import axios from 'axios';
 
@@ -88,6 +89,11 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/device' ? styles.active : ''}`} onClick={() => navigate('/dashboard/device')}>
             <FileText size={20} className={`${styles.navText} me-2`} />
             Dasboard
+          </Button>
+
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/crane' ? styles.active : ''}`} onClick={() => navigate('/dashboard/crane')}>
+            <Truck size={20} className={`${styles.navText} me-2`} />
+            Crane Dashboard
           </Button>
 
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/reports' ? styles.active : ''}`} onClick={() => navigate('/dashboard/reports')}>
