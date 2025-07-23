@@ -578,11 +578,16 @@ if (latestLog.DigitalInput1 === "1") {
     console.log(`🔍 DEBUG: Current time: ${now}`);
     console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
     
-    // Only add if it's reasonable (not negative or too large)
+    // ✅ Handle timezone issues - if negative, assume it's a timezone problem
     if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
       deviceOngoingHours = ongoingHoursDiff;
       hasOngoingSession = true;
       console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
+    } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -24) {
+      // ✅ Timezone issue - treat as ongoing session from latest timestamp
+      deviceOngoingHours = Math.abs(ongoingHoursDiff);
+      hasOngoingSession = true;
+      console.log(`✅ Crane ${deviceId} ongoing session (timezone adjusted): ${latestLog.Timestamp} to now = ${deviceOngoingHours.toFixed(2)} hours`);
     } else {
       console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
     }
