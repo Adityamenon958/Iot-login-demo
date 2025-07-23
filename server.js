@@ -473,6 +473,133 @@ app.post("/api/crane/log", async (req, res) => {
   }
 });
 
+// ✅ GET: Fetch crane overview data for dashboard
+app.get("/api/crane/overview", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 Fetching crane overview for:', { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get all crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    if (craneDevices.length === 0) {
+      return res.json({
+        totalWorkingHours: 0,
+        activeCranes: 0,
+        inactiveCranes: 0,
+        underMaintenance: 0,
+        quickStats: {
+          todayOperations: 0,
+          thisWeekOperations: 0,
+          thisMonthOperations: 0
+        }
+      });
+    }
+
+    // ✅ Calculate total working hours and crane statuses
+    let totalWorkingHours = 0;
+    let activeCranes = 0;
+    let inactiveCranes = 0;
+    let underMaintenance = 0;
+
+    // ✅ Process each crane device
+    for (const deviceId of craneDevices) {
+      const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+      
+      // Get all logs for this device
+      const deviceLogs = await CraneLog.find(deviceFilter)
+        .sort({ createdAt: 1 })
+        .lean();
+
+      if (deviceLogs.length === 0) continue;
+
+      // ✅ Calculate working hours for this device
+      let deviceWorkingHours = 0;
+
+      // ✅ Process logs to calculate working hours
+      for (let i = 0; i < deviceLogs.length - 1; i++) {
+        const currentLog = deviceLogs[i];
+        const nextLog = deviceLogs[i + 1];
+
+        // ✅ Check if crane is working (DigitalInput1 = "1" means crane is active)
+        if (currentLog.DigitalInput1 === "1") {
+          // ✅ Parse timestamps correctly
+          try {
+            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+            const currentTime = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            
+            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+            const nextTime = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            
+            // Calculate hours difference
+            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+            deviceWorkingHours += hoursDiff;
+            
+            console.log(`✅ Crane ${deviceId}: ${currentLog.Timestamp} to ${nextLog.Timestamp} = ${hoursDiff.toFixed(2)} hours`);
+          } catch (err) {
+            console.error(`❌ Error parsing timestamps for crane ${deviceId}:`, err);
+            // Fallback to using createdAt timestamps
+            const hoursDiff = (new Date(nextLog.createdAt) - new Date(currentLog.createdAt)) / (1000 * 60 * 60);
+            deviceWorkingHours += hoursDiff;
+          }
+        }
+      }
+
+      // ✅ Check current status
+      const latestLog = deviceLogs[deviceLogs.length - 1];
+      if (latestLog.DigitalInput1 === "1") {
+        activeCranes++;
+      } else if (latestLog.DigitalInput2 === "1") {
+        underMaintenance++;
+      } else {
+        inactiveCranes++;
+      }
+
+      totalWorkingHours += deviceWorkingHours;
+    }
+
+    // ✅ Calculate quick statistics
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const todayFilter = { ...companyFilter, createdAt: { $gte: today } };
+    const weekFilter = { ...companyFilter, createdAt: { $gte: weekAgo } };
+    const monthFilter = { ...companyFilter, createdAt: { $gte: monthAgo } };
+
+    const [todayOperations, thisWeekOperations, thisMonthOperations] = await Promise.all([
+      CraneLog.countDocuments(todayFilter),
+      CraneLog.countDocuments(weekFilter),
+      CraneLog.countDocuments(monthFilter)
+    ]);
+
+    res.json({
+      totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
+      activeCranes,
+      inactiveCranes,
+      underMaintenance,
+      quickStats: {
+        todayOperations,
+        thisWeekOperations,
+        thisMonthOperations
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Crane overview fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 
 
 
