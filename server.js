@@ -8,7 +8,7 @@ const connectDB = require('./backend/db');
 const Device = require('./backend/models/Device');
 const User = require('./backend/models/User');
 const LevelSensor = require('./backend/models/LevelSensor');
-const CraneLog = require("./backend/models/CraneLog"); // adjust path if needed
+
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const Razorpay = require('razorpay');
@@ -22,7 +22,7 @@ const sendEmail = require("./backend/utils/sendEmail");
 const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
-
+const CraneLog = require("./backend/models/CraneLog");
 
 // ✅ Middleware
 app.use(cors({
@@ -50,7 +50,11 @@ function authenticateToken(req, res, next) {
 }
 
 // ✅ Connect MongoDB
-connectDB();
+connectDB().then(() => {
+  console.log('✅ MongoDB connected successfully');
+}).catch((err) => {
+  console.error('❌ MongoDB connection failed:', err);
+});
 
 // ✅ Razorpay Instance
 const razorpay = new Razorpay({
@@ -405,724 +409,82 @@ app.delete('/api/devices/:id', async (req, res) => {
   }
 });
 
-// ✅ API endpoint to receive crane log data
+// ✅ POST: Receive crane data from edge device/router (DEBUG VERSION)
 app.post("/api/crane/log", async (req, res) => {
   try {
-    // Validate required fields
-    const {
-      DeviceID, Timestamp, Date, Time,
-      Longitude, Latitude, DigitalInput1, DigitalInput2
-    } = req.body;
-
-    if (
-      !DeviceID || !Timestamp || !Date || !Time ||
-      !Longitude || !Latitude || !DigitalInput1 || !DigitalInput2
-    ) {
+    console.log('🔍 DEBUG - Request headers:', req.headers);
+    console.log('🔍 DEBUG - Request body type:', typeof req.body);
+    console.log('🔍 DEBUG - Request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 DEBUG - Request body keys:', Object.keys(req.body || {}));
+    
+    // ✅ Extract data from request body
+    const { craneCompany, DeviceID, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
+    
+    console.log('🔍 DEBUG - Extracted values:');
+    console.log('  craneCompany:', craneCompany);
+    console.log('  DeviceID:', DeviceID);
+    console.log('  Timestamp:', Timestamp);
+    console.log('  Longitude:', Longitude);
+    console.log('  Latitude:', Latitude);
+    console.log('  DigitalInput1:', DigitalInput1);
+    console.log('  DigitalInput2:', DigitalInput2);
+    
+    // ✅ Validate required fields
+    if (!craneCompany || !DeviceID || !Timestamp || !Longitude || !Latitude || !DigitalInput1 || !DigitalInput2) {
+      console.log('❌ Missing required fields:', { 
+        craneCompany: !!craneCompany, 
+        DeviceID: !!DeviceID, 
+        Timestamp: !!Timestamp, 
+        Longitude: !!Longitude, 
+        Latitude: !!Latitude, 
+        DigitalInput1: !!DigitalInput1, 
+        DigitalInput2: !!DigitalInput2 
+      });
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Save to DB
-    const log = new CraneLog({
-      DeviceID, Timestamp, Date, Time,
-      Longitude, Latitude, DigitalInput1, DigitalInput2
+    // ✅ Create new crane log entry
+    const craneLog = new CraneLog({
+      craneCompany,
+      DeviceID,
+      Timestamp,
+      Longitude,
+      Latitude,
+      DigitalInput1,
+      DigitalInput2
     });
-    await log.save();
-
-    res.status(201).json({ message: "Crane log saved successfully" });
-  } catch (err) {
-    console.error("Crane log save error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ✅ GET: Fetch unique crane devices
-app.get("/api/crane/devices", authenticateToken, async (req, res) => {
-  try {
-    // Get unique DeviceIDs from crane logs
-    const devices = await CraneLog.distinct("DeviceID");
     
-    // Create device objects with additional info
-    const deviceList = await Promise.all(
-      devices.map(async (deviceId) => {
-        const latestLog = await CraneLog.findOne({ DeviceID: deviceId })
-          .sort({ createdAt: -1 })
-          .lean();
-        
-        return {
-          DeviceID: deviceId,
-          location: latestLog ? `${latestLog.Latitude}, ${latestLog.Longitude}` : "Unknown",
-          lastSeen: latestLog ? latestLog.Timestamp : "Never"
-        };
-      })
-    );
-
-    res.json(deviceList);
-  } catch (err) {
-    console.error("Crane devices fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ✅ GET: Fetch crane logs with pagination
-app.get("/api/crane/logs", authenticateToken, async (req, res) => {
-  try {
-    const page = parseInt(req.query.page || '1', 10);
-    const limit = parseInt(req.query.limit || '20', 10);
-    const skip = (page - 1) * limit;
-    const deviceId = req.query.deviceId;
-
-    const filter = {};
-    if (deviceId) filter.DeviceID = deviceId;
-
-    const [logs, total] = await Promise.all([
-      CraneLog.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      CraneLog.countDocuments(filter)
-    ]);
-
-    res.json({ logs, total, page, limit });
-  } catch (err) {
-    console.error("Crane logs fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ✅ GET: Fetch current crane status
-app.get("/api/crane/status", authenticateToken, async (req, res) => {
-  try {
-    const { deviceId } = req.query;
+    // ✅ Save to database
+    const savedLog = await craneLog.save();
     
-    if (!deviceId) {
-      return res.status(400).json({ error: "DeviceID is required" });
-    }
+    console.log('✅ Crane log saved successfully:', savedLog._id);
 
-    // Get latest log for this device
-    const latestLog = await CraneLog.findOne({ DeviceID: deviceId })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    if (!latestLog) {
-      return res.status(404).json({ error: "No data found for this device" });
-    }
-
-    // Determine status based on digital inputs
-    const isOperating = latestLog.DigitalInput1 === "1";
-    const isDown = latestLog.DigitalInput2 === "1";
-
-    let status = "Unknown";
-    let statusColor = "secondary";
-
-    if (isDown) {
-      status = "Under Maintenance";
-      statusColor = "warning";
-    } else if (isOperating) {
-      status = "Operating";
-      statusColor = "success";
-    } else {
-      status = "Idle";
-      statusColor = "secondary";
-    }
-
-    res.json({
-      deviceId,
-      status,
-      statusColor,
-      isOperating,
-      isDown,
-      lastUpdate: latestLog.Timestamp,
-      location: `${latestLog.Latitude}, ${latestLog.Longitude}`,
-      digitalInput1: latestLog.DigitalInput1,
-      digitalInput2: latestLog.DigitalInput2
+    // ✅ Return success response
+    res.status(201).json({ 
+      message: "Crane data saved successfully",
+      logId: savedLog._id,
+      deviceId: savedLog.DeviceID,
+      timestamp: savedLog.Timestamp
     });
-  } catch (err) {
-    console.error("Crane status fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ✅ GET: Fetch crane activity summary (operating hours)
-app.get("/api/crane/activity", authenticateToken, async (req, res) => {
-  try {
-    const { deviceId } = req.query;
     
-    if (!deviceId) {
-      return res.status(400).json({ error: "DeviceID is required" });
-    }
-
-    // Get logs for the last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const logs = await CraneLog.find({
-      DeviceID: deviceId,
-      createdAt: { $gte: thirtyDaysAgo }
-    })
-    .sort({ createdAt: 1 })
-    .lean();
-
-    if (logs.length === 0) {
-      return res.json({
-        deviceId,
-        todayHours: 0,
-        weekHours: 0,
-        monthHours: 0,
-        recentActivity: []
-      });
-    }
-
-    // Calculate operating hours
-    let totalOperatingMinutes = 0;
-    let todayOperatingMinutes = 0;
-    let weekOperatingMinutes = 0;
-    const operatingSessions = []; // NEW: Array to store complete operating sessions
-
-    const today = new Date();
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
-    let lastOperatingState = null;
-    let lastOperatingTime = null;
-
-    for (let i = 0; i < logs.length; i++) {
-      const log = logs[i];
-      const isOperating = log.DigitalInput1 === "1";
-      
-      // ✅ FIX: Use actual crane timestamp instead of database createdAt
-      let logTime;
-      try {
-        // Parse crane timestamp: "07/01/2025 08:00:00"
-        const [datePart, timePart] = log.Timestamp.split(' ');
-        const [month, day, year] = datePart.split('/').map(Number);
-        const [hour, minute, second] = timePart.split(':').map(Number);
-        logTime = new Date(year, month - 1, day, hour, minute, second);
-      } catch (err) {
-        console.error("Error parsing timestamp:", log.Timestamp);
-        logTime = new Date(log.createdAt); // Fallback to createdAt
-      }
-
-      // ✅ NEW: Track complete operating sessions (Start → Stop)
-      if (lastOperatingState === true && !isOperating && lastOperatingTime) {
-        // Crane just stopped - create a complete session
-        const minutesOperated = (logTime - lastOperatingTime) / (1000 * 60);
-        const hoursOperated = Math.round((minutesOperated / 60) * 10) / 10;
-        
-        operatingSessions.push({
-          startTime: lastOperatingTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          stopTime: logTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          date: lastOperatingTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          totalHours: hoursOperated,
-          minutesOperated: minutesOperated
-        });
-
-        // Add to totals
-        totalOperatingMinutes += minutesOperated;
-
-        // Today's hours (compare dates properly)
-        const logDate = logTime.toDateString();
-        const todayDate = today.toDateString();
-        if (logDate === todayDate) {
-          todayOperatingMinutes += minutesOperated;
-        }
-
-        // Week's hours - FIX: Check if the START time was within the week
-        if (lastOperatingTime >= weekAgo) {
-          weekOperatingMinutes += minutesOperated;
-        }
-      }
-
-      // Update state tracking
-      if (isOperating && lastOperatingState !== true) {
-        // Crane just started - record start time
-        lastOperatingTime = logTime;
-      }
-      
-      lastOperatingState = isOperating;
-    }
-
-    // ✅ NEW: Handle case where crane is still operating (no stop event yet)
-    if (lastOperatingState === true && lastOperatingTime) {
-      const now = new Date();
-      const minutesOperated = (now - lastOperatingTime) / (1000 * 60);
-      
-      // ✅ DEBUG: Log the calculation
-      console.log(`\n🔍 ONGOING SESSION DEBUG:`);
-      console.log(`Start time: ${lastOperatingTime}`);
-      console.log(`Current time: ${now}`);
-      console.log(`Minutes operated: ${minutesOperated}`);
-      console.log(`Is future date: ${lastOperatingTime > now}`);
-      
-      // ✅ FIX: Handle future dates by using a small default duration
-      let actualMinutesOperated = minutesOperated;
-      if (minutesOperated <= 0) {
-        // For future dates or same time, assume 1 minute of operation
-        actualMinutesOperated = 1;
-        console.log(`⚠️ Future/same timestamp detected. Using 1 minute as default.`);
-      }
-      
-      // Only add if it's reasonable (less than 24 hours)
-      if (actualMinutesOperated < 24 * 60) {
-        const hoursOperated = Math.round((actualMinutesOperated / 60) * 10) / 10;
-        
-        // Add ongoing session
-        operatingSessions.push({
-          startTime: lastOperatingTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          stopTime: "Running...", // Still operating
-          date: lastOperatingTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          totalHours: hoursOperated,
-          minutesOperated: actualMinutesOperated
-        });
-
-        totalOperatingMinutes += actualMinutesOperated;
-        
-        // For today's calculation, use actual date comparison
-        const startDate = lastOperatingTime.toDateString();
-        const todayDate = now.toDateString();
-        console.log(`Start date: ${startDate}, Today: ${todayDate}, Same day: ${startDate === todayDate}`);
-        
-        if (startDate === todayDate) {
-          todayOperatingMinutes += actualMinutesOperated;
-        }
-        
-        if (lastOperatingTime >= weekAgo) {
-          weekOperatingMinutes += actualMinutesOperated;
-        }
-      } else if (minutesOperated <= 0) {
-        console.log(`⚠️ WARNING: Future timestamp detected. Skipping ongoing session calculation.`);
-      }
-    }
-
-    // Convert minutes to hours
-    const todayHours = Math.round((todayOperatingMinutes / 60) * 10) / 10;
-    const weekHours = Math.round((weekOperatingMinutes / 60) * 10) / 10;
-    const monthHours = Math.round((totalOperatingMinutes / 60) * 10) / 10;
-
-    res.json({
-      deviceId,
-      todayHours,
-      weekHours,
-      monthHours,
-      operatingSessions: operatingSessions.slice(-10).reverse() // Last 10 sessions, newest first
-    });
   } catch (err) {
-    console.error("Crane activity fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Crane log save error:", err);
+    res.status(500).json({ error: "Failed to save crane data" });
   }
 });
 
-// ✅ NEW: Single API endpoint for ALL crane data (simplified approach)
-app.get("/api/crane/dashboard/:deviceId", authenticateToken, async (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    
-    if (!deviceId) {
-      return res.status(400).json({ error: "DeviceID is required" });
-    }
 
-    // Get all devices first
-    const devices = await CraneLog.distinct("DeviceID");
-    const deviceList = await Promise.all(
-      devices.map(async (id) => {
-        const latestLog = await CraneLog.findOne({ DeviceID: id })
-          .sort({ createdAt: -1 })
-          .lean();
-        
-        return {
-          DeviceID: id,
-          location: latestLog ? `${latestLog.Latitude}, ${latestLog.Longitude}` : "Unknown",
-          lastSeen: latestLog ? latestLog.Timestamp : "Never"
-        };
-      })
-    );
 
-    // Get latest status for selected device
-    const latestLog = await CraneLog.findOne({ DeviceID: deviceId })
-      .sort({ createdAt: -1 })
-      .lean();
 
-    if (!latestLog) {
-      return res.status(404).json({ error: "No data found for this device" });
-    }
 
-    // Determine status
-    const isOperating = latestLog.DigitalInput1 === "1";
-    const isDown = latestLog.DigitalInput2 === "1";
-    let status = "Unknown";
-    let statusColor = "secondary";
 
-    if (isDown) {
-      status = "Under Maintenance";
-      statusColor = "warning";
-    } else if (isOperating) {
-      status = "Operating";
-      statusColor = "success";
-    } else {
-      status = "Idle";
-      statusColor = "secondary";
-    }
 
-    // Get activity data (reuse the same logic from /activity endpoint)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const logs = await CraneLog.find({
-      DeviceID: deviceId,
-      createdAt: { $gte: thirtyDaysAgo }
-    })
-    .sort({ createdAt: 1 })
-    .lean();
 
-    let totalOperatingMinutes = 0;
-    let todayOperatingMinutes = 0;
-    let weekOperatingMinutes = 0;
-    const operatingSessions = []; // NEW: Array to store complete operating sessions
 
-    const today = new Date();
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
 
-    let lastOperatingState = null;
-    let lastOperatingTime = null;
 
-    for (let i = 0; i < logs.length; i++) {
-      const log = logs[i];
-      const isOp = log.DigitalInput1 === "1";
-      
-      let logTime;
-      try {
-        const [datePart, timePart] = log.Timestamp.split(' ');
-        const [month, day, year] = datePart.split('/').map(Number);
-        const [hour, minute, second] = timePart.split(':').map(Number);
-        logTime = new Date(year, month - 1, day, hour, minute, second);
-      } catch (err) {
-        logTime = new Date(log.createdAt);
-      }
 
-      // NEW: Track complete operating sessions (Start → Stop)
-      if (lastOperatingState === true && !isOp && lastOperatingTime) {
-        // Crane just stopped - create a complete session
-        const minutesOperated = (logTime - lastOperatingTime) / (1000 * 60);
-        const hoursOperated = Math.round((minutesOperated / 60) * 10) / 10;
-        
-        operatingSessions.push({
-          startTime: lastOperatingTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          stopTime: logTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          date: lastOperatingTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          totalHours: hoursOperated,
-          minutesOperated: minutesOperated
-        });
-
-        // Add to totals
-        totalOperatingMinutes += minutesOperated;
-
-        if (logTime.toDateString() === today.toDateString()) {
-          todayOperatingMinutes += minutesOperated;
-        }
-
-        // FIX: Check if the START time was within the week
-        if (lastOperatingTime >= weekAgo) {
-          weekOperatingMinutes += minutesOperated;
-        }
-      }
-
-      if (isOp && lastOperatingState !== true) {
-        lastOperatingTime = logTime;
-      }
-      
-      lastOperatingState = isOp;
-    }
-
-    // NEW: Handle case where crane is still operating (no stop event yet)
-    if (lastOperatingState === true && lastOperatingTime) {
-      const now = new Date();
-      const minutesOperated = (now - lastOperatingTime) / (1000 * 60);
-      
-      console.log(`\n🔍 DASHBOARD ONGOING SESSION DEBUG:`);
-      console.log(`Start time: ${lastOperatingTime}`);
-      console.log(`Current time: ${now}`);
-      console.log(`Minutes operated: ${minutesOperated}`);
-      console.log(`Is future date: ${lastOperatingTime > now}`);
-      
-      // FIX: Handle future dates by using a small default duration
-      let actualMinutesOperated = minutesOperated;
-      if (minutesOperated <= 0) {
-        // For future dates or same time, assume 1 minute of operation
-        actualMinutesOperated = 1;
-        console.log(`⚠️ Future/same timestamp detected. Using 1 minute as default.`);
-      }
-      
-      // Only add if it's reasonable (less than 24 hours)
-      if (actualMinutesOperated < 24 * 60) {
-        const hoursOperated = Math.round((actualMinutesOperated / 60) * 10) / 10;
-        
-        // Add ongoing session
-        operatingSessions.push({
-          startTime: lastOperatingTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          stopTime: "Running...", // Still operating
-          date: lastOperatingTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          totalHours: hoursOperated,
-          minutesOperated: actualMinutesOperated
-        });
-
-        totalOperatingMinutes += actualMinutesOperated;
-        
-        // For today's calculation, use actual date comparison
-        const startDate = lastOperatingTime.toDateString();
-        const todayDate = now.toDateString();
-        console.log(`Start date: ${startDate}, Today: ${todayDate}, Same day: ${startDate === todayDate}`);
-        
-        if (startDate === todayDate) {
-          todayOperatingMinutes += actualMinutesOperated;
-        }
-        
-        if (lastOperatingTime >= weekAgo) {
-          weekOperatingMinutes += actualMinutesOperated;
-        }
-      }
-    }
-
-    const todayHours = Math.round((todayOperatingMinutes / 60) * 10) / 10;
-    const weekHours = Math.round((weekOperatingMinutes / 60) * 10) / 10;
-    const monthHours = Math.round((totalOperatingMinutes / 60) * 10) / 10;
-
-    // Return ALL data in one response
-    res.json({
-      devices: deviceList,
-      selectedDevice: {
-        deviceId,
-        status,
-        statusColor,
-        isOperating,
-        isDown,
-        lastUpdate: latestLog.Timestamp,
-        location: `${latestLog.Latitude}, ${latestLog.Longitude}`,
-        digitalInput1: latestLog.DigitalInput1,
-        digitalInput2: latestLog.DigitalInput2
-      },
-      activity: {
-        todayHours,
-        weekHours,
-        monthHours,
-        operatingSessions: operatingSessions.slice(-10).reverse() // Last 10 sessions, newest first
-      }
-    });
-  } catch (err) {
-    console.error("Crane dashboard fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-/* ─── get crane chart data ─── */
-app.get('/api/crane/chart', authenticateToken, async (req, res) => {
-  try {
-    const { deviceId, period = '24hr' } = req.query;
-    const { companyName } = req.user;
-
-    if (!deviceId) {
-      return res.status(400).json({ message: 'Device ID is required' });
-    }
-
-    // Get logs based on period
-    let startDate;
-    const now = new Date();
-    
-    switch (period) {
-      case '24hr':
-        startDate = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        break;
-      case 'weekly':
-        startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-        break;
-      case 'monthly':
-        startDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-        break;
-      case 'yearly':
-        startDate = new Date(now.getTime() - (365 * 24 * 60 * 60 * 1000));
-        break;
-      default:
-        startDate = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-    }
-
-    const logs = await CraneLog.find({
-      DeviceID: deviceId,
-      createdAt: { $gte: startDate }
-    }).sort({ Timestamp: 1 });
-
-    if (logs.length === 0) {
-      return res.json({
-        labels: [],
-        data: [],
-        period: period
-      });
-    }
-
-    // Calculate operating sessions (reuse the same logic)
-    const operatingSessions = [];
-    let lastOperatingState = null;
-    let lastOperatingTime = null;
-
-    for (let i = 0; i < logs.length; i++) {
-      const log = logs[i];
-      const isOperating = log.DigitalInput1 === '1';
-      
-      let logTime;
-      try {
-        const [datePart, timePart] = log.Timestamp.split(' ');
-        const [month, day, year] = datePart.split('/').map(Number);
-        const [hour, minute, second] = timePart.split(':').map(Number);
-        logTime = new Date(year, month - 1, day, hour, minute, second);
-      } catch (err) {
-        logTime = new Date(log.createdAt);
-      }
-
-      if (lastOperatingState === true && !isOperating && lastOperatingTime) {
-        // Crane just stopped - create a complete session
-        const minutesOperated = (logTime - lastOperatingTime) / (1000 * 60);
-        const hoursOperated = Math.round((minutesOperated / 60) * 10) / 10;
-        
-        operatingSessions.push({
-          startTime: lastOperatingTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          stopTime: logTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          date: lastOperatingTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          totalHours: hoursOperated,
-          startTimestamp: lastOperatingTime
-        });
-      }
-
-      if (isOperating && lastOperatingState !== true) {
-        lastOperatingTime = logTime;
-      }
-      
-      lastOperatingState = isOperating;
-    }
-
-    // Handle ongoing session
-    if (lastOperatingState === true && lastOperatingTime) {
-      const now = new Date();
-      let minutesOperated = (now - lastOperatingTime) / (1000 * 60);
-      
-      if (minutesOperated <= 0) {
-        minutesOperated = 1; // Default for future dates
-      }
-      
-      if (minutesOperated < 24 * 60) {
-        const hoursOperated = Math.round((minutesOperated / 60) * 10) / 10;
-        
-        operatingSessions.push({
-          startTime: lastOperatingTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          stopTime: "Running...",
-          date: lastOperatingTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          totalHours: hoursOperated,
-          startTimestamp: lastOperatingTime
-        });
-      }
-    }
-
-    // Group data by time period
-    const chartData = groupDataByPeriod(operatingSessions, period);
-
-    res.json({
-      labels: chartData.labels,
-      data: chartData.data,
-      period: period
-    });
-
-  } catch (error) {
-    console.error('Crane chart error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-/* ─── group data by period helper ─── */
-function groupDataByPeriod(sessions, period) {
-  const now = new Date();
-  const data = [];
-  const labels = [];
-
-  switch (period) {
-    case '24hr':
-      // Group by hour for last 24 hours
-      for (let i = 23; i >= 0; i--) {
-        const hour = new Date(now.getTime() - (i * 60 * 60 * 1000));
-        const hourStr = hour.getHours().toString().padStart(2, '0') + ':00';
-        labels.push(hourStr);
-        
-        const hoursInThisHour = sessions
-          .filter(session => {
-            const sessionStart = session.startTimestamp || new Date(session.date);
-            return sessionStart.getHours() === hour.getHours() && 
-                   sessionStart.toDateString() === hour.toDateString();
-          })
-          .reduce((sum, session) => sum + session.totalHours, 0);
-        
-        data.push(Math.round(hoursInThisHour * 10) / 10);
-      }
-      break;
-
-    case 'weekly':
-      // Group by day for last 7 days
-      for (let i = 6; i >= 0; i--) {
-        const day = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
-        const dayStr = day.toLocaleDateString('en-US', { weekday: 'short' });
-        labels.push(dayStr);
-        
-        const hoursInThisDay = sessions
-          .filter(session => {
-            const sessionStart = session.startTimestamp || new Date(session.date);
-            return sessionStart.toDateString() === day.toDateString();
-          })
-          .reduce((sum, session) => sum + session.totalHours, 0);
-        
-        data.push(Math.round(hoursInThisDay * 10) / 10);
-      }
-      break;
-
-    case 'monthly':
-      // Group by day for last 30 days
-      for (let i = 29; i >= 0; i--) {
-        const day = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
-        const dayStr = day.getDate().toString();
-        labels.push(dayStr);
-        
-        const hoursInThisDay = sessions
-          .filter(session => {
-            const sessionStart = session.startTimestamp || new Date(session.date);
-            return sessionStart.toDateString() === day.toDateString();
-          })
-          .reduce((sum, session) => sum + session.totalHours, 0);
-        
-        data.push(Math.round(hoursInThisDay * 10) / 10);
-      }
-      break;
-
-    case 'yearly':
-      // Group by month for last 12 months
-      for (let i = 11; i >= 0; i--) {
-        const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const monthStr = month.toLocaleDateString('en-US', { month: 'short' });
-        labels.push(monthStr);
-        
-        const hoursInThisMonth = sessions
-          .filter(session => {
-            const sessionStart = session.startTimestamp || new Date(session.date);
-            return sessionStart.getMonth() === month.getMonth() && 
-                   sessionStart.getFullYear() === month.getFullYear();
-          })
-          .reduce((sum, session) => sum + session.totalHours, 0);
-        
-        data.push(Math.round(hoursInThisMonth * 10) / 10);
-      }
-      break;
-
-    default:
-      labels.push('No Data');
-      data.push(0);
-  }
-
-  return { labels, data };
-}
 
 // ✅ Level Sensor
 // ✅ POST: Store sensor data from TRB245
@@ -1611,15 +973,9 @@ app.get("/api/levelsensor/uids", authenticateToken, async (req, res) => {
 
 
 
-// ✅ TEST: Simple test endpoint without authentication
-app.get("/api/crane/test", async (req, res) => {
-  try {
-    res.json({ message: "Crane API is working!", timestamp: new Date() });
-  } catch (err) {
-    console.error("Test endpoint error:", err);
-    res.status(500).json({ error: "Test failed" });
-  }
-});
+
+
+
 
 // ✅ Logout
 app.post('/api/logout', (req, res) => {

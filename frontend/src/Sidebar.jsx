@@ -91,6 +91,11 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             Dasboard
           </Button>
 
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/crane-overview' ? styles.active : ''}`} onClick={() => navigate('/dashboard/crane-overview')}>
+             <Truck size={20} className={`${styles.navText} me-2`} />
+              Crane Overview
+          </Button>
+
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/crane' ? styles.active : ''}`} onClick={() => navigate('/dashboard/crane')}>
             <Truck size={20} className={`${styles.navText} me-2`} />
             Crane Dashboard

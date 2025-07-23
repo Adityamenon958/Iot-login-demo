@@ -16,6 +16,7 @@ import LoginCarousel from './components/LoginCarousel';
 import './App.css';
 import DynamicDb from './components/DynamicDb';
 import CraneDashboard from './pages/CraneDashboard';
+import CraneOverview from './pages/CraneOverview';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,7 @@ function App() {
         <Route path="device" element={<Navigate to="GS-1234" replace />} />
         <Route path="device/:deviceId" element={<DynamicDb />} />
         <Route path="crane" element={<CraneDashboard />} />
+        <Route path="crane-overview" element={<CraneOverview />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
         <Route

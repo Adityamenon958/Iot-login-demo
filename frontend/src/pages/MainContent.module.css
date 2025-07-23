@@ -6,6 +6,14 @@
     width: calc(100vw - 14rem);
   }
 
+  .mainCO {
+    background-color: #EEF6F8;
+    height: calc(100vh - 4.5rem);
+    overflow-y: auto;
+    border-top-left-radius: 1.625rem;
+    width: calc(100vw - 14rem);
+  }
+
   
   
 
