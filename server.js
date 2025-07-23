@@ -534,16 +534,20 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         // ✅ Only count as completed when DigitalInput1 changes from "1" to "0" (start → stop)
         if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
           try {
-            // ✅ Parse timestamps correctly
+            // ✅ Parse timestamps correctly - Convert IST to UTC
             const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
             const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
             const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            const currentTime = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            // ✅ Create IST time and convert to UTC (IST = UTC+5:30)
+            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            const currentTime = new Date(currentTimeIST.getTime() - (5.5 * 60 * 60 * 1000)); // Convert IST to UTC
             
             const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
             const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
             const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            const nextTime = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            // ✅ Create IST time and convert to UTC
+            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            const nextTime = new Date(nextTimeIST.getTime() - (5.5 * 60 * 60 * 1000)); // Convert IST to UTC
             
             // Calculate hours difference
             const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
@@ -569,7 +573,9 @@ if (latestLog.DigitalInput1 === "1") {
     const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
     const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
     const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-    const latestTime = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+    // ✅ Create IST time and convert to UTC (IST = UTC+5:30)
+    const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+    const latestTime = new Date(latestTimeIST.getTime() - (5.5 * 60 * 60 * 1000)); // Convert IST to UTC
     
     const now = new Date();
     const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
