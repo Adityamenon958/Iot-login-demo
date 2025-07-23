@@ -758,18 +758,259 @@ if (latestLog.DigitalInput1 === "1") {
   }
 });
 
+// ✅ GET: Fetch crane devices for dropdown (filtered by company)
+app.get("/api/crane/devices", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 User requesting crane devices:', { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get unique crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    // ✅ Get latest log for each device to get location info
+    const devicesWithInfo = await Promise.all(
+      craneDevices.map(async (deviceId) => {
+        const latestLog = await CraneLog.findOne(
+          { ...companyFilter, DeviceID: deviceId },
+          { Longitude: 1, Latitude: 1, Timestamp: 1 },
+          { sort: { createdAt: -1 } }
+        ).lean();
+        
+        return {
+          DeviceID: deviceId,
+          location: `${latestLog?.Latitude || 'N/A'}, ${latestLog?.Longitude || 'N/A'}`,
+          lastUpdate: latestLog?.Timestamp || 'Never'
+        };
+      })
+    );
+    
+    console.log(`✅ Found ${devicesWithInfo.length} crane devices for ${companyName}`);
+    
+    res.json(devicesWithInfo);
+    
+  } catch (err) {
+    console.error("❌ Crane devices fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
+// ✅ GET: Fetch individual crane status
+app.get("/api/crane/status", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { deviceId } = req.query;
+    
+    console.log('🔍 User requesting crane status:', { role, companyName, deviceId });
+    
+    if (!deviceId) {
+      return res.status(400).json({ error: "Device ID is required" });
+    }
+    
+    // ✅ Filter by company and device
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+    
+    // ✅ Get latest log for this device
+    const latestLog = await CraneLog.findOne(deviceFilter)
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    if (!latestLog) {
+      return res.status(404).json({ error: "Crane device not found" });
+    }
+    
+    // ✅ Determine status based on DigitalInput values
+    let status = "Unknown";
+    let statusColor = "secondary";
+    let isOperating = false;
+    let isDown = false;
+    
+    if (latestLog.DigitalInput1 === "1") {
+      status = "Operating";
+      statusColor = "success";
+      isOperating = true;
+    } else if (latestLog.DigitalInput2 === "1") {
+      status = "Maintenance";
+      statusColor = "warning";
+      isDown = true;
+    } else {
+      status = "Idle";
+      statusColor = "info";
+    }
+    
+    const craneStatus = {
+      status,
+      statusColor,
+      isOperating,
+      isDown,
+      lastUpdate: latestLog.Timestamp,
+      location: `${latestLog.Latitude}, ${latestLog.Longitude}`,
+      deviceId: latestLog.DeviceID
+    };
+    
+    console.log(`✅ Crane ${deviceId} status: ${status}`);
+    
+    res.json(craneStatus);
+    
+  } catch (err) {
+    console.error("❌ Crane status fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
-
-
-
-
-
-
-
-
-
-
+// ✅ GET: Fetch individual crane activity data
+app.get("/api/crane/activity", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { deviceId } = req.query;
+    
+    console.log('🔍 User requesting crane activity:', { role, companyName, deviceId });
+    
+    if (!deviceId) {
+      return res.status(400).json({ error: "Device ID is required" });
+    }
+    
+    // ✅ Filter by company and device
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+    
+    // ✅ Get all logs for this device
+    const deviceLogs = await CraneLog.find(deviceFilter)
+      .sort({ createdAt: 1 })
+      .lean();
+    
+    if (deviceLogs.length === 0) {
+      return res.json({
+        todayHours: 0,
+        weekHours: 0,
+        monthHours: 0,
+        totalHours: 0,
+        completedSessions: 0,
+        ongoingHours: 0
+      });
+    }
+    
+    // ✅ Sort by timestamp
+    deviceLogs.sort((a, b) => {
+      const [aDate, aTime] = a.Timestamp.split(' ');
+      const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+      const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+      const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+      
+      const [bDate, bTime] = b.Timestamp.split(' ');
+      const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+      const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+      const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+      
+      return aTimestamp - bTimestamp;
+    });
+    
+    // ✅ Calculate working hours for different periods
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    // ✅ Helper function to calculate hours for a period
+    function calculateHoursForPeriod(startDate, endDate = now) {
+      let completedHours = 0;
+      let ongoingHours = 0;
+      
+      // Filter logs within period
+      const periodLogs = deviceLogs.filter(log => {
+        const [datePart, timePart] = log.Timestamp.split(' ');
+        const [day, month, year] = datePart.split('/').map(Number);
+        const [hour, minute, second] = timePart.split(':').map(Number);
+        const logTime = new Date(year, month - 1, day, hour, minute, second);
+        const logTimeIST = new Date(logTime.getTime() + (5.5 * 60 * 60 * 1000)); // Convert to IST
+        return logTimeIST >= startDate && logTimeIST <= endDate;
+      });
+      
+      // Calculate completed sessions
+      for (let i = 0; i < periodLogs.length - 1; i++) {
+        const currentLog = periodLogs[i];
+        const nextLog = periodLogs[i + 1];
+        
+        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+          try {
+            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            const currentTime = new Date(currentTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+            
+            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            const nextTime = new Date(nextTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+            
+            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+            completedHours += hoursDiff;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamps for activity calculation:`, err);
+          }
+        }
+      }
+      
+      // Check for ongoing session
+      const latestLog = periodLogs[periodLogs.length - 1];
+      if (latestLog && latestLog.DigitalInput1 === "1") {
+        try {
+          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+          const latestTime = new Date(latestTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+          
+          const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
+          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
+            ongoingHours = ongoingHoursDiff;
+          }
+        } catch (err) {
+          console.error(`❌ Error calculating ongoing hours for activity:`, err);
+        }
+      }
+      
+      return completedHours + ongoingHours;
+    }
+    
+    // ✅ Calculate hours for different periods
+    const todayHours = calculateHoursForPeriod(today);
+    const weekHours = calculateHoursForPeriod(weekAgo);
+    const monthHours = calculateHoursForPeriod(monthAgo);
+    const totalHours = calculateHoursForPeriod(new Date(0)); // All time
+    
+    // ✅ Count completed sessions
+    let completedSessions = 0;
+    for (let i = 0; i < deviceLogs.length - 1; i++) {
+      if (deviceLogs[i].DigitalInput1 === "1" && deviceLogs[i + 1].DigitalInput1 === "0") {
+        completedSessions++;
+      }
+    }
+    
+    const craneActivity = {
+      todayHours: Math.round(todayHours * 100) / 100,
+      weekHours: Math.round(weekHours * 100) / 100,
+      monthHours: Math.round(monthHours * 100) / 100,
+      totalHours: Math.round(totalHours * 100) / 100,
+      completedSessions,
+      ongoingHours: Math.round(ongoingHours * 100) / 100
+    };
+    
+    console.log(`✅ Crane ${deviceId} activity calculated:`, craneActivity);
+    
+    res.json(craneActivity);
+    
+  } catch (err) {
+    console.error("❌ Crane activity fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // ✅ Level Sensor
 // ✅ POST: Store sensor data from TRB245
