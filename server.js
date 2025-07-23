@@ -473,22 +473,24 @@ app.post("/api/crane/log", async (req, res) => {
   }
 });
 
-// ✅ GET: Fetch crane overview data for dashboard
+// ✅ GET: Fetch crane overview data for dashboard (with real-time ongoing hours)
 app.get("/api/crane/overview", authenticateToken, async (req, res) => {
   try {
     const { role, companyName } = req.user;
     
-    console.log('🔍 Fetching crane overview for:', { role, companyName });
+    console.log('🔍 User requesting crane data:', { role, companyName });
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane devices for this company
+    // ✅ Get all crane devices for this company only
     const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
     
     if (craneDevices.length === 0) {
       return res.json({
         totalWorkingHours: 0,
+        completedHours: 0,
+        ongoingHours: 0,
         activeCranes: 0,
         inactiveCranes: 0,
         underMaintenance: 0,
@@ -500,8 +502,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       });
     }
 
-    // ✅ Calculate total working hours and crane statuses
+    // ✅ Calculate total working hours for all cranes
     let totalWorkingHours = 0;
+    let completedHours = 0;
+    let ongoingHours = 0;
     let activeCranes = 0;
     let inactiveCranes = 0;
     let underMaintenance = 0;
@@ -518,17 +522,19 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       if (deviceLogs.length === 0) continue;
 
       // ✅ Calculate working hours for this device
-      let deviceWorkingHours = 0;
+      let deviceCompletedHours = 0;
+      let deviceOngoingHours = 0;
+      let hasOngoingSession = false;
 
-      // ✅ Process logs to calculate working hours
+      // ✅ Process completed sessions (start → stop)
       for (let i = 0; i < deviceLogs.length - 1; i++) {
         const currentLog = deviceLogs[i];
         const nextLog = deviceLogs[i + 1];
 
-        // ✅ Check if crane is working (DigitalInput1 = "1" means crane is active)
-        if (currentLog.DigitalInput1 === "1") {
-          // ✅ Parse timestamps correctly
+        // ✅ Only count as completed when DigitalInput1 changes from "1" to "0" (start → stop)
+        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
           try {
+            // ✅ Parse timestamps correctly
             const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
             const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
             const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
@@ -541,20 +547,53 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
             
             // Calculate hours difference
             const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-            deviceWorkingHours += hoursDiff;
+            deviceCompletedHours += hoursDiff;
             
-            console.log(`✅ Crane ${deviceId}: ${currentLog.Timestamp} to ${nextLog.Timestamp} = ${hoursDiff.toFixed(2)} hours`);
+            console.log(`✅ Crane ${deviceId} completed session: ${currentLog.Timestamp} to ${nextLog.Timestamp} = ${hoursDiff.toFixed(2)} hours`);
           } catch (err) {
             console.error(`❌ Error parsing timestamps for crane ${deviceId}:`, err);
             // Fallback to using createdAt timestamps
             const hoursDiff = (new Date(nextLog.createdAt) - new Date(currentLog.createdAt)) / (1000 * 60 * 60);
-            deviceWorkingHours += hoursDiff;
+            deviceCompletedHours += hoursDiff;
           }
         }
       }
 
-      // ✅ Check current status
-      const latestLog = deviceLogs[deviceLogs.length - 1];
+      // ✅ Check for ongoing session (latest log) - ADD THIS DEBUG
+const latestLog = deviceLogs[deviceLogs.length - 1];
+if (latestLog.DigitalInput1 === "1") {
+  console.log(`🔍 DEBUG: Crane ${deviceId} is currently operating`);
+  console.log(`🔍 DEBUG: Latest timestamp: ${latestLog.Timestamp}`);
+  
+  try {
+    const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+    const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+    const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+    const latestTime = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+    
+    const now = new Date();
+    const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
+    
+    console.log(`�� DEBUG: Latest time parsed: ${latestTime}`);
+    console.log(`🔍 DEBUG: Current time: ${now}`);
+    console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
+    
+    // Only add if it's reasonable (not negative or too large)
+    if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
+      deviceOngoingHours = ongoingHoursDiff;
+      hasOngoingSession = true;
+      console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
+    } else {
+      console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
+    }
+  } catch (err) {
+    console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
+  }
+} else {
+  console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
+}
+
+      // ✅ Check current status for crane counts
       if (latestLog.DigitalInput1 === "1") {
         activeCranes++;
       } else if (latestLog.DigitalInput2 === "1") {
@@ -563,7 +602,12 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         inactiveCranes++;
       }
 
-      totalWorkingHours += deviceWorkingHours;
+      // ✅ Add to totals
+      completedHours += deviceCompletedHours;
+      ongoingHours += deviceOngoingHours;
+      totalWorkingHours = completedHours + ongoingHours;
+
+      console.log(`📊 Crane ${deviceId} summary: ${deviceCompletedHours.toFixed(2)}h completed + ${deviceOngoingHours.toFixed(2)}h ongoing`);
     }
 
     // ✅ Calculate quick statistics
@@ -582,8 +626,12 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       CraneLog.countDocuments(monthFilter)
     ]);
 
+    console.log(`📊 Final totals: ${completedHours.toFixed(2)}h completed + ${ongoingHours.toFixed(2)}h ongoing = ${totalWorkingHours.toFixed(2)}h total`);
+
     res.json({
       totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
+      completedHours: Math.round(completedHours * 100) / 100,
+      ongoingHours: Math.round(ongoingHours * 100) / 100,
       activeCranes,
       inactiveCranes,
       underMaintenance,

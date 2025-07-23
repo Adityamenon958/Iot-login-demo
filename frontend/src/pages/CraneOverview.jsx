@@ -11,6 +11,8 @@ export default function CraneOverview() {
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState({
     totalWorkingHours: 0,
+    completedHours: 0,
+    ongoingHours: 0,
     activeCranes: 0,
     inactiveCranes: 0,
     underMaintenance: 0,
@@ -49,7 +51,8 @@ export default function CraneOverview() {
     {
       id: 1,
       title: "Total Working Hours",
-      value: dashboardData.totalWorkingHours,
+      value: dashboardData.completedHours,  // ✅ Use completedHours instead of totalWorkingHours
+      ongoingHours: dashboardData.ongoingHours,
       gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
       icon: PiTimerDuotone,
       iconSize: 60
@@ -83,6 +86,12 @@ export default function CraneOverview() {
   // ✅ Render summary card component
   const renderSummaryCard = (card) => {
     const IconComponent = card.icon;
+    
+    // ✅ Special display for working hours with ongoing indicator
+    const displayValue = card.id === 1 && card.ongoingHours > 0 
+      ? `${card.value}h + ${card.ongoingHours.toFixed(1)} ongoing`
+      : card.value;
+  
     return (
       <Col xs={6} sm={6} md={3} className="mb-2" key={card.id}>
         <Card 
@@ -96,7 +105,7 @@ export default function CraneOverview() {
             <div className="d-flex justify-content-between align-items-start">
               <div>
                 <h3 className="mb-1 fw-bold" style={{ fontSize: '1.8rem' }}>
-                  {loading ? '...' : card.value}
+                  {loading ? '...' : displayValue}
                 </h3>
                 <p className="mb-0" style={{ fontSize: '0.75rem', opacity: 0.9 }}>
                   {card.title}
