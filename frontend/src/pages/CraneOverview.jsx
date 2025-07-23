@@ -16,11 +16,12 @@ export default function CraneOverview() {
     activeCranes: 0,
     inactiveCranes: 0,
     underMaintenance: 0,
-    quickStats: {
-      todayOperations: 0,
-      thisWeekOperations: 0,
-      thisMonthOperations: 0
-    }
+          quickStats: {
+        today: { completed: 0, ongoing: 0, total: 0 },
+        thisWeek: { completed: 0, ongoing: 0, total: 0 },
+        thisMonth: { completed: 0, ongoing: 0, total: 0 },
+        thisYear: { completed: 0, ongoing: 0, total: 0 }
+      }
   });
 
   // ✅ Fetch crane overview data from backend
@@ -89,8 +90,8 @@ export default function CraneOverview() {
     
     // ✅ Special display for working hours with ongoing indicator
     const displayValue = card.id === 1 && card.ongoingHours > 0 
-      ? `${card.value}h + ${card.ongoingHours.toFixed(1)} ongoing`
-      : card.value;
+      ? `${Math.max(0, card.value)}h + ${card.ongoingHours.toFixed(1)} ongoing`  // ✅ Prevent negative hours display
+      : Math.max(0, card.value);  // ✅ Prevent negative hours display
   
     return (
       <Col xs={6} sm={6} md={3} className="mb-2" key={card.id}>
@@ -215,21 +216,31 @@ export default function CraneOverview() {
                 </Card.Header>
                 <Card.Body className="p-2">
                   <div className="d-flex justify-content-between mb-1">
-                    <span style={{ fontSize: '0.6rem' }}>Today's Operations:</span>
+                    <span style={{ fontSize: '0.6rem' }}>Today:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.todayOperations}
+                      {dashboardData.quickStats.today.total}h
+                      {dashboardData.quickStats.today.ongoing > 0 && ` + ${dashboardData.quickStats.today.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Week:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.thisWeekOperations}
+                      {dashboardData.quickStats.thisWeek.total}h
+                      {dashboardData.quickStats.thisWeek.ongoing > 0 && ` + ${dashboardData.quickStats.thisWeek.ongoing.toFixed(1)} ongoing`}
+                    </span>
+                  </div>
+                  <div className="d-flex justify-content-between mb-1">
+                    <span style={{ fontSize: '0.6rem' }}>This Month:</span>
+                    <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
+                      {dashboardData.quickStats.thisMonth.total}h
+                      {dashboardData.quickStats.thisMonth.ongoing > 0 && ` + ${dashboardData.quickStats.thisMonth.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
-                    <span style={{ fontSize: '0.6rem' }}>This Month:</span>
+                    <span style={{ fontSize: '0.6rem' }}>This Year:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.thisMonthOperations}
+                      {dashboardData.quickStats.thisYear.total}h
+                      {dashboardData.quickStats.thisYear.ongoing > 0 && ` + ${dashboardData.quickStats.thisYear.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                 </Card.Body>

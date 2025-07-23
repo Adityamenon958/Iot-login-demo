@@ -514,10 +514,24 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     for (const deviceId of craneDevices) {
       const deviceFilter = { ...companyFilter, DeviceID: deviceId };
       
-      // Get all logs for this device
+      // Get all logs for this device - SORT BY TIMESTAMP, not createdAt
       const deviceLogs = await CraneLog.find(deviceFilter)
-        .sort({ createdAt: 1 })
         .lean();
+      
+      // ✅ Sort by actual timestamp (not database creation time)
+      deviceLogs.sort((a, b) => {
+        const [aDate, aTime] = a.Timestamp.split(' ');
+        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        
+        const [bDate, bTime] = b.Timestamp.split(' ');
+        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        
+        return aTimestamp - bTimestamp;
+      });
 
       if (deviceLogs.length === 0) continue;
 
@@ -621,20 +635,104 @@ if (latestLog.DigitalInput1 === "1") {
       console.log(`📊 Crane ${deviceId} summary: ${deviceCompletedHours.toFixed(2)}h completed + ${deviceOngoingHours.toFixed(2)}h ongoing`);
     }
 
-    // ✅ Calculate quick statistics
+    // ✅ Calculate period-based working hours
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const yearStart = new Date(now.getFullYear(), 0, 1); // January 1st of current year
 
-    const todayFilter = { ...companyFilter, createdAt: { $gte: today } };
-    const weekFilter = { ...companyFilter, createdAt: { $gte: weekAgo } };
-    const monthFilter = { ...companyFilter, createdAt: { $gte: monthAgo } };
+    // ✅ Helper function to calculate working hours for a period
+    async function calculateWorkingHoursForPeriod(startDate, endDate = now) {
+      let periodCompletedHours = 0;
+      let periodOngoingHours = 0;
 
-    const [todayOperations, thisWeekOperations, thisMonthOperations] = await Promise.all([
-      CraneLog.countDocuments(todayFilter),
-      CraneLog.countDocuments(weekFilter),
-      CraneLog.countDocuments(monthFilter)
+      for (const deviceId of craneDevices) {
+        const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+        
+        // Get logs within the period
+        const periodLogs = await CraneLog.find({
+          ...deviceFilter,
+          createdAt: { $gte: startDate, $lte: endDate }
+        }).lean();
+
+        if (periodLogs.length === 0) continue;
+
+        // Sort by timestamp
+        periodLogs.sort((a, b) => {
+          const [aDate, aTime] = a.Timestamp.split(' ');
+          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+          
+          const [bDate, bTime] = b.Timestamp.split(' ');
+          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+          
+          return aTimestamp - bTimestamp;
+        });
+
+        // Calculate completed sessions within period
+        for (let i = 0; i < periodLogs.length - 1; i++) {
+          const currentLog = periodLogs[i];
+          const nextLog = periodLogs[i + 1];
+
+          if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+            try {
+              const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+              const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+              const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+              const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+              const currentTime = new Date(currentTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+              
+              const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+              const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+              const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+              const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+              const nextTime = new Date(nextTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+              
+              const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+              periodCompletedHours += hoursDiff;
+            } catch (err) {
+              console.error(`❌ Error parsing timestamps for period calculation:`, err);
+            }
+          }
+        }
+
+        // Check for ongoing sessions that started within the period
+        const latestLog = periodLogs[periodLogs.length - 1];
+        if (latestLog && latestLog.DigitalInput1 === "1") {
+          try {
+            const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+            const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+            const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+            const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+            const latestTime = new Date(latestTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+            
+            const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
+            if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
+              periodOngoingHours += ongoingHoursDiff;
+            }
+          } catch (err) {
+            console.error(`❌ Error calculating ongoing hours for period:`, err);
+          }
+        }
+      }
+
+      return {
+        completed: Math.round(periodCompletedHours * 100) / 100,
+        ongoing: Math.round(periodOngoingHours * 100) / 100,
+        total: Math.round((periodCompletedHours + periodOngoingHours) * 100) / 100
+      };
+    }
+
+    // ✅ Calculate working hours for all periods
+    const [todayStats, thisWeekStats, thisMonthStats, thisYearStats] = await Promise.all([
+      calculateWorkingHoursForPeriod(today),
+      calculateWorkingHoursForPeriod(weekAgo),
+      calculateWorkingHoursForPeriod(monthAgo),
+      calculateWorkingHoursForPeriod(yearStart)
     ]);
 
     console.log(`📊 Final totals: ${completedHours.toFixed(2)}h completed + ${ongoingHours.toFixed(2)}h ongoing = ${totalWorkingHours.toFixed(2)}h total`);
@@ -647,9 +745,10 @@ if (latestLog.DigitalInput1 === "1") {
       inactiveCranes,
       underMaintenance,
       quickStats: {
-        todayOperations,
-        thisWeekOperations,
-        thisMonthOperations
+        today: todayStats,
+        thisWeek: thisWeekStats,
+        thisMonth: thisMonthStats,
+        thisYear: thisYearStats
       }
     });
 
