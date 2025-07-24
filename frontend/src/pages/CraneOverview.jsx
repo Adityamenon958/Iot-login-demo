@@ -5,6 +5,10 @@ import styles from "./MainContent.module.css";
 import { PiCraneDuotone, PiTimerDuotone, PiBandaidsFill } from "react-icons/pi";
 import { GiNightSleep } from "react-icons/gi";
 import axios from 'axios';
+// ✅ Import MonthlyChart component
+import MonthlyChart from '../components/MonthlyChart';
+// ✅ Import CraneBarChart component
+import CraneBarChart from '../components/CraneBarChart';
 
 // ✅ Helper function to convert decimal hours to hours.minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -188,8 +192,8 @@ export default function CraneOverview() {
       </div>
 
       {/* ✅ Section 2: Top Row - 4 Summary Cards */}
-      <Row className="mb-2">
-        {summaryCards.map(renderSummaryCard)}
+      <Row className="mb-3">
+        {summaryCards.map(card => renderSummaryCard(card))}
       </Row>
 
       {/* ✅ Section 3: Middle Section - Two Columns */}
@@ -202,19 +206,27 @@ export default function CraneOverview() {
                 Crane Activity Trend
               </h6>
             </Card.Header>
-            <Card.Body className="p-2">
+            <Card.Body className="p-2" style={{ height: '150px', padding: '8px !important' }}>
+              {/* Upper Half - Line Chart Section */}
               <div 
                 style={{ 
-                  height: '150px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
+                  height: '50%', 
+                  backgroundColor: '#f8f9fa',
+                  borderBottom: '1px solid #dee2e6',
+                  marginBottom: '4px'
+                }}
+              >
+                <MonthlyChart />
+              </div>
+              
+              {/* Lower Half - Bar Chart Section */}
+              <div 
+                style={{ 
+                  height: '50%', 
                   backgroundColor: '#f8f9fa' 
                 }}
               >
-                <p className="text-muted" style={{ fontSize: '0.65rem' }}>
-                  Chart will be placed here
-                </p>
+                <CraneBarChart />
               </div>
             </Card.Body>
           </Card>

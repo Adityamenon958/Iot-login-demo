@@ -795,6 +795,379 @@ if (latestLog.DigitalInput1 === "1") {
   }
 });
 
+// ✅ GET: Fetch monthly crane statistics for line chart (last 6 months)
+app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 User requesting monthly crane stats:', { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get all crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    if (craneDevices.length === 0) {
+      return res.json({ monthlyData: [] });
+    }
+
+    // ✅ Calculate last 6 months data
+    const now = getCurrentTimeInIST();
+    const monthlyData = [];
+    
+    // ✅ Generate last 6 months (including current month)
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = monthDate.toLocaleString('default', { month: 'short' });
+      const monthYear = `${monthName} ${monthDate.getFullYear()}`;
+      
+      // ✅ Calculate start and end of month
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
+      
+      let monthUsageHours = 0;
+      let monthMaintenanceHours = 0;
+
+      // ✅ Calculate for each crane device
+      for (const deviceId of craneDevices) {
+        const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+        
+        // Get all logs for this device
+        const deviceLogs = await CraneLog.find(deviceFilter).lean();
+        
+        // Filter logs within this month
+        const monthLogs = deviceLogs.filter(log => {
+          try {
+            const [datePart, timePart] = log.Timestamp.split(' ');
+            const [day, month, year] = datePart.split('/').map(Number);
+            const [hour, minute, second] = timePart.split(':').map(Number);
+            const logTime = new Date(year, month - 1, day, hour, minute, second);
+            return logTime >= monthStart && logTime <= monthEnd;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamp for monthly filtering:`, err);
+            return false;
+          }
+        });
+
+        if (monthLogs.length === 0) continue;
+
+        // Sort by timestamp
+        monthLogs.sort((a, b) => {
+          const [aDate, aTime] = a.Timestamp.split(' ');
+          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+          
+          const [bDate, bTime] = b.Timestamp.split(' ');
+          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+          
+          return aTimestamp - bTimestamp;
+        });
+
+        // ✅ Calculate usage hours (completed sessions)
+        for (let i = 0; i < monthLogs.length - 1; i++) {
+          const currentLog = monthLogs[i];
+          const nextLog = monthLogs[i + 1];
+
+          // ✅ Only count as completed when DigitalInput1 changes from "1" to "0" (start → stop)
+          if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+            try {
+              const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+              const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+              const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+              const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+              const currentTime = convertISTToUTC(currentTimeIST);
+              
+              const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+              const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+              const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+              const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+              const nextTime = convertISTToUTC(nextTimeIST);
+              
+              const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+              monthUsageHours += hoursDiff;
+            } catch (err) {
+              console.error(`❌ Error parsing timestamps for monthly usage calculation:`, err);
+            }
+          }
+        }
+
+        // ✅ Calculate maintenance hours (DigitalInput2 = "1" sessions)
+        for (let i = 0; i < monthLogs.length - 1; i++) {
+          const currentLog = monthLogs[i];
+          const nextLog = monthLogs[i + 1];
+
+          // ✅ Count maintenance sessions when DigitalInput2 changes from "1" to "0"
+          if (currentLog.DigitalInput2 === "1" && nextLog.DigitalInput2 === "0") {
+            try {
+              const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+              const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+              const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+              const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+              const currentTime = convertISTToUTC(currentTimeIST);
+              
+              const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+              const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+              const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+              const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+              const nextTime = convertISTToUTC(nextTimeIST);
+              
+              const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+              monthMaintenanceHours += hoursDiff;
+            } catch (err) {
+              console.error(`❌ Error parsing timestamps for monthly maintenance calculation:`, err);
+            }
+          }
+        }
+
+        // ✅ Check for ongoing sessions in current month
+        if (monthDate.getMonth() === now.getMonth() && monthDate.getFullYear() === now.getFullYear()) {
+          const latestLog = monthLogs[monthLogs.length - 1];
+          
+          if (latestLog.DigitalInput1 === "1") {
+            try {
+              const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+              const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+              const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+              const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+              
+              const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+              if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
+                monthUsageHours += ongoingHoursDiff;
+              }
+            } catch (err) {
+              console.error(`❌ Error calculating ongoing hours for monthly stats:`, err);
+            }
+          }
+          
+          if (latestLog.DigitalInput2 === "1") {
+            try {
+              const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+              const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+              const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+              const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+              
+              const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+              if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
+                monthMaintenanceHours += ongoingHoursDiff;
+              }
+            } catch (err) {
+              console.error(`❌ Error calculating ongoing maintenance hours for monthly stats:`, err);
+            }
+          }
+        }
+      }
+
+      monthlyData.push({
+        month: monthYear,
+        usageHours: Math.round(monthUsageHours * 100) / 100,
+        maintenanceHours: Math.round(monthMaintenanceHours * 100) / 100
+      });
+    }
+
+    console.log(`✅ Monthly crane stats calculated for ${monthlyData.length} months`);
+    
+    res.json({ monthlyData });
+
+  } catch (err) {
+    console.error("❌ Monthly crane stats fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET: Fetch individual crane statistics for bar chart (last 6 months)
+app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 User requesting individual crane stats:', { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get all crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    if (craneDevices.length === 0) {
+      return res.json({ craneData: [] });
+    }
+
+    // ✅ Calculate last 6 months period
+    const now = getCurrentTimeInIST();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const periodStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1);
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    
+    // ✅ Calculate total period hours (6 months)
+    const totalPeriodHours = (periodEnd - periodStart) / (1000 * 60 * 60);
+    
+    const craneData = [];
+
+    // ✅ Calculate stats for each crane
+    for (const deviceId of craneDevices) {
+      const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+      
+      // Get all logs for this device
+      const deviceLogs = await CraneLog.find(deviceFilter).lean();
+      
+      // Filter logs within the 6-month period
+      const periodLogs = deviceLogs.filter(log => {
+        try {
+          const [datePart, timePart] = log.Timestamp.split(' ');
+          const [day, month, year] = datePart.split('/').map(Number);
+          const [hour, minute, second] = timePart.split(':').map(Number);
+          const logTime = new Date(year, month - 1, day, hour, minute, second);
+          return logTime >= periodStart && logTime <= periodEnd;
+        } catch (err) {
+          console.error(`❌ Error parsing timestamp for crane stats filtering:`, err);
+          return false;
+        }
+      });
+
+      if (periodLogs.length === 0) {
+        // ✅ No data for this crane in the period
+        craneData.push({
+          craneId: deviceId,
+          workingHours: 0,
+          inactiveHours: Math.round(totalPeriodHours * 100) / 100,
+          maintenanceHours: 0
+        });
+        continue;
+      }
+
+      // Sort by timestamp
+      periodLogs.sort((a, b) => {
+        const [aDate, aTime] = a.Timestamp.split(' ');
+        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        
+        const [bDate, bTime] = b.Timestamp.split(' ');
+        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        
+        return aTimestamp - bTimestamp;
+      });
+
+      let workingHours = 0;
+      let maintenanceHours = 0;
+
+      // ✅ Calculate working hours (DigitalInput1 = "1" sessions)
+      for (let i = 0; i < periodLogs.length - 1; i++) {
+        const currentLog = periodLogs[i];
+        const nextLog = periodLogs[i + 1];
+
+        // ✅ Only count as completed when DigitalInput1 changes from "1" to "0"
+        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+          try {
+            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            const currentTime = convertISTToUTC(currentTimeIST);
+            
+            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            const nextTime = convertISTToUTC(nextTimeIST);
+            
+            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+            workingHours += hoursDiff;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamps for crane working hours:`, err);
+          }
+        }
+      }
+
+      // ✅ Calculate maintenance hours (DigitalInput2 = "1" sessions)
+      for (let i = 0; i < periodLogs.length - 1; i++) {
+        const currentLog = periodLogs[i];
+        const nextLog = periodLogs[i + 1];
+
+        // ✅ Only count as completed when DigitalInput2 changes from "1" to "0"
+        if (currentLog.DigitalInput2 === "1" && nextLog.DigitalInput2 === "0") {
+          try {
+            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            const currentTime = convertISTToUTC(currentTimeIST);
+            
+            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            const nextTime = convertISTToUTC(nextTimeIST);
+            
+            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
+            maintenanceHours += hoursDiff;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamps for crane maintenance hours:`, err);
+          }
+        }
+      }
+
+      // ✅ Check for ongoing sessions
+      const latestLog = periodLogs[periodLogs.length - 1];
+      
+      if (latestLog.DigitalInput1 === "1") {
+        try {
+          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+          
+          const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
+            workingHours += ongoingHoursDiff;
+          }
+        } catch (err) {
+          console.error(`❌ Error calculating ongoing working hours for crane stats:`, err);
+        }
+      }
+      
+      if (latestLog.DigitalInput2 === "1") {
+        try {
+          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+          
+          const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
+            maintenanceHours += ongoingHoursDiff;
+          }
+        } catch (err) {
+          console.error(`❌ Error calculating ongoing maintenance hours for crane stats:`, err);
+        }
+      }
+
+      // ✅ Calculate inactive hours
+      const inactiveHours = Math.max(0, totalPeriodHours - workingHours - maintenanceHours);
+
+      craneData.push({
+        craneId: deviceId,
+        workingHours: Math.round(workingHours * 100) / 100,
+        inactiveHours: Math.round(inactiveHours * 100) / 100,
+        maintenanceHours: Math.round(maintenanceHours * 100) / 100
+      });
+    }
+
+    console.log(`✅ Individual crane stats calculated for ${craneData.length} cranes`);
+    
+    res.json({ craneData });
+
+  } catch (err) {
+    console.error("❌ Individual crane stats fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ✅ GET: Fetch crane devices for dropdown (filtered by company)
 app.get("/api/crane/devices", authenticateToken, async (req, res) => {
   try {
@@ -886,7 +1259,9 @@ app.get("/api/crane/status", authenticateToken, async (req, res) => {
       isDown,
       lastUpdate: latestLog.Timestamp,
       location: `${latestLog.Latitude}, ${latestLog.Longitude}`,
-      deviceId: latestLog.DeviceID
+      deviceId: latestLog.DeviceID,
+      digitalInput1: latestLog.DigitalInput1,
+      digitalInput2: latestLog.DigitalInput2
     };
     
     console.log(`✅ Crane ${deviceId} status: ${status}`);
@@ -1022,13 +1397,86 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
     const monthHours = calculateHoursForPeriod(monthAgo);
     const totalHours = calculateHoursForPeriod(new Date(0)); // All time
     
-    // ✅ Count completed sessions
+    // ✅ Count completed sessions and extract operating sessions
     let completedSessions = 0;
+    const operatingSessions = [];
+    
+    // ✅ Extract operating sessions from device logs
     for (let i = 0; i < deviceLogs.length - 1; i++) {
-      if (deviceLogs[i].DigitalInput1 === "1" && deviceLogs[i + 1].DigitalInput1 === "0") {
+      const currentLog = deviceLogs[i];
+      const nextLog = deviceLogs[i + 1];
+      
+      if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
         completedSessions++;
+        
+        try {
+          // ✅ Calculate session duration
+          const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+          const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+          const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+          const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+          const currentTime = convertISTToUTC(currentTimeIST);
+          
+          const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+          const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+          const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+          const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+          const nextTime = convertISTToUTC(nextTimeIST);
+          
+          const sessionHours = (nextTime - currentTime) / (1000 * 60 * 60);
+          
+          const session = {
+            date: currentDatePart, // DD/MM/YYYY
+            startTime: currentTimePart, // HH:mm:ss
+            stopTime: nextTimePart, // HH:mm:ss
+            totalHours: Math.round(sessionHours * 100) / 100
+          };
+          operatingSessions.push(session);
+        } catch (err) {
+          console.error(`❌ Error parsing session timestamps:`, err);
+        }
       }
     }
+    
+    // ✅ Check for ongoing session (latest log)
+    const latestLog = deviceLogs[deviceLogs.length - 1];
+    if (latestLog && latestLog.DigitalInput1 === "1") {
+      try {
+        const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+        const latestTimeIST = new Date(
+          latestDatePart.split('/')[2], // year
+          latestDatePart.split('/')[1] - 1, // month (0-based)
+          latestDatePart.split('/')[0], // day
+          latestTimePart.split(':')[0], // hour
+          latestTimePart.split(':')[1], // minute
+          latestTimePart.split(':')[2] // second
+        );
+        
+        const currentTime = getCurrentTimeInIST();
+        const ongoingHoursDiff = (currentTime - latestTimeIST) / (1000 * 60 * 60);
+        
+        if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
+          const ongoingSession = {
+            date: latestDatePart,
+            startTime: latestTimePart,
+            stopTime: "Running...",
+            totalHours: Math.round(ongoingHoursDiff * 100) / 100
+          };
+          operatingSessions.unshift(ongoingSession); // Add to beginning
+        }
+      } catch (err) {
+        console.error(`❌ Error calculating ongoing session:`, err);
+      }
+    }
+    
+    // ✅ Sort sessions by date (newest first)
+    operatingSessions.sort((a, b) => {
+      const [aDay, aMonth, aYear] = a.date.split('/').map(Number);
+      const [bDay, bMonth, bYear] = b.date.split('/').map(Number);
+      const aDate = new Date(aYear, aMonth - 1, aDay);
+      const bDate = new Date(bYear, bMonth - 1, bDay);
+      return bDate - aDate; // Newest first
+    });
     
     const craneActivity = {
       todayHours: Math.round(todayHours * 100) / 100,
@@ -1036,7 +1484,8 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
       monthHours: Math.round(monthHours * 100) / 100,
       totalHours: Math.round(totalHours * 100) / 100,
       completedSessions,
-      ongoingHours: Math.round(ongoingHours * 100) / 100
+      ongoingHours: Math.round(ongoingHours * 100) / 100,
+      operatingSessions: operatingSessions.slice(0, 10) // Return last 10 sessions
     };
     
     console.log(`✅ Crane ${deviceId} activity calculated:`, craneActivity);
@@ -1045,6 +1494,254 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
     
   } catch (err) {
     console.error("❌ Crane activity fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET: Fetch crane chart data for individual device
+app.get("/api/crane/chart", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { deviceId, period = '24hr' } = req.query;
+    
+    console.log('🔍 User requesting crane chart data:', { role, companyName, deviceId, period });
+    
+    if (!deviceId) {
+      return res.status(400).json({ error: "Device ID is required" });
+    }
+    
+    // ✅ Filter by company and device
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+    
+    // ✅ Get all logs for this device
+    const deviceLogs = await CraneLog.find(deviceFilter)
+      .sort({ createdAt: 1 })
+      .lean();
+    
+    if (deviceLogs.length === 0) {
+      return res.json({ labels: [], data: [] });
+    }
+    
+    // ✅ Sort by timestamp
+    deviceLogs.sort((a, b) => {
+      const [aDate, aTime] = a.Timestamp.split(' ');
+      const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+      const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+      const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+      
+      const [bDate, bTime] = b.Timestamp.split(' ');
+      const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+      const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+      const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+      
+      return aTimestamp - bTimestamp;
+    });
+    
+    // ✅ Calculate chart data based on period
+    let labels = [];
+    let data = [];
+    
+    const now = new Date();
+    
+    switch (period) {
+      case '24hr':
+        // ✅ Last 24 hours by hour
+        labels = [];
+        data = [];
+        for (let i = 23; i >= 0; i--) {
+          const hour = new Date(now.getTime() - i * 60 * 60 * 1000);
+          labels.push(hour.getHours().toString().padStart(2, '0') + ':00');
+          
+          // ✅ Calculate operating hours for this hour
+          const hourStart = new Date(hour.getFullYear(), hour.getMonth(), hour.getDate(), hour.getHours(), 0, 0);
+          const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+          
+          let hourHours = 0;
+          for (let j = 0; j < deviceLogs.length - 1; j++) {
+            const currentLog = deviceLogs[j];
+            const nextLog = deviceLogs[j + 1];
+            
+            if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+              try {
+                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentTime = convertISTToUTC(currentTimeIST);
+                
+                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTime = convertISTToUTC(nextTimeIST);
+                
+                // ✅ Check if session overlaps with this hour
+                const sessionStart = Math.max(currentTime, hourStart);
+                const sessionEnd = Math.min(nextTime, hourEnd);
+                
+                if (sessionStart < sessionEnd) {
+                  hourHours += (sessionEnd - sessionStart) / (1000 * 60 * 60);
+                }
+              } catch (err) {
+                console.error(`❌ Error parsing chart timestamps:`, err);
+              }
+            }
+          }
+          data.push(Math.round(hourHours * 100) / 100);
+        }
+        break;
+        
+      case 'weekly':
+        // ✅ Last 7 days by day
+        labels = [];
+        data = [];
+        for (let i = 6; i >= 0; i--) {
+          const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          labels.push(day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+          
+          // ✅ Calculate operating hours for this day
+          const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
+          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+          
+          let dayHours = 0;
+          for (let j = 0; j < deviceLogs.length - 1; j++) {
+            const currentLog = deviceLogs[j];
+            const nextLog = deviceLogs[j + 1];
+            
+            if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+              try {
+                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentTime = convertISTToUTC(currentTimeIST);
+                
+                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTime = convertISTToUTC(nextTimeIST);
+                
+                // ✅ Check if session overlaps with this day
+                const sessionStart = Math.max(currentTime, dayStart);
+                const sessionEnd = Math.min(nextTime, dayEnd);
+                
+                if (sessionStart < sessionEnd) {
+                  dayHours += (sessionEnd - sessionStart) / (1000 * 60 * 60);
+                }
+              } catch (err) {
+                console.error(`❌ Error parsing chart timestamps:`, err);
+              }
+            }
+          }
+          data.push(Math.round(dayHours * 100) / 100);
+        }
+        break;
+        
+      case 'monthly':
+        // ✅ Last 30 days by day
+        labels = [];
+        data = [];
+        for (let i = 29; i >= 0; i--) {
+          const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          labels.push(day.getDate().toString());
+          
+          // ✅ Calculate operating hours for this day (same logic as weekly)
+          const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
+          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+          
+          let dayHours = 0;
+          for (let j = 0; j < deviceLogs.length - 1; j++) {
+            const currentLog = deviceLogs[j];
+            const nextLog = deviceLogs[j + 1];
+            
+            if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+              try {
+                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentTime = convertISTToUTC(currentTimeIST);
+                
+                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTime = convertISTToUTC(nextTimeIST);
+                
+                const sessionStart = Math.max(currentTime, dayStart);
+                const sessionEnd = Math.min(nextTime, dayEnd);
+                
+                if (sessionStart < sessionEnd) {
+                  dayHours += (sessionEnd - sessionStart) / (1000 * 60 * 60);
+                }
+              } catch (err) {
+                console.error(`❌ Error parsing chart timestamps:`, err);
+              }
+            }
+          }
+          data.push(Math.round(dayHours * 100) / 100);
+        }
+        break;
+        
+      case 'yearly':
+        // ✅ Last 12 months by month
+        labels = [];
+        data = [];
+        for (let i = 11; i >= 0; i--) {
+          const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push(month.toLocaleDateString('en-US', { month: 'short' }));
+          
+          // ✅ Calculate operating hours for this month
+          const monthStart = new Date(month.getFullYear(), month.getMonth(), 1, 0, 0, 0);
+          const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59);
+          
+          let monthHours = 0;
+          for (let j = 0; j < deviceLogs.length - 1; j++) {
+            const currentLog = deviceLogs[j];
+            const nextLog = deviceLogs[j + 1];
+            
+            if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+              try {
+                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentTime = convertISTToUTC(currentTimeIST);
+                
+                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTime = convertISTToUTC(nextTimeIST);
+                
+                const sessionStart = Math.max(currentTime, monthStart);
+                const sessionEnd = Math.min(nextTime, monthEnd);
+                
+                if (sessionStart < sessionEnd) {
+                  monthHours += (sessionEnd - sessionStart) / (1000 * 60 * 60);
+                }
+              } catch (err) {
+                console.error(`❌ Error parsing chart timestamps:`, err);
+              }
+            }
+          }
+          data.push(Math.round(monthHours * 100) / 100);
+        }
+        break;
+        
+      default:
+        labels = [];
+        data = [];
+    }
+    
+    console.log(`✅ Chart data for crane ${deviceId} (${period}):`, { labels: labels.length, data: data.length });
+    
+    res.json({ labels, data });
+    
+  } catch (err) {
+    console.error("❌ Crane chart fetch error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
