@@ -7,8 +7,8 @@
 
 const brand = {
   name : 'GSN IoT',
-  url  : 'https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net',          // <- change if you have a real site
-  logo : 'https://gsn-iot-dashboard-hhbgdjfmhvfjekex.canadacentral-01.azurewebsites.net/gsn_logo_200x60.png'  // 200×60 transparent PNG works best
+  url  : process.env.DOMAIN_URL || 'https://gsnsolnedge.com',          // <- uses environment variable or defaults to your domain
+  logo : (process.env.DOMAIN_URL || 'https://gsnsolnedge.com') + '/gsn_logo_200x60.png'  // 200×60 transparent PNG works best
 };
 
 const baseStyles = `
