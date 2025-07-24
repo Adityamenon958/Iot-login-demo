@@ -218,29 +218,29 @@ export default function CraneOverview() {
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>Today:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.today.completed}h
-                      {dashboardData.quickStats.today.ongoing > 0 && ` + ${dashboardData.quickStats.today.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${dashboardData.quickStats?.today?.completed || 0}h`}
+                      {!loading && dashboardData.quickStats?.today?.ongoing > 0 && ` + ${dashboardData.quickStats.today.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Week:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.thisWeek.completed}h
-                      {dashboardData.quickStats.thisWeek.ongoing > 0 && ` + ${dashboardData.quickStats.thisWeek.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${dashboardData.quickStats?.thisWeek?.completed || 0}h`}
+                      {!loading && dashboardData.quickStats?.thisWeek?.ongoing > 0 && ` + ${dashboardData.quickStats.thisWeek.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Month:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.thisMonth.completed}h
-                      {dashboardData.quickStats.thisMonth.ongoing > 0 && ` + ${dashboardData.quickStats.thisMonth.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${dashboardData.quickStats?.thisMonth?.completed || 0}h`}
+                      {!loading && dashboardData.quickStats?.thisMonth?.ongoing > 0 && ` + ${dashboardData.quickStats.thisMonth.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span style={{ fontSize: '0.6rem' }}>This Year:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {dashboardData.quickStats.thisYear.completed}h
-                      {dashboardData.quickStats.thisYear.ongoing > 0 && ` + ${dashboardData.quickStats.thisYear.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${dashboardData.quickStats?.thisYear?.completed || 0}h`}
+                      {!loading && dashboardData.quickStats?.thisYear?.ongoing > 0 && ` + ${dashboardData.quickStats.thisYear.ongoing.toFixed(1)} ongoing`}
                     </span>
                   </div>
                 </Card.Body>

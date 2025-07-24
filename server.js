@@ -673,16 +673,27 @@ if (latestLog.DigitalInput1 === "1") {
       for (const deviceId of craneDevices) {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
         
-        // Get logs within the period
-        const periodLogs = await CraneLog.find({
-          ...deviceFilter,
-          createdAt: { $gte: startDate, $lte: endDate }
-        }).lean();
+        // Get logs within the period - Filter by actual Timestamp, not createdAt
+        const periodLogs = await CraneLog.find(deviceFilter).lean();
+        
+        // Filter by timestamp after fetching
+        const filteredPeriodLogs = periodLogs.filter(log => {
+          try {
+            const [datePart, timePart] = log.Timestamp.split(' ');
+            const [day, month, year] = datePart.split('/').map(Number);
+            const [hour, minute, second] = timePart.split(':').map(Number);
+            const logTime = new Date(year, month - 1, day, hour, minute, second);
+            return logTime >= startDate && logTime <= endDate;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamp for filtering:`, err);
+            return false;
+          }
+        });
 
-        if (periodLogs.length === 0) continue;
+        if (filteredPeriodLogs.length === 0) continue;
 
         // Sort by timestamp
-        periodLogs.sort((a, b) => {
+        filteredPeriodLogs.sort((a, b) => {
           const [aDate, aTime] = a.Timestamp.split(' ');
           const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
           const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
@@ -697,9 +708,9 @@ if (latestLog.DigitalInput1 === "1") {
         });
 
         // Calculate completed sessions within period
-        for (let i = 0; i < periodLogs.length - 1; i++) {
-          const currentLog = periodLogs[i];
-          const nextLog = periodLogs[i + 1];
+        for (let i = 0; i < filteredPeriodLogs.length - 1; i++) {
+          const currentLog = filteredPeriodLogs[i];
+          const nextLog = filteredPeriodLogs[i + 1];
 
           if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
             try {
@@ -724,7 +735,7 @@ if (latestLog.DigitalInput1 === "1") {
         }
 
         // Check for ongoing sessions that started within the period
-        const latestLog = periodLogs[periodLogs.length - 1];
+        const latestLog = filteredPeriodLogs[filteredPeriodLogs.length - 1];
         if (latestLog && latestLog.DigitalInput1 === "1") {
           try {
             const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
@@ -733,9 +744,14 @@ if (latestLog.DigitalInput1 === "1") {
             const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
             const latestTime = convertISTToUTC(latestTimeIST);
             
-            const ongoingHoursDiff = (endDate - latestTime) / (1000 * 60 * 60);
-            if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
-              periodOngoingHours += ongoingHoursDiff;
+            // ✅ Only count ongoing hours if the session started within this period
+            if (latestTime >= startDate && latestTime <= endDate) {
+              // ✅ Use current time for ongoing calculation, not period end date
+              const currentTime = getCurrentTimeInIST();
+              const ongoingHoursDiff = (currentTime - latestTime) / (1000 * 60 * 60);
+              if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
+                periodOngoingHours += ongoingHoursDiff;
+              }
             }
           } catch (err) {
             console.error(`❌ Error calculating ongoing hours for period:`, err);
