@@ -24,6 +24,29 @@ const { alarmEmail } = require("./backend/utils/emailTemplates");
 const isProd = process.env.NODE_ENV === 'production';
 const CraneLog = require("./backend/models/CraneLog");
 
+// ✅ Environment-based timezone helper function
+function getCurrentTimeInIST() {
+  if (isProd) {
+    // Production (Azure): Convert UTC to IST
+    const nowUTC = new Date();
+    return new Date(nowUTC.getTime() + (5.5 * 60 * 60 * 1000)); // Convert UTC to IST
+  } else {
+    // Local Development: Already in IST, no conversion needed
+    return new Date();
+  }
+}
+
+// ✅ Environment-based timestamp conversion helper
+function convertISTToUTC(istTime) {
+  if (isProd) {
+    // Production: Convert IST to UTC for calculation
+    return new Date(istTime.getTime() - (5.5 * 60 * 60 * 1000));
+  } else {
+    // Local Development: Keep in IST, no conversion needed
+    return istTime;
+  }
+}
+
 // ✅ Middleware
 app.use(cors({
   origin: true,
@@ -548,20 +571,20 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         // ✅ Only count as completed when DigitalInput1 changes from "1" to "0" (start → stop)
         if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
           try {
-            // ✅ Parse timestamps correctly - Convert IST to UTC
+            // ✅ Parse timestamps correctly - Use environment-based conversion
             const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
             const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
             const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            // ✅ Create IST time and convert to UTC (IST = UTC+5:30)
+            // ✅ Create IST time and use environment-based conversion
             const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            const currentTime = new Date(currentTimeIST.getTime() - (5.5 * 60 * 60 * 1000)); // Convert IST to UTC
+            const currentTime = convertISTToUTC(currentTimeIST);
             
             const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
             const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
             const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            // ✅ Create IST time and convert to UTC
+            // ✅ Create IST time and use environment-based conversion
             const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            const nextTime = new Date(nextTimeIST.getTime() - (5.5 * 60 * 60 * 1000)); // Convert IST to UTC
+            const nextTime = convertISTToUTC(nextTimeIST);
             
             // Calculate hours difference
             const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
@@ -587,23 +610,23 @@ if (latestLog.DigitalInput1 === "1") {
     const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
     const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
     const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-    // ✅ Create IST time and convert to UTC (IST = UTC+5:30)
+    // ✅ Create IST time and use environment-based conversion
     const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-    const latestTime = new Date(latestTimeIST.getTime() - (5.5 * 60 * 60 * 1000)); // Convert IST to UTC
+    const latestTime = convertISTToUTC(latestTimeIST);
     
-    const now = new Date();
+    const now = getCurrentTimeInIST();
     const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
     
     console.log(`�� DEBUG: Latest time parsed: ${latestTime}`);
     console.log(`🔍 DEBUG: Current time: ${now}`);
     console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
     
-    // ✅ Handle timezone issues - if negative, assume it's a timezone problem
-    if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
+    // ✅ Handle ongoing sessions with environment-based timezone logic
+    if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
       deviceOngoingHours = ongoingHoursDiff;
       hasOngoingSession = true;
       console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
-    } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -24) {
+    } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
       // ✅ Timezone issue - treat as ongoing session from latest timestamp
       deviceOngoingHours = Math.abs(ongoingHoursDiff);
       hasOngoingSession = true;
@@ -643,7 +666,7 @@ if (latestLog.DigitalInput1 === "1") {
     const yearStart = new Date(now.getFullYear(), 0, 1); // January 1st of current year
 
     // ✅ Helper function to calculate working hours for a period
-    async function calculateWorkingHoursForPeriod(startDate, endDate = now) {
+    async function calculateWorkingHoursForPeriod(startDate, endDate = getCurrentTimeInIST()) {
       let periodCompletedHours = 0;
       let periodOngoingHours = 0;
 
@@ -708,10 +731,10 @@ if (latestLog.DigitalInput1 === "1") {
             const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
             const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
             const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-            const latestTime = new Date(latestTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+            const latestTime = convertISTToUTC(latestTimeIST);
             
-            const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
-            if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
+            const ongoingHoursDiff = (endDate - latestTime) / (1000 * 60 * 60);
+            if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
               periodOngoingHours += ongoingHoursDiff;
             }
           } catch (err) {
@@ -916,7 +939,7 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     
     // ✅ Helper function to calculate hours for a period
-    function calculateHoursForPeriod(startDate, endDate = now) {
+    function calculateHoursForPeriod(startDate, endDate = getCurrentTimeInIST()) {
       let completedHours = 0;
       let ongoingHours = 0;
       
@@ -941,13 +964,13 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
             const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
             const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
             const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            const currentTime = new Date(currentTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+            const currentTime = convertISTToUTC(currentTimeIST);
             
             const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
             const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
             const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
             const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            const nextTime = new Date(nextTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+            const nextTime = convertISTToUTC(nextTimeIST);
             
             const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
             completedHours += hoursDiff;
@@ -965,10 +988,10 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
           const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
           const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
           const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-          const latestTime = new Date(latestTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
+          const latestTime = convertISTToUTC(latestTimeIST);
           
-          const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
-          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 24) {
+          const ongoingHoursDiff = (endDate - latestTime) / (1000 * 60 * 60);
+          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
             ongoingHours = ongoingHoursDiff;
           }
         } catch (err) {
