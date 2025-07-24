@@ -6,6 +6,23 @@ import { PiCraneDuotone, PiTimerDuotone, PiBandaidsFill } from "react-icons/pi";
 import { GiNightSleep } from "react-icons/gi";
 import axios from 'axios';
 
+// ✅ Helper function to convert decimal hours to hours.minutes format
+function formatHoursToHoursMinutes(decimalHours) {
+  if (!decimalHours || decimalHours === 0) return '0.00';
+  
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours % 1) * 60);
+  
+  // Handle edge case where minutes round to 60
+  if (minutes === 60) {
+    return `${hours + 1}.00`;
+  }
+  
+  // Format minutes with leading zero if needed
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  return `${hours}.${formattedMinutes}`;
+}
+
 export default function CraneOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -90,8 +107,8 @@ export default function CraneOverview() {
     
     // ✅ Special display for working hours with ongoing indicator
     const displayValue = card.id === 1 && card.ongoingHours > 0 
-      ? `${Math.max(0, card.value)}h + ${card.ongoingHours.toFixed(1)} ongoing`  // ✅ Prevent negative hours display
-      : Math.max(0, card.value);  // ✅ Prevent negative hours display
+      ? `${formatHoursToHoursMinutes(Math.max(0, card.value))}h + ${formatHoursToHoursMinutes(card.ongoingHours)} ongoing`  // ✅ Use new format
+      : formatHoursToHoursMinutes(Math.max(0, card.value));  // ✅ Use new format
   
     return (
       <Col xs={6} sm={6} md={3} className="mb-2" key={card.id}>
@@ -218,29 +235,29 @@ export default function CraneOverview() {
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>Today:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : `${dashboardData.quickStats?.today?.completed || 0}h`}
-                      {!loading && dashboardData.quickStats?.today?.ongoing > 0 && ` + ${dashboardData.quickStats.today.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${formatHoursToHoursMinutes(dashboardData.quickStats?.today?.completed || 0)}h`}
+                      {!loading && dashboardData.quickStats?.today?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.today.ongoing)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Week:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : `${dashboardData.quickStats?.thisWeek?.completed || 0}h`}
-                      {!loading && dashboardData.quickStats?.thisWeek?.ongoing > 0 && ` + ${dashboardData.quickStats.thisWeek.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${formatHoursToHoursMinutes(dashboardData.quickStats?.thisWeek?.completed || 0)}h`}
+                      {!loading && dashboardData.quickStats?.thisWeek?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.thisWeek.ongoing)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Month:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : `${dashboardData.quickStats?.thisMonth?.completed || 0}h`}
-                      {!loading && dashboardData.quickStats?.thisMonth?.ongoing > 0 && ` + ${dashboardData.quickStats.thisMonth.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${formatHoursToHoursMinutes(dashboardData.quickStats?.thisMonth?.completed || 0)}h`}
+                      {!loading && dashboardData.quickStats?.thisMonth?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.thisMonth.ongoing)} ongoing`}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span style={{ fontSize: '0.6rem' }}>This Year:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : `${dashboardData.quickStats?.thisYear?.completed || 0}h`}
-                      {!loading && dashboardData.quickStats?.thisYear?.ongoing > 0 && ` + ${dashboardData.quickStats.thisYear.ongoing.toFixed(1)} ongoing`}
+                      {loading ? '...' : `${formatHoursToHoursMinutes(dashboardData.quickStats?.thisYear?.completed || 0)}h`}
+                      {!loading && dashboardData.quickStats?.thisYear?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.thisYear.ongoing)} ongoing`}
                     </span>
                   </div>
                 </Card.Body>
