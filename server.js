@@ -610,12 +610,11 @@ if (latestLog.DigitalInput1 === "1") {
     const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
     const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
     const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-    // ✅ Create IST time and use environment-based conversion
+    // ✅ Create IST time - keep in IST for ongoing calculation
     const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-    const latestTime = convertISTToUTC(latestTimeIST);
     
     const now = getCurrentTimeInIST();
-    const ongoingHoursDiff = (now - latestTime) / (1000 * 60 * 60);
+    const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
     
     console.log(`�� DEBUG: Latest time parsed: ${latestTime}`);
     console.log(`🔍 DEBUG: Current time: ${now}`);
@@ -742,13 +741,12 @@ if (latestLog.DigitalInput1 === "1") {
             const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
             const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
             const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-            const latestTime = convertISTToUTC(latestTimeIST);
             
             // ✅ Only count ongoing hours if the session started within this period
-            if (latestTime >= startDate && latestTime <= endDate) {
+            if (latestTimeIST >= startDate && latestTimeIST <= endDate) {
               // ✅ Use current time for ongoing calculation, not period end date
               const currentTime = getCurrentTimeInIST();
-              const ongoingHoursDiff = (currentTime - latestTime) / (1000 * 60 * 60);
+              const ongoingHoursDiff = (currentTime - latestTimeIST) / (1000 * 60 * 60);
               if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
                 periodOngoingHours += ongoingHoursDiff;
               }
