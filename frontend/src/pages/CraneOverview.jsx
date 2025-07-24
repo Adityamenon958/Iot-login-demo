@@ -51,9 +51,9 @@ export default function CraneOverview() {
   const summaryCards = [
     {
       id: 1,
-      title: "Total Working Hours",
-      value: dashboardData.completedHours,  // ✅ Use completedHours instead of totalWorkingHours
-      ongoingHours: dashboardData.ongoingHours,
+      title: `Total Working Hours (${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()})`,
+      value: dashboardData.quickStats?.thisMonth?.completed || 0,  // ✅ Use current month's completed hours
+      ongoingHours: dashboardData.quickStats?.thisMonth?.ongoing || 0,  // ✅ Use current month's ongoing hours
       gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
       icon: PiTimerDuotone,
       iconSize: 60
