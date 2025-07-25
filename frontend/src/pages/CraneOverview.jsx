@@ -9,6 +9,10 @@ import axios from 'axios';
 import MonthlyChart from '../components/MonthlyChart';
 // ✅ Import CraneBarChart component
 import CraneBarChart from '../components/CraneBarChart';
+// ✅ Import PreviousMonthStats component
+import PreviousMonthStats from '../components/PreviousMonthStats';
+// ✅ Import MaintenanceUpdates component
+import MaintenanceUpdates from '../components/MaintenanceUpdates';
 
 // ✅ Helper function to convert decimal hours to hours.minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -276,56 +280,14 @@ export default function CraneOverview() {
               </Card>
             </Col>
 
-            {/* Recent Alerts */}
+            {/* Previous Month Performance */}
             <Col xs={12} className="mb-2">
-              <Card className="border-0 shadow-sm">
-                <Card.Header className="py-2 bg-white border-bottom">
-                  <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
-                    Recent Alerts
-                  </h6>
-                </Card.Header>
-                <Card.Body className="p-2">
-                  <div 
-                    style={{ 
-                      height: '80px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      backgroundColor: '#f8f9fa' 
-                    }}
-                  >
-                    <p className="text-muted" style={{ fontSize: '0.65rem' }}>
-                      Alerts list will be placed here
-                    </p>
-                  </div>
-                </Card.Body>
-              </Card>
+              <PreviousMonthStats />
             </Col>
 
-            {/* System Updates */}
+            {/* Maintenance Updates */}
             <Col xs={12}>
-              <Card className="border-0 shadow-sm">
-                <Card.Header className="py-2 bg-white border-bottom">
-                  <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
-                    System Updates
-                  </h6>
-                </Card.Header>
-                <Card.Body className="p-2">
-                  <div 
-                    style={{ 
-                      height: '80px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      backgroundColor: '#f8f9fa' 
-                    }}
-                  >
-                    <p className="text-muted" style={{ fontSize: '0.65rem' }}>
-                      System updates will be placed here
-                    </p>
-                  </div>
-                </Card.Body>
-              </Card>
+              <MaintenanceUpdates />
             </Col>
           </Row>
         </Col>

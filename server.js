@@ -1168,6 +1168,386 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ GET: Fetch previous month performance stats
+app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { month, year } = req.query; // Optional: month (0-11), year
+    
+    console.log('🔍 User requesting previous month stats:', { role, companyName, month, year });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get all crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    if (craneDevices.length === 0) {
+      return res.json({ 
+        monthName: "No Data",
+        workingHours: 0,
+        maintenanceHours: 0,
+        idleHours: 0,
+        utilizationRate: 0,
+        totalHours: 0
+      });
+    }
+
+    // ✅ Calculate target month (default: previous month)
+    const now = getCurrentTimeInIST();
+    let targetMonth, targetYear;
+    
+    if (month !== undefined && year !== undefined) {
+      // Use provided month/year
+      targetMonth = parseInt(month);
+      targetYear = parseInt(year);
+    } else {
+      // Default to previous month
+      targetMonth = now.getMonth() - 1;
+      targetYear = now.getFullYear();
+      
+      // Handle January case (previous month would be December of previous year)
+      if (targetMonth < 0) {
+        targetMonth = 11; // December
+        targetYear = now.getFullYear() - 1;
+      }
+    }
+    
+    // ✅ Calculate month period
+    const monthStart = new Date(targetYear, targetMonth, 1);
+    const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+    const monthName = monthStart.toLocaleString('default', { month: 'long', year: 'numeric' });
+    
+    // ✅ Calculate total hours in the month
+    const totalHours = (monthEnd - monthStart) / (1000 * 60 * 60);
+    
+    let totalWorkingHours = 0;
+    let totalMaintenanceHours = 0;
+
+    // ✅ Calculate for each crane device
+    for (const deviceId of craneDevices) {
+      const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+      
+      // Get all logs for this device
+      const deviceLogs = await CraneLog.find(deviceFilter).lean();
+      
+      // Filter logs within this month
+      const monthLogs = deviceLogs.filter(log => {
+        try {
+          const [datePart, timePart] = log.Timestamp.split(' ');
+          const [day, month, year] = datePart.split('/').map(Number);
+          const [hour, minute, second] = timePart.split(':').map(Number);
+          const logTime = new Date(year, month - 1, day, hour, minute, second);
+          return logTime >= monthStart && logTime <= monthEnd;
+        } catch (err) {
+          console.error(`❌ Error parsing timestamp for previous month filtering:`, err);
+          return false;
+        }
+      });
+
+      if (monthLogs.length === 0) continue;
+
+      // Sort by timestamp
+      monthLogs.sort((a, b) => {
+        const [aDate, aTime] = a.Timestamp.split(' ');
+        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        
+        const [bDate, bTime] = b.Timestamp.split(' ');
+        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        
+        return aTimestamp - bTimestamp;
+      });
+
+      // ✅ Calculate working hours (DigitalInput1 = "1" sessions)
+      for (let i = 0; i < monthLogs.length - 1; i++) {
+        const currentLog = monthLogs[i];
+        const nextLog = monthLogs[i + 1];
+
+        // Only count as completed when DigitalInput1 changes from "1" to "0"
+        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
+          try {
+            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            
+            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            
+            const hoursDiff = (nextTimeIST - currentTimeIST) / (1000 * 60 * 60);
+            totalWorkingHours += hoursDiff;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamps for previous month working hours:`, err);
+          }
+        }
+      }
+
+      // ✅ Calculate maintenance hours (DigitalInput2 = "1" sessions)
+      for (let i = 0; i < monthLogs.length - 1; i++) {
+        const currentLog = monthLogs[i];
+        const nextLog = monthLogs[i + 1];
+
+        // Only count as completed when DigitalInput2 changes from "1" to "0"
+        if (currentLog.DigitalInput2 === "1" && nextLog.DigitalInput2 === "0") {
+          try {
+            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
+            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
+            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            
+            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
+            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
+            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
+            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            
+            const hoursDiff = (nextTimeIST - currentTimeIST) / (1000 * 60 * 60);
+            totalMaintenanceHours += hoursDiff;
+          } catch (err) {
+            console.error(`❌ Error parsing timestamps for previous month maintenance hours:`, err);
+          }
+        }
+      }
+    }
+
+    // ✅ Calculate idle hours and utilization rate
+    const totalIdleHours = Math.max(0, totalHours - totalWorkingHours - totalMaintenanceHours);
+    const utilizationRate = totalHours > 0 ? (totalWorkingHours / totalHours) * 100 : 0;
+
+    console.log(`✅ Previous month stats calculated for ${monthName}: Working: ${totalWorkingHours.toFixed(2)}h, Maintenance: ${totalMaintenanceHours.toFixed(2)}h, Idle: ${totalIdleHours.toFixed(2)}h`);
+    
+    res.json({
+      monthName,
+      workingHours: Math.round(totalWorkingHours * 100) / 100,
+      maintenanceHours: Math.round(totalMaintenanceHours * 100) / 100,
+      idleHours: Math.round(totalIdleHours * 100) / 100,
+      utilizationRate: Math.round(utilizationRate * 100) / 100,
+      totalHours: Math.round(totalHours * 100) / 100
+    });
+
+  } catch (err) {
+    console.error("❌ Previous month stats fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET: Fetch maintenance updates for all cranes
+app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { month, year } = req.query; // Optional: month (0-11), year
+    
+    console.log('🔍 User requesting maintenance updates:', { role, companyName, month, year });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get all crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    if (craneDevices.length === 0) {
+      return res.json({ 
+        monthName: "No Data",
+        summary: {
+          totalMaintenanceHours: 0,
+          totalSessions: 0,
+          averageDuration: 0
+        },
+        craneData: []
+      });
+    }
+
+    // ✅ Calculate target month (default: current month)
+    const now = getCurrentTimeInIST();
+    let targetMonth, targetYear;
+    
+    if (month !== undefined && year !== undefined) {
+      // Use provided month/year
+      targetMonth = parseInt(month);
+      targetYear = parseInt(year);
+    } else {
+      // Default to current month
+      targetMonth = now.getMonth();
+      targetYear = now.getFullYear();
+    }
+    
+    // ✅ Calculate month period
+    const monthStart = new Date(targetYear, targetMonth, 1);
+    const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+    const monthName = monthStart.toLocaleString('default', { month: 'long', year: 'numeric' });
+    
+    let totalMaintenanceHours = 0;
+    let totalSessions = 0;
+    const craneData = [];
+
+    // ✅ Calculate for each crane device
+    for (const deviceId of craneDevices) {
+      const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+      
+      // Get all logs for this device
+      const deviceLogs = await CraneLog.find(deviceFilter).lean();
+      
+      // Filter logs within this month
+      const monthLogs = deviceLogs.filter(log => {
+        try {
+          const [datePart, timePart] = log.Timestamp.split(' ');
+          const [day, month, year] = datePart.split('/').map(Number);
+          const [hour, minute, second] = timePart.split(':').map(Number);
+          const logTime = new Date(year, month - 1, day, hour, minute, second);
+          return logTime >= monthStart && logTime <= monthEnd;
+        } catch (err) {
+          console.error(`❌ Error parsing timestamp for maintenance filtering:`, err);
+          return false;
+        }
+      });
+
+      if (monthLogs.length === 0) continue;
+
+      // Sort by timestamp
+      monthLogs.sort((a, b) => {
+        const [aDate, aTime] = a.Timestamp.split(' ');
+        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        
+        const [bDate, bTime] = b.Timestamp.split(' ');
+        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        
+        return aTimestamp - bTimestamp;
+      });
+
+      let craneMaintenanceHours = 0;
+      let craneSessions = 0;
+      const maintenanceSessions = [];
+
+      // ✅ Find maintenance sessions (DigitalInput2 = "1" sessions)
+      console.log(`🔍 Checking ${deviceId} for maintenance sessions in ${monthName}. Total logs: ${monthLogs.length}`);
+      
+      // Debug: Show all logs for this crane in this month
+      console.log(`🔍 All logs for ${deviceId} in ${monthName}:`);
+      monthLogs.forEach((log, index) => {
+        console.log(`  ${index}: ${log.Timestamp} - DigitalInput1: ${log.DigitalInput1}, DigitalInput2: ${log.DigitalInput2}`);
+      });
+      
+      for (let i = 0; i < monthLogs.length - 1; i++) {
+        const currentLog = monthLogs[i];
+        const nextLog = monthLogs[i + 1];
+
+        // Find maintenance start (DigitalInput2 changes from "0" to "1")
+        if (currentLog.DigitalInput2 === "0" && nextLog.DigitalInput2 === "1") {
+          console.log(`🔍 Found maintenance start for ${deviceId}: ${currentLog.Timestamp} (0) -> ${nextLog.Timestamp} (1)`);
+          const sessionStart = nextLog.Timestamp; // ✅ Use the timestamp when maintenance actually started
+          let sessionEnd = null;
+          let sessionDuration = 0;
+          let isOngoing = false;
+
+          // Find maintenance end (DigitalInput2 changes from "1" to "0")
+          for (let j = i + 1; j < monthLogs.length - 1; j++) {
+            const checkLog = monthLogs[j];
+            const nextCheckLog = monthLogs[j + 1];
+            
+            if (checkLog.DigitalInput2 === "1" && nextCheckLog.DigitalInput2 === "0") {
+              sessionEnd = nextCheckLog.Timestamp; // ✅ Use the timestamp when maintenance actually ended
+              
+              // Calculate duration
+              try {
+                const [startDatePart, startTimePart] = sessionStart.split(' ');
+                const [startDay, startMonth, startYear] = startDatePart.split('/').map(Number);
+                const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
+                const startTimeIST = new Date(startYear, startMonth - 1, startDay, startHour, startMinute, startSecond);
+                
+                const [endDatePart, endTimePart] = sessionEnd.split(' ');
+                const [endDay, endMonth, endYear] = endDatePart.split('/').map(Number);
+                const [endHour, endMinute, endSecond] = endTimePart.split(':').map(Number);
+                const endTimeIST = new Date(endYear, endMonth - 1, endDay, endHour, endMinute, endSecond);
+                
+                sessionDuration = (endTimeIST - startTimeIST) / (1000 * 60 * 60);
+                craneMaintenanceHours += sessionDuration;
+                craneSessions++;
+                console.log(`✅ Found maintenance session for ${deviceId}: ${sessionStart} to ${sessionEnd} = ${sessionDuration.toFixed(2)}h`);
+              } catch (err) {
+                console.error(`❌ Error calculating maintenance session duration:`, err);
+              }
+              break;
+            }
+          }
+
+          // If no end found, it's ongoing
+          if (!sessionEnd) {
+            sessionEnd = "Ongoing";
+            isOngoing = true;
+            
+            // Calculate ongoing duration
+            try {
+              const [startDatePart, startTimePart] = sessionStart.split(' ');
+              const [startDay, startMonth, startYear] = startDatePart.split('/').map(Number);
+              const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
+              const startTimeIST = new Date(startYear, startMonth - 1, startDay, startHour, startMinute, startSecond);
+              
+              const currentTime = getCurrentTimeInIST();
+              sessionDuration = (currentTime - startTimeIST) / (1000 * 60 * 60);
+              craneMaintenanceHours += sessionDuration;
+              craneSessions++;
+              console.log(`✅ Found ongoing maintenance session for ${deviceId}: ${sessionStart} to ongoing = ${sessionDuration.toFixed(2)}h`);
+            } catch (err) {
+              console.error(`❌ Error calculating ongoing maintenance duration:`, err);
+            }
+          }
+
+          maintenanceSessions.push({
+            startTime: sessionStart,
+            endTime: sessionEnd,
+            duration: Math.round(sessionDuration * 100) / 100,
+            isOngoing
+          });
+        }
+      }
+
+      // ✅ Add crane data if it has maintenance sessions
+      if (craneSessions > 0) {
+        const averageDuration = craneSessions > 0 ? craneMaintenanceHours / craneSessions : 0;
+        
+        craneData.push({
+          craneId: deviceId,
+          totalHours: Math.round(craneMaintenanceHours * 100) / 100,
+          sessions: craneSessions,
+          averageDuration: Math.round(averageDuration * 100) / 100,
+          maintenanceSessions
+        });
+
+        totalMaintenanceHours += craneMaintenanceHours;
+        totalSessions += craneSessions;
+      }
+    }
+
+    // ✅ Calculate summary
+    const averageDuration = totalSessions > 0 ? totalMaintenanceHours / totalSessions : 0;
+
+    console.log(`✅ Maintenance updates calculated for ${monthName}: Total: ${totalMaintenanceHours.toFixed(2)}h, Sessions: ${totalSessions}`);
+    
+    res.json({
+      monthName,
+      summary: {
+        totalMaintenanceHours: Math.round(totalMaintenanceHours * 100) / 100,
+        totalSessions,
+        averageDuration: Math.round(averageDuration * 100) / 100
+      },
+      craneData
+    });
+
+  } catch (err) {
+    console.error("❌ Maintenance updates fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ✅ GET: Fetch crane devices for dropdown (filtered by company)
 app.get("/api/crane/devices", authenticateToken, async (req, res) => {
   try {
