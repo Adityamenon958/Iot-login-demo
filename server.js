@@ -47,6 +47,89 @@ function convertISTToUTC(istTime) {
   }
 }
 
+// ✅ NEW: Helper function to parse timestamp string to Date object
+function parseTimestamp(timestampStr) {
+  try {
+    const [datePart, timePart] = timestampStr.split(' ');
+    const [day, month, year] = datePart.split('/').map(Number);
+    const [hour, minute, second] = timePart.split(':').map(Number);
+    return new Date(year, month - 1, day, hour, minute, second);
+  } catch (err) {
+    console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
+    return null;
+  }
+}
+
+// ✅ NEW: Helper function to calculate consecutive periods for periodic data
+function calculateConsecutivePeriods(logs, statusType) {
+  const periods = [];
+  let currentPeriod = null;
+  
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i];
+    const timestamp = parseTimestamp(log.Timestamp);
+    if (!timestamp) continue;
+    
+    let currentStatus = null;
+    
+    // Determine status based on statusType
+    if (statusType === 'working') {
+      currentStatus = log.DigitalInput1;
+    } else if (statusType === 'maintenance') {
+      currentStatus = log.DigitalInput2;
+    } else if (statusType === 'idle') {
+      currentStatus = (log.DigitalInput1 === "0" && log.DigitalInput2 === "0") ? "1" : "0";
+    }
+    
+    if (currentStatus === "1") {
+      // Status is active
+      if (!currentPeriod) {
+        // Start new period
+        currentPeriod = {
+          startTime: timestamp,
+          startTimestamp: log.Timestamp,
+          logs: [log]
+        };
+      } else {
+        // Continue current period
+        currentPeriod.logs.push(log);
+      }
+    } else {
+      // Status is inactive
+      if (currentPeriod) {
+        // End current period
+        currentPeriod.endTime = timestamp;
+        currentPeriod.endTimestamp = log.Timestamp;
+        currentPeriod.duration = (currentPeriod.endTime - currentPeriod.startTime) / (1000 * 60 * 60);
+        currentPeriod.isOngoing = false;
+        periods.push(currentPeriod);
+        currentPeriod = null;
+      }
+    }
+  }
+  
+  // Handle ongoing period (last period that hasn't ended)
+  if (currentPeriod) {
+    currentPeriod.isOngoing = true;
+    currentPeriod.endTime = null;
+    currentPeriod.endTimestamp = null;
+    currentPeriod.duration = null; // Will be calculated later
+    periods.push(currentPeriod);
+  }
+  
+  return periods;
+}
+
+// ✅ NEW: Helper function to calculate period duration including ongoing sessions
+function calculatePeriodDuration(startTime, endTime = null, isOngoing = false) {
+  if (!startTime) return 0;
+  
+  const end = endTime || getCurrentTimeInIST();
+  const duration = (end - startTime) / (1000 * 60 * 60);
+  
+  return Math.max(0, duration); // Ensure non-negative
+}
+
 // ✅ Middleware
 app.use(cors({
   origin: true,
@@ -496,7 +579,7 @@ app.post("/api/crane/log", async (req, res) => {
   }
 });
 
-// ✅ GET: Fetch crane overview data for dashboard (with real-time ongoing hours)
+// ✅ GET: Fetch crane overview data for dashboard (with periodic data logic)
 app.get("/api/crane/overview", authenticateToken, async (req, res) => {
   try {
     const { role, companyName } = req.user;
@@ -537,68 +620,40 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     for (const deviceId of craneDevices) {
       const deviceFilter = { ...companyFilter, DeviceID: deviceId };
       
-      // Get all logs for this device - SORT BY TIMESTAMP, not createdAt
-      const deviceLogs = await CraneLog.find(deviceFilter)
-        .lean();
+      // Get all logs for this device
+      const deviceLogs = await CraneLog.find(deviceFilter).lean();
       
       // ✅ Sort by actual timestamp (not database creation time)
       deviceLogs.sort((a, b) => {
-        const [aDate, aTime] = a.Timestamp.split(' ');
-        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-        
-        const [bDate, bTime] = b.Timestamp.split(' ');
-        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
-        
+        const aTimestamp = parseTimestamp(a.Timestamp);
+        const bTimestamp = parseTimestamp(b.Timestamp);
+        if (!aTimestamp || !bTimestamp) return 0;
         return aTimestamp - bTimestamp;
       });
 
       if (deviceLogs.length === 0) continue;
 
-      // ✅ Calculate working hours for this device
+      // ✅ NEW: Use periodic data logic - Calculate consecutive periods
+      const workingPeriods = calculateConsecutivePeriods(deviceLogs, 'working');
+      const maintenancePeriods = calculateConsecutivePeriods(deviceLogs, 'maintenance');
+      
       let deviceCompletedHours = 0;
       let deviceOngoingHours = 0;
       let hasOngoingSession = false;
 
-      // ✅ Process completed sessions (start → stop)
-      for (let i = 0; i < deviceLogs.length - 1; i++) {
-        const currentLog = deviceLogs[i];
-        const nextLog = deviceLogs[i + 1];
-
-        // ✅ Only count as completed when DigitalInput1 changes from "1" to "0" (start → stop)
-        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
-          try {
-            // ✅ Parse timestamps correctly - Use environment-based conversion
-            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            // ✅ Create IST time and use environment-based conversion
-            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            const currentTime = convertISTToUTC(currentTimeIST);
-            
-            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            // ✅ Create IST time and use environment-based conversion
-            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            const nextTime = convertISTToUTC(nextTimeIST);
-            
-            // Calculate hours difference
-            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-            deviceCompletedHours += hoursDiff;
-            
-            console.log(`✅ Crane ${deviceId} completed session: ${currentLog.Timestamp} to ${nextLog.Timestamp} = ${hoursDiff.toFixed(2)} hours`);
-          } catch (err) {
-            console.error(`❌ Error parsing timestamps for crane ${deviceId}:`, err);
-            // Fallback to using createdAt timestamps
-            const hoursDiff = (new Date(nextLog.createdAt) - new Date(currentLog.createdAt)) / (1000 * 60 * 60);
-            deviceCompletedHours += hoursDiff;
-          }
+      // ✅ Process completed working periods
+      workingPeriods.forEach(period => {
+        if (!period.isOngoing) {
+          deviceCompletedHours += period.duration;
+          console.log(`✅ Crane ${deviceId} completed working session: ${period.startTimestamp} to ${period.endTimestamp} = ${period.duration.toFixed(2)} hours`);
+        } else {
+          // Ongoing working session
+          const ongoingDuration = calculatePeriodDuration(period.startTime);
+          deviceOngoingHours += ongoingDuration;
+          hasOngoingSession = true;
+          console.log(`✅ Crane ${deviceId} ongoing working session: ${period.startTimestamp} to now = ${ongoingDuration.toFixed(2)} hours`);
         }
-      }
+      });
 
       // ✅ Check for ongoing session (latest log) - ADD THIS DEBUG
 const latestLog = deviceLogs[deviceLogs.length - 1];
@@ -664,7 +719,7 @@ if (latestLog.DigitalInput1 === "1") {
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1); // ✅ First day of current month
     const yearStart = new Date(now.getFullYear(), 0, 1); // January 1st of current year
 
-    // ✅ Helper function to calculate working hours for a period
+    // ✅ NEW: Helper function to calculate working hours for a period using periodic data logic
     async function calculateWorkingHoursForPeriod(startDate, endDate = getCurrentTimeInIST()) {
       let periodCompletedHours = 0;
       let periodOngoingHours = 0;
@@ -677,84 +732,42 @@ if (latestLog.DigitalInput1 === "1") {
         
         // Filter by timestamp after fetching
         const filteredPeriodLogs = periodLogs.filter(log => {
-          try {
-            const [datePart, timePart] = log.Timestamp.split(' ');
-            const [day, month, year] = datePart.split('/').map(Number);
-            const [hour, minute, second] = timePart.split(':').map(Number);
-            const logTime = new Date(year, month - 1, day, hour, minute, second);
-            return logTime >= startDate && logTime <= endDate;
-          } catch (err) {
-            console.error(`❌ Error parsing timestamp for filtering:`, err);
-            return false;
-          }
+          const logTime = parseTimestamp(log.Timestamp);
+          if (!logTime) return false;
+          return logTime >= startDate && logTime <= endDate;
         });
 
         if (filteredPeriodLogs.length === 0) continue;
 
         // Sort by timestamp
         filteredPeriodLogs.sort((a, b) => {
-          const [aDate, aTime] = a.Timestamp.split(' ');
-          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-          
-          const [bDate, bTime] = b.Timestamp.split(' ');
-          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
-          
+          const aTimestamp = parseTimestamp(a.Timestamp);
+          const bTimestamp = parseTimestamp(b.Timestamp);
+          if (!aTimestamp || !bTimestamp) return 0;
           return aTimestamp - bTimestamp;
         });
 
-        // Calculate completed sessions within period
-        for (let i = 0; i < filteredPeriodLogs.length - 1; i++) {
-          const currentLog = filteredPeriodLogs[i];
-          const nextLog = filteredPeriodLogs[i + 1];
+        // ✅ NEW: Use periodic data logic - Calculate consecutive periods
+        const workingPeriods = calculateConsecutivePeriods(filteredPeriodLogs, 'working');
 
-          if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
-            try {
-              const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-              const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-              const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-              const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-              const currentTime = new Date(currentTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
-              
-              const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-              const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-              const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-              const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-              const nextTime = new Date(nextTimeIST.getTime() - (5.5 * 60 * 60 * 1000));
-              
-              const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-              periodCompletedHours += hoursDiff;
-            } catch (err) {
-              console.error(`❌ Error parsing timestamps for period calculation:`, err);
+        // Process working periods within the period
+        workingPeriods.forEach(period => {
+          if (!period.isOngoing) {
+            // Completed period within the time range
+            periodCompletedHours += period.duration;
+          } else {
+            // Ongoing period - check if it started within this period
+            if (period.startTime >= startDate) {
+              // Session started within this period, calculate ongoing hours from period start
+              const ongoingDuration = calculatePeriodDuration(period.startTime);
+              periodOngoingHours += ongoingDuration;
+            } else {
+              // Session started before this period, calculate ongoing hours from period start
+              const ongoingDuration = calculatePeriodDuration(startDate);
+              periodOngoingHours += ongoingDuration;
             }
           }
-        }
-
-        // Check for ongoing sessions that started within the period
-        const latestLog = filteredPeriodLogs[filteredPeriodLogs.length - 1];
-        if (latestLog && latestLog.DigitalInput1 === "1") {
-          try {
-            const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-            const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-            const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-            const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-            
-            // ✅ Only count ongoing hours if the session started within this period
-            if (latestTimeIST >= startDate && latestTimeIST <= endDate) {
-              // ✅ Use current time for ongoing calculation, not period end date
-              const currentTime = getCurrentTimeInIST();
-              const ongoingHoursDiff = (currentTime - latestTimeIST) / (1000 * 60 * 60);
-              if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
-                periodOngoingHours += ongoingHoursDiff;
-              }
-            }
-          } catch (err) {
-            console.error(`❌ Error calculating ongoing hours for period:`, err);
-          }
-        }
+        });
       }
 
       return {
@@ -867,98 +880,63 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
           return aTimestamp - bTimestamp;
         });
 
-        // ✅ Calculate usage hours (completed sessions)
-        for (let i = 0; i < monthLogs.length - 1; i++) {
-          const currentLog = monthLogs[i];
-          const nextLog = monthLogs[i + 1];
-
-          // ✅ Only count as completed when DigitalInput1 changes from "1" to "0" (start → stop)
-          if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
-            try {
-              const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-              const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-              const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-              const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-              const currentTime = convertISTToUTC(currentTimeIST);
-              
-              const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-              const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-              const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-              const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-              const nextTime = convertISTToUTC(nextTimeIST);
-              
-              const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-              monthUsageHours += hoursDiff;
-            } catch (err) {
-              console.error(`❌ Error parsing timestamps for monthly usage calculation:`, err);
-            }
+        // ✅ NEW: Calculate usage hours using periodic data logic
+        const workingPeriods = calculateConsecutivePeriods(monthLogs, 'working');
+        
+        for (const period of workingPeriods) {
+          if (period.isOngoing) {
+            // For ongoing sessions, calculate from period start to current time
+            const periodStart = period.startTime;
+            const currentTime = getCurrentTimeInIST();
+            
+            // If ongoing session started before this month, count from month start
+            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+            const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+            monthUsageHours += duration;
+          } else {
+            // For completed sessions, calculate from period start to period end
+            const periodStart = period.startTime;
+            const periodEnd = period.endTime;
+            
+            // If session started before this month, count from month start
+            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+            // If session ended after this month, count until month end
+            const effectiveEnd = periodEnd > monthEnd ? monthEnd : periodEnd;
+            
+            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
+            monthUsageHours += duration;
           }
         }
 
-        // ✅ Calculate maintenance hours (DigitalInput2 = "1" sessions)
-        for (let i = 0; i < monthLogs.length - 1; i++) {
-          const currentLog = monthLogs[i];
-          const nextLog = monthLogs[i + 1];
-
-          // ✅ Count maintenance sessions when DigitalInput2 changes from "1" to "0"
-          if (currentLog.DigitalInput2 === "1" && nextLog.DigitalInput2 === "0") {
-            try {
-              const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-              const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-              const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-              const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-              const currentTime = convertISTToUTC(currentTimeIST);
-              
-              const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-              const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-              const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-              const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-              const nextTime = convertISTToUTC(nextTimeIST);
-              
-              const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-              monthMaintenanceHours += hoursDiff;
-            } catch (err) {
-              console.error(`❌ Error parsing timestamps for monthly maintenance calculation:`, err);
-            }
+        // ✅ NEW: Calculate maintenance hours using periodic data logic
+        const maintenancePeriods = calculateConsecutivePeriods(monthLogs, 'maintenance');
+        
+        for (const period of maintenancePeriods) {
+          if (period.isOngoing) {
+            // For ongoing sessions, calculate from period start to current time
+            const periodStart = period.startTime;
+            const currentTime = getCurrentTimeInIST();
+            
+            // If ongoing session started before this month, count from month start
+            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+            const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+            monthMaintenanceHours += duration;
+          } else {
+            // For completed sessions, calculate from period start to period end
+            const periodStart = period.startTime;
+            const periodEnd = period.endTime;
+            
+            // If session started before this month, count from month start
+            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+            // If session ended after this month, count until month end
+            const effectiveEnd = periodEnd > monthEnd ? monthEnd : periodEnd;
+            
+            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
+            monthMaintenanceHours += duration;
           }
         }
 
-        // ✅ Check for ongoing sessions in current month
-        if (monthDate.getMonth() === now.getMonth() && monthDate.getFullYear() === now.getFullYear()) {
-          const latestLog = monthLogs[monthLogs.length - 1];
-          
-          if (latestLog.DigitalInput1 === "1") {
-            try {
-              const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-              const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-              const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-              const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-              
-              const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
-              if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
-                monthUsageHours += ongoingHoursDiff;
-              }
-            } catch (err) {
-              console.error(`❌ Error calculating ongoing hours for monthly stats:`, err);
-            }
-          }
-          
-          if (latestLog.DigitalInput2 === "1") {
-            try {
-              const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-              const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-              const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-              const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-              
-              const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
-              if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
-                monthMaintenanceHours += ongoingHoursDiff;
-              }
-            } catch (err) {
-              console.error(`❌ Error calculating ongoing maintenance hours for monthly stats:`, err);
-            }
-          }
-        }
+        // ✅ REMOVED: Old ongoing session logic - now handled by calculateConsecutivePeriods()
       }
 
       monthlyData.push({
@@ -1038,114 +1016,69 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
         continue;
       }
 
-      // Sort by timestamp
-      periodLogs.sort((a, b) => {
-        const [aDate, aTime] = a.Timestamp.split(' ');
-        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-        
-        const [bDate, bTime] = b.Timestamp.split(' ');
-        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
-        
-        return aTimestamp - bTimestamp;
-      });
+        // Sort by timestamp
+        periodLogs.sort((a, b) => {
+          const [aDate, aTime] = a.Timestamp.split(' ');
+          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+          
+          const [bDate, bTime] = b.Timestamp.split(' ');
+          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+          
+          return aTimestamp - bTimestamp;
+        });
 
       let workingHours = 0;
       let maintenanceHours = 0;
 
-      // ✅ Calculate working hours (DigitalInput1 = "1" sessions)
-      for (let i = 0; i < periodLogs.length - 1; i++) {
-        const currentLog = periodLogs[i];
-        const nextLog = periodLogs[i + 1];
-
-        // ✅ Only count as completed when DigitalInput1 changes from "1" to "0"
-        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
-          try {
-            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            const currentTime = convertISTToUTC(currentTimeIST);
-            
-            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            const nextTime = convertISTToUTC(nextTimeIST);
-            
-            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-            workingHours += hoursDiff;
-          } catch (err) {
-            console.error(`❌ Error parsing timestamps for crane working hours:`, err);
-          }
-        }
-      }
-
-      // ✅ Calculate maintenance hours (DigitalInput2 = "1" sessions)
-      for (let i = 0; i < periodLogs.length - 1; i++) {
-        const currentLog = periodLogs[i];
-        const nextLog = periodLogs[i + 1];
-
-        // ✅ Only count as completed when DigitalInput2 changes from "1" to "0"
-        if (currentLog.DigitalInput2 === "1" && nextLog.DigitalInput2 === "0") {
-          try {
-            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            const currentTime = convertISTToUTC(currentTimeIST);
-            
-            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            const nextTime = convertISTToUTC(nextTimeIST);
-            
-            const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
-            maintenanceHours += hoursDiff;
-          } catch (err) {
-            console.error(`❌ Error parsing timestamps for crane maintenance hours:`, err);
-          }
-        }
-      }
-
-      // ✅ Check for ongoing sessions
-      const latestLog = periodLogs[periodLogs.length - 1];
+      // ✅ NEW: Calculate working hours using periodic data logic
+      const workingPeriods = calculateConsecutivePeriods(periodLogs, 'working');
       
-      if (latestLog.DigitalInput1 === "1") {
-        try {
-          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+      for (const period of workingPeriods) {
+        if (period.isOngoing) {
+          // For ongoing sessions, calculate from period start to current time
+          const periodStart = period.startTime;
+          const currentTime = getCurrentTimeInIST();
           
-          const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
-          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
-            workingHours += ongoingHoursDiff;
-          }
-        } catch (err) {
-          console.error(`❌ Error calculating ongoing working hours for crane stats:`, err);
+          // If ongoing session started before this period, count from period start
+          const effectiveStart = periodStart < periodStart ? periodStart : periodStart;
+          const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+          workingHours += duration;
+        } else {
+          // For completed sessions, calculate from period start to period end
+          const periodStart = period.startTime;
+          const periodEnd = period.endTime;
+          
+          const duration = calculatePeriodDuration(periodStart, periodEnd, false);
+          workingHours += duration;
         }
       }
+
+      // ✅ NEW: Calculate maintenance hours using periodic data logic
+      const maintenancePeriods = calculateConsecutivePeriods(periodLogs, 'maintenance');
       
-      if (latestLog.DigitalInput2 === "1") {
-        try {
-          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+      for (const period of maintenancePeriods) {
+        if (period.isOngoing) {
+          // For ongoing sessions, calculate from period start to current time
+          const periodStart = period.startTime;
+          const currentTime = getCurrentTimeInIST();
           
-          const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
-          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) {
-            maintenanceHours += ongoingHoursDiff;
-          }
-        } catch (err) {
-          console.error(`❌ Error calculating ongoing maintenance hours for crane stats:`, err);
+          const duration = calculatePeriodDuration(periodStart, currentTime, true);
+          maintenanceHours += duration;
+        } else {
+          // For completed sessions, calculate from period start to period end
+          const periodStart = period.startTime;
+          const periodEnd = period.endTime;
+          
+          const duration = calculatePeriodDuration(periodStart, periodEnd, false);
+          maintenanceHours += duration;
         }
       }
+
+      // ✅ REMOVED: Old ongoing session logic - now handled by calculateConsecutivePeriods()
 
       // ✅ Calculate inactive hours
       const inactiveHours = Math.max(0, totalPeriodHours - workingHours - maintenanceHours);
@@ -1262,55 +1195,59 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
         return aTimestamp - bTimestamp;
       });
 
-      // ✅ Calculate working hours (DigitalInput1 = "1" sessions)
-      for (let i = 0; i < monthLogs.length - 1; i++) {
-        const currentLog = monthLogs[i];
-        const nextLog = monthLogs[i + 1];
-
-        // Only count as completed when DigitalInput1 changes from "1" to "0"
-        if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
-          try {
-            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            
-            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            
-            const hoursDiff = (nextTimeIST - currentTimeIST) / (1000 * 60 * 60);
-            totalWorkingHours += hoursDiff;
-          } catch (err) {
-            console.error(`❌ Error parsing timestamps for previous month working hours:`, err);
-          }
+      // ✅ NEW: Calculate working hours using periodic data logic
+      const workingPeriods = calculateConsecutivePeriods(monthLogs, 'working');
+      
+      for (const period of workingPeriods) {
+        if (period.isOngoing) {
+          // For ongoing sessions, calculate from period start to current time
+          const periodStart = period.startTime;
+          const currentTime = getCurrentTimeInIST();
+          
+          // If ongoing session started before this month, count from month start
+          const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+          const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+          totalWorkingHours += duration;
+        } else {
+          // For completed sessions, calculate from period start to period end
+          const periodStart = period.startTime;
+          const periodEnd = period.endTime;
+          
+          // If session started before this month, count from month start
+          const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+          // If session ended after this month, count until month end
+          const effectiveEnd = periodEnd > monthEnd ? monthEnd : periodEnd;
+          
+          const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
+          totalWorkingHours += duration;
         }
       }
 
-      // ✅ Calculate maintenance hours (DigitalInput2 = "1" sessions)
-      for (let i = 0; i < monthLogs.length - 1; i++) {
-        const currentLog = monthLogs[i];
-        const nextLog = monthLogs[i + 1];
-
-        // Only count as completed when DigitalInput2 changes from "1" to "0"
-        if (currentLog.DigitalInput2 === "1" && nextLog.DigitalInput2 === "0") {
-          try {
-            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
-            
-            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
-            
-            const hoursDiff = (nextTimeIST - currentTimeIST) / (1000 * 60 * 60);
-            totalMaintenanceHours += hoursDiff;
-          } catch (err) {
-            console.error(`❌ Error parsing timestamps for previous month maintenance hours:`, err);
-          }
+      // ✅ NEW: Calculate maintenance hours using periodic data logic
+      const maintenancePeriods = calculateConsecutivePeriods(monthLogs, 'maintenance');
+      
+      for (const period of maintenancePeriods) {
+        if (period.isOngoing) {
+          // For ongoing sessions, calculate from period start to current time
+          const periodStart = period.startTime;
+          const currentTime = getCurrentTimeInIST();
+          
+          // If ongoing session started before this month, count from month start
+          const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+          const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+          totalMaintenanceHours += duration;
+        } else {
+          // For completed sessions, calculate from period start to period end
+          const periodStart = period.startTime;
+          const periodEnd = period.endTime;
+          
+          // If session started before this month, count from month start
+          const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+          // If session ended after this month, count until month end
+          const effectiveEnd = periodEnd > monthEnd ? monthEnd : periodEnd;
+          
+          const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
+          totalMaintenanceHours += duration;
         }
       }
     }
@@ -1320,7 +1257,7 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
     const utilizationRate = totalHours > 0 ? (totalWorkingHours / totalHours) * 100 : 0;
 
     console.log(`✅ Previous month stats calculated for ${monthName}: Working: ${totalWorkingHours.toFixed(2)}h, Maintenance: ${totalMaintenanceHours.toFixed(2)}h, Idle: ${totalIdleHours.toFixed(2)}h`);
-    
+
     res.json({
       monthName,
       workingHours: Math.round(totalWorkingHours * 100) / 100,
@@ -1400,7 +1337,7 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
           const [hour, minute, second] = timePart.split(':').map(Number);
           const logTime = new Date(year, month - 1, day, hour, minute, second);
           return logTime >= monthStart && logTime <= monthEnd;
-        } catch (err) {
+  } catch (err) {
           console.error(`❌ Error parsing timestamp for maintenance filtering:`, err);
           return false;
         }

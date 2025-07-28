@@ -2,21 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Card, Form, Row, Col, Badge } from 'react-bootstrap';
 import axios from 'axios';
 
-// ✅ Helper function to convert decimal hours to hours.minutes format
+// ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
-  if (!decimalHours || decimalHours === 0) return '0.00';
+  if (!decimalHours || decimalHours === 0) return '0h 0m';
   
   const hours = Math.floor(decimalHours);
-  const minutes = Math.round((decimalHours % 1) * 60);
+  const minutes = Math.round((decimalHours - hours) * 60);
   
   // Handle edge case where minutes round to 60
   if (minutes === 60) {
-    return `${hours + 1}.00`;
+    return `${hours + 1}h 0m`;
   }
   
-  // Format minutes with leading zero if needed
-  const formattedMinutes = minutes.toString().padStart(2, '0');
-  return `${hours}.${formattedMinutes}`;
+  return `${hours}h ${minutes}m`;
 }
 
 // ✅ Helper function to format timestamp for display
@@ -178,7 +176,7 @@ export default function MaintenanceUpdates() {
               <div className="d-flex justify-content-between mb-1">
                 <span style={{ fontSize: '0.6rem' }}>Total Hours:</span>
                 <span className="fw-bold" style={{ fontSize: '0.6rem', color: '#dc3545' }}>
-                  {formatHoursToHoursMinutes(data.summary.totalMaintenanceHours)}h
+                  {formatHoursToHoursMinutes(data.summary.totalMaintenanceHours)}
                 </span>
               </div>
               <div className="d-flex justify-content-between mb-1">
@@ -190,7 +188,7 @@ export default function MaintenanceUpdates() {
               <div className="d-flex justify-content-between">
                 <span style={{ fontSize: '0.6rem' }}>Avg Duration:</span>
                 <span className="fw-bold" style={{ fontSize: '0.6rem', color: '#6c757d' }}>
-                  {formatHoursToHoursMinutes(data.summary.averageDuration)}h
+                  {formatHoursToHoursMinutes(data.summary.averageDuration)}
                 </span>
               </div>
             </div>
@@ -213,13 +211,13 @@ export default function MaintenanceUpdates() {
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>Total:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem', color: '#856404' }}>
-                      {formatHoursToHoursMinutes(crane.totalHours)}h
+                      {formatHoursToHoursMinutes(crane.totalHours)}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span style={{ fontSize: '0.6rem' }}>Average:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem', color: '#856404' }}>
-                      {formatHoursToHoursMinutes(crane.averageDuration)}h
+                      {formatHoursToHoursMinutes(crane.averageDuration)}
                     </span>
                   </div>
                 </div>
@@ -233,7 +231,7 @@ export default function MaintenanceUpdates() {
                           📅 {formatTimestamp(session.startTime)}
                         </span>
                         <span className="fw-bold" style={{ color: '#dc3545' }}>
-                          {formatHoursToHoursMinutes(session.duration)}h
+                          {formatHoursToHoursMinutes(session.duration)}
                         </span>
                       </div>
                       <div className="d-flex justify-content-between">

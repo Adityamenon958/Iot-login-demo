@@ -17,6 +17,7 @@ import './App.css';
 import DynamicDb from './components/DynamicDb';
 import CraneDashboard from './pages/CraneDashboard';
 import CraneOverview from './pages/CraneOverview';
+import ElevatorOverview from './pages/ElevatorOverview';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -44,6 +45,7 @@ function App() {
         <Route path="device/:deviceId" element={<DynamicDb />} />
         <Route path="crane" element={<CraneDashboard />} />
         <Route path="crane-overview" element={<CraneOverview />} />
+        <Route path="elevator-overview" element={<ElevatorOverview />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<Settings />} />
         <Route

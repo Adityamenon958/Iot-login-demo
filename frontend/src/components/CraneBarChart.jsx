@@ -2,6 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
 
+// ✅ Helper function to convert decimal hours to hours and minutes format
+function formatHoursToHoursMinutes(decimalHours) {
+  if (!decimalHours || decimalHours === 0) return '0h 0m';
+  
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  
+  // Handle edge case where minutes round to 60
+  if (minutes === 60) {
+    return `${hours + 1}h 0m`;
+  }
+  
+  return `${hours}h ${minutes}m`;
+}
+
 export default function CraneBarChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -48,7 +63,7 @@ export default function CraneBarChart() {
               color: entry.color,
               fontSize: '12px'
             }}>
-              {entry.name}: {entry.value}h
+              {entry.name}: {formatHoursToHoursMinutes(entry.value)}
               {entry.dataKey === 'inactiveHours' && ' (Right Scale)'}
               {(entry.dataKey === 'workingHours' || entry.dataKey === 'maintenanceHours') && ' (Left Scale)'}
             </p>
@@ -127,7 +142,7 @@ export default function CraneBarChart() {
           stroke="#666"
           fontSize={10}
           tick={{ fontSize: 10 }}
-          tickFormatter={(value) => `${value}h`}
+          tickFormatter={(value) => formatHoursToHoursMinutes(value)}
           domain={[0, 50]}
         />
         {/* Right Y-axis for Inactive Hours (0-5000h range) */}
@@ -137,7 +152,7 @@ export default function CraneBarChart() {
           stroke="#666"
           fontSize={10}
           tick={{ fontSize: 10 }}
-          tickFormatter={(value) => `${value}h`}
+          tickFormatter={(value) => formatHoursToHoursMinutes(value)}
           domain={[0, 5000]}
         />
         <Tooltip content={<CustomTooltip />} />

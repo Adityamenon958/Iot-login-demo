@@ -9,6 +9,7 @@ import { HiOutlineOfficeBuilding } from "react-icons/hi";
 import { PlusSquare } from 'lucide-react';
 import { MdOutlineSubscriptions } from "react-icons/md";
 import { Truck } from 'lucide-react';
+import { PiElevatorDuotone } from "react-icons/pi";
 
 import axios from 'axios';
 
@@ -100,6 +101,11 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             <Truck size={20} className={`${styles.navText} me-2`} />
             Crane Dashboard
           </Button>
+
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/elevator-overview' ? styles.active : ''}`} onClick={() => navigate('/dashboard/elevator-overview')}>
+    <PiElevatorDuotone size={20} className={`${styles.navText} me-2`} />
+    Elevator Overview
+</Button>
 
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/reports' ? styles.active : ''}`} onClick={() => navigate('/dashboard/reports')}>
             <FileText size={20} className={`${styles.navText} me-2`} />

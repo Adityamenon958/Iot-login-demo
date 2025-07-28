@@ -2,6 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
 
+// ✅ Helper function to convert decimal hours to hours and minutes format
+function formatHoursToHoursMinutes(decimalHours) {
+  if (!decimalHours || decimalHours === 0) return '0h 0m';
+  
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  
+  // Handle edge case where minutes round to 60
+  if (minutes === 60) {
+    return `${hours + 1}h 0m`;
+  }
+  
+  return `${hours}h ${minutes}m`;
+}
+
 export default function MonthlyChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -48,7 +63,7 @@ export default function MonthlyChart() {
               color: entry.color,
               fontSize: '12px'
             }}>
-              {entry.name}: {entry.value}h
+              {entry.name}: {formatHoursToHoursMinutes(entry.value)}
             </p>
           ))}
         </div>
@@ -122,7 +137,7 @@ export default function MonthlyChart() {
           stroke="#666"
           fontSize={10}
           tick={{ fontSize: 10 }}
-          tickFormatter={(value) => `${value}h`}
+          tickFormatter={(value) => formatHoursToHoursMinutes(value)}
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend 
