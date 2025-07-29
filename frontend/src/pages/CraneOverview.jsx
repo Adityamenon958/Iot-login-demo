@@ -15,6 +15,7 @@ import PreviousMonthStats from '../components/PreviousMonthStats';
 import MaintenanceUpdates from '../components/MaintenanceUpdates';
 import CraneDistanceChart from '../components/CraneDistanceChart';
 import CraneDetails from '../components/CraneDetails';
+import ExportModal from '../components/ExportModal';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -35,6 +36,7 @@ export default function CraneOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCrane, setSelectedCrane] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     totalWorkingHours: 0,
     completedHours: 0,
@@ -76,6 +78,11 @@ export default function CraneOverview() {
   // ✅ Handler for crane selection
   const handleCraneSelect = (craneData) => {
     setSelectedCrane(craneData);
+  };
+
+  // ✅ Handler for export modal
+  const handleExportModal = () => {
+    setShowExportModal(true);
   };
 
   // ✅ Define card data for better maintainability
@@ -203,11 +210,37 @@ export default function CraneOverview() {
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
       {/* ✅ Section 1: Header */}
-      <div className="mb-2">
-        <h6 className="mb-0">Crane Overview Dashboard</h6>
-        <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
-          Overview of all crane operations and status
-        </p>
+      <div className="mb-2 d-flex justify-content-between align-items-center">
+        <div>
+          <h6 className="mb-0">Crane Overview Dashboard</h6>
+          <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
+            Overview of all crane operations and status
+          </p>
+        </div>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={handleExportModal}
+          style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '8px 16px',
+            fontSize: '0.8rem',
+            fontWeight: '500',
+            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.transform = 'translateY(-2px)';
+            e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+          }}
+        >
+          📊 Export Report
+        </button>
       </div>
 
       {/* ✅ Section 2: Top Row - 4 Summary Cards */}
@@ -320,6 +353,13 @@ export default function CraneOverview() {
           <CraneDetails selectedCrane={selectedCrane} />
         </Col>
       </Row>
+
+      {/* ✅ Export Modal */}
+      <ExportModal 
+        show={showExportModal}
+        onHide={() => setShowExportModal(false)}
+        companyName="Gsn Soln"
+      />
     </Col>
   );
 }

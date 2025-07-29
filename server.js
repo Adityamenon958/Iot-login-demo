@@ -23,7 +23,7 @@ const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
 const CraneLog = require("./backend/models/CraneLog");
-const { calculateAllCraneDistances, getCurrentDateString } = require("./backend/utils/locationUtils");
+const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 
 // ✅ Environment-based timezone helper function
 function getCurrentTimeInIST() {
@@ -114,7 +114,8 @@ function calculateConsecutivePeriods(logs, statusType) {
     currentPeriod.isOngoing = true;
     currentPeriod.endTime = null;
     currentPeriod.endTimestamp = null;
-    currentPeriod.duration = null; // Will be calculated later
+    // ✅ Calculate duration for ongoing sessions using current time
+    currentPeriod.duration = calculatePeriodDuration(currentPeriod.startTime, getCurrentTimeInIST(), true);
     periods.push(currentPeriod);
   }
   
@@ -601,6 +602,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         activeCranes: 0,
         inactiveCranes: 0,
         underMaintenance: 0,
+        craneDevices: [], // ✅ Add crane devices to response
         quickStats: {
           todayOperations: 0,
           thisWeekOperations: 0,
@@ -800,6 +802,7 @@ if (latestLog.DigitalInput1 === "1") {
       activeCranes,
       inactiveCranes,
       underMaintenance,
+      craneDevices, // ✅ Add crane devices to response
       quickStats: {
         today: todayStats,
         thisWeek: thisWeekStats,
@@ -860,6 +863,400 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
     
   } catch (err) {
     console.error("❌ Crane movement fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ POST: Export comprehensive crane analysis data for PDF generation
+app.post("/api/export/crane-data", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { selectedCranes, selectedMonths } = req.body;
+    
+    console.log('🔍 User requesting comprehensive export data:', { role, companyName, selectedCranes, selectedMonths });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Filter by selected cranes if specified
+    const craneFilter = selectedCranes && selectedCranes.length > 0 
+      ? { DeviceID: { $in: selectedCranes } } 
+      : {};
+    
+    // ✅ Get all crane logs with filters
+    const allCraneLogs = await CraneLog.find({ ...companyFilter, ...craneFilter }).lean();
+    
+    // ✅ Sort logs by timestamp
+    allCraneLogs.sort((a, b) => {
+      const aTimestamp = parseTimestamp(a.Timestamp);
+      const bTimestamp = parseTimestamp(b.Timestamp);
+      if (!aTimestamp || !bTimestamp) return 0;
+      return aTimestamp - bTimestamp;
+    });
+
+    // ✅ 1. Generate Start/Stop Time Sessions
+    const sessionsData = generateSessionsData(allCraneLogs, selectedCranes);
+    
+    // ✅ 2. Generate Cumulative Statistics
+    const cumulativeStats = generateCumulativeStats(allCraneLogs, selectedCranes, selectedMonths);
+    console.log('🔍 Cumulative stats generated:', cumulativeStats);
+    
+    // ✅ 3. Generate Movement Analysis
+    const movementAnalysis = generateMovementAnalysis(allCraneLogs, selectedCranes, selectedMonths);
+    
+    // ✅ 4. Generate Monthly Movement Data
+    const monthlyMovementData = generateMonthlyMovementData(allCraneLogs, selectedCranes, selectedMonths);
+    
+    console.log(`✅ Comprehensive export data prepared: ${sessionsData.length} sessions, ${Object.keys(cumulativeStats).length} stats`);
+    
+    res.json({
+      success: true,
+      sessionsData,
+      cumulativeStats,
+      movementAnalysis,
+      monthlyMovementData,
+      summary: {
+        totalCranes: selectedCranes ? selectedCranes.length : 0,
+        totalMonths: selectedMonths ? selectedMonths.length : 0,
+        totalSessions: sessionsData.length,
+        totalLogs: allCraneLogs.length
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Comprehensive export data fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ Helper function to generate sessions data (start/stop times)
+function generateSessionsData(allCraneLogs, selectedCranes) {
+  const sessionsData = [];
+  
+  for (const craneId of selectedCranes) {
+    const craneLogs = allCraneLogs.filter(log => log.DeviceID === craneId);
+    
+    if (craneLogs.length === 0) continue;
+    
+    // Calculate consecutive periods
+    const workingPeriods = calculateConsecutivePeriods(craneLogs, 'working');
+    const maintenancePeriods = calculateConsecutivePeriods(craneLogs, 'maintenance');
+    
+    // Add working sessions
+    workingPeriods.forEach(period => {
+      if (!period.isOngoing) {
+        sessionsData.push({
+          craneId,
+          sessionType: 'Working',
+          startTime: period.startTimestamp,
+          endTime: period.endTimestamp,
+          duration: period.duration,
+          startLocation: {
+            lat: period.startLocation?.lat || 'N/A',
+            lon: period.startLocation?.lon || 'N/A'
+          },
+          endLocation: {
+            lat: period.endLocation?.lat || 'N/A',
+            lon: period.endLocation?.lon || 'N/A'
+          }
+        });
+      }
+    });
+    
+    // Add maintenance sessions
+    maintenancePeriods.forEach(period => {
+      if (!period.isOngoing) {
+        sessionsData.push({
+          craneId,
+          sessionType: 'Maintenance',
+          startTime: period.startTimestamp,
+          endTime: period.endTimestamp,
+          duration: period.duration,
+          startLocation: {
+            lat: period.startLocation?.lat || 'N/A',
+            lon: period.startLocation?.lon || 'N/A'
+          },
+          endLocation: {
+            lat: period.endLocation?.lat || 'N/A',
+            lon: period.endLocation?.lon || 'N/A'
+          }
+        });
+      }
+    });
+  }
+  
+  return sessionsData;
+}
+
+// ✅ Helper function to generate cumulative statistics
+function generateCumulativeStats(allCraneLogs, selectedCranes, selectedMonths) {
+  const stats = {
+    overall: { 
+      working: 0, 
+      workingCompleted: 0, 
+      workingOngoing: 0,
+      idle: 0, 
+      maintenance: 0, 
+      maintenanceCompleted: 0,
+      maintenanceOngoing: 0,
+      total: 0 
+    },
+    byCrane: {},
+    byPeriod: {
+      daily: {},
+      monthly: {},
+      yearly: {}
+    }
+  };
+  
+  for (const craneId of selectedCranes) {
+    const craneLogs = allCraneLogs.filter(log => log.DeviceID === craneId);
+    
+    if (craneLogs.length === 0) continue;
+    
+    // Calculate periods for this crane
+    const workingPeriods = calculateConsecutivePeriods(craneLogs, 'working');
+    const maintenancePeriods = calculateConsecutivePeriods(craneLogs, 'maintenance');
+    
+    let craneWorkingCompleted = 0;
+    let craneWorkingOngoing = 0;
+    let craneMaintenanceCompleted = 0;
+    let craneMaintenanceOngoing = 0;
+    
+    // Sum up working hours (separate completed vs ongoing)
+    console.log(`🔍 Processing ${workingPeriods.length} working periods for ${craneId}:`, workingPeriods);
+    workingPeriods.forEach(period => {
+      if (period.isOngoing) {
+        craneWorkingOngoing += period.duration;
+        console.log(`  ✅ Ongoing period: ${period.duration}h`);
+      } else {
+        craneWorkingCompleted += period.duration;
+        console.log(`  ✅ Completed period: ${period.duration}h`);
+      }
+    });
+    
+    // Sum up maintenance hours (separate completed vs ongoing)
+    maintenancePeriods.forEach(period => {
+      if (period.isOngoing) {
+        craneMaintenanceOngoing += period.duration;
+      } else {
+        craneMaintenanceCompleted += period.duration;
+      }
+    });
+    
+    const totalWorking = craneWorkingCompleted + craneWorkingOngoing;
+    const totalMaintenance = craneMaintenanceCompleted + craneMaintenanceOngoing;
+    
+    // Calculate idle time (assuming 24 hours per day for the period)
+    const totalDays = selectedMonths.length * 30; // Approximate
+    const totalHours = totalDays * 24;
+    const craneIdle = totalHours - totalWorking - totalMaintenance;
+    
+    // Store crane stats
+    stats.byCrane[craneId] = {
+      working: Math.round(totalWorking * 100) / 100,
+      workingCompleted: Math.round(craneWorkingCompleted * 100) / 100,
+      workingOngoing: Math.round(craneWorkingOngoing * 100) / 100,
+      idle: Math.round(craneIdle * 100) / 100,
+      maintenance: Math.round(totalMaintenance * 100) / 100,
+      maintenanceCompleted: Math.round(craneMaintenanceCompleted * 100) / 100,
+      maintenanceOngoing: Math.round(craneMaintenanceOngoing * 100) / 100,
+      total: Math.round((totalWorking + craneIdle + totalMaintenance) * 100) / 100
+    };
+    
+    // Add to overall stats
+    stats.overall.working += totalWorking;
+    stats.overall.workingCompleted += craneWorkingCompleted;
+    stats.overall.workingOngoing += craneWorkingOngoing;
+    stats.overall.idle += craneIdle;
+    stats.overall.maintenance += totalMaintenance;
+    stats.overall.maintenanceCompleted += craneMaintenanceCompleted;
+    stats.overall.maintenanceOngoing += craneMaintenanceOngoing;
+  }
+  
+  stats.overall.total = stats.overall.working + stats.overall.idle + stats.overall.maintenance;
+  
+  return stats;
+}
+
+// ✅ Helper function to generate movement analysis
+function generateMovementAnalysis(allCraneLogs, selectedCranes, selectedMonths) {
+  const movementData = {
+    byCrane: {},
+    byPeriod: {
+      daily: {},
+      weekly: {},
+      monthly: {}
+    }
+  };
+  
+  for (const craneId of selectedCranes) {
+    const craneLogs = allCraneLogs.filter(log => log.DeviceID === craneId);
+    
+    if (craneLogs.length === 0) continue;
+    
+    // Calculate total distance for this crane
+    let totalDistance = 0;
+    const movements = [];
+    
+    for (let i = 1; i < craneLogs.length; i++) {
+      const prevLog = craneLogs[i - 1];
+      const currLog = craneLogs[i];
+      
+      if (validateGPSData(prevLog.Latitude, prevLog.Longitude) && 
+          validateGPSData(currLog.Latitude, currLog.Longitude)) {
+        
+        const distance = calculateDistance(
+          parseFloat(prevLog.Latitude), 
+          parseFloat(prevLog.Longitude),
+          parseFloat(currLog.Latitude), 
+          parseFloat(currLog.Longitude)
+        );
+        
+        totalDistance += distance;
+        
+        movements.push({
+          from: {
+            lat: prevLog.Latitude,
+            lon: prevLog.Longitude,
+            timestamp: prevLog.Timestamp
+          },
+          to: {
+            lat: currLog.Latitude,
+            lon: currLog.Longitude,
+            timestamp: currLog.Timestamp
+          },
+          distance: Math.round(distance * 100) / 100
+        });
+      }
+    }
+    
+    movementData.byCrane[craneId] = {
+      totalDistance: Math.round(totalDistance * 100) / 100,
+      totalMovements: movements.length,
+      averageDistancePerMovement: movements.length > 0 ? Math.round((totalDistance / movements.length) * 100) / 100 : 0,
+      movements: movements
+    };
+  }
+  
+  return movementData;
+}
+
+// ✅ Helper function to generate monthly movement data
+function generateMonthlyMovementData(allCraneLogs, selectedCranes, selectedMonths) {
+  const monthlyData = {};
+  
+  for (const monthStr of selectedMonths) {
+    try {
+      const date = new Date(monthStr + ' 1, 2025');
+      const targetDate = date.toLocaleDateString('en-GB');
+      
+      // Filter logs for this month
+      const monthLogs = allCraneLogs.filter(log => {
+        const logDate = log.Timestamp.split(' ')[0];
+        return logDate === targetDate;
+      });
+      
+      if (monthLogs.length > 0) {
+        // Calculate distances for this month
+        const { craneDistances, totalDistance, averageDistance } = calculateAllCraneDistances(monthLogs, targetDate);
+        
+        monthlyData[monthStr] = {
+          craneDistances,
+          totalDistance,
+          averageDistance,
+          totalLogs: monthLogs.length
+        };
+      }
+    } catch (err) {
+      console.error(`❌ Error processing month ${monthStr}:`, err);
+    }
+  }
+  
+  return monthlyData;
+}
+
+// ✅ GET: Fetch crane logs for export functionality
+app.get("/api/crane/logs", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 User requesting crane logs for export:', { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get all crane logs for this company
+    const craneLogs = await CraneLog.find(companyFilter).lean();
+    
+    console.log(`✅ Crane logs fetched: ${craneLogs.length} records`);
+    
+    res.json({
+      success: true,
+      logs: craneLogs,
+      totalLogs: craneLogs.length
+    });
+    
+  } catch (err) {
+    console.error("❌ Crane logs fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET: Fetch available months with data for specific cranes
+app.get("/api/crane/available-months", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { cranes } = req.query; // Comma-separated crane IDs
+    
+    console.log('🔍 User requesting available months:', { role, companyName, cranes });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Filter by selected cranes if specified
+    const craneFilter = cranes && cranes.length > 0 
+      ? { DeviceID: { $in: cranes.split(',') } } 
+      : {};
+    
+    // ✅ Get crane logs with filters
+    const craneLogs = await CraneLog.find({ ...companyFilter, ...craneFilter }).lean();
+    
+    // ✅ Extract unique months from logs
+    const monthSet = new Set();
+    
+    craneLogs.forEach(log => {
+      try {
+        const [datePart] = log.Timestamp.split(' ');
+        const [day, month, year] = datePart.split('/').map(Number);
+        const date = new Date(year, month - 1, day);
+        const monthYear = date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long' 
+        });
+        monthSet.add(monthYear);
+      } catch (err) {
+        console.error('❌ Error parsing timestamp:', log.Timestamp);
+      }
+    });
+    
+    // ✅ Convert to sorted array
+    const availableMonths = Array.from(monthSet).sort((a, b) => {
+      const dateA = new Date(a + ' 1, 2025');
+      const dateB = new Date(b + ' 1, 2025');
+      return dateA - dateB;
+    });
+    
+    console.log(`✅ Available months found: ${availableMonths.length} months`);
+    
+    res.json({
+      success: true,
+      availableMonths,
+      totalMonths: availableMonths.length
+    });
+    
+  } catch (err) {
+    console.error("❌ Available months fetch error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
