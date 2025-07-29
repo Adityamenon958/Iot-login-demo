@@ -13,6 +13,8 @@ import CraneBarChart from '../components/CraneBarChart';
 import PreviousMonthStats from '../components/PreviousMonthStats';
 // ✅ Import MaintenanceUpdates component
 import MaintenanceUpdates from '../components/MaintenanceUpdates';
+import CraneDistanceChart from '../components/CraneDistanceChart';
+import CraneDetails from '../components/CraneDetails';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -32,6 +34,7 @@ function formatHoursToHoursMinutes(decimalHours) {
 export default function CraneOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedCrane, setSelectedCrane] = useState(null);
   const [dashboardData, setDashboardData] = useState({
     totalWorkingHours: 0,
     completedHours: 0,
@@ -69,6 +72,11 @@ export default function CraneOverview() {
 
     fetchCraneOverview();
   }, []);
+
+  // ✅ Handler for crane selection
+  const handleCraneSelect = (craneData) => {
+    setSelectedCrane(craneData);
+  };
 
   // ✅ Define card data for better maintainability
   const summaryCards = [
@@ -297,6 +305,19 @@ export default function CraneOverview() {
               <MaintenanceUpdates />
             </Col>
           </Row>
+        </Col>
+      </Row>
+
+      {/* ✅ Section 4: Movement Tracking - Full Row with Two Columns */}
+      <Row className="mt-4">
+        {/* Left Column - Distance Chart */}
+        <Col xs={12} lg={7} className="mb-3">
+          <CraneDistanceChart onCraneSelect={handleCraneSelect} />
+        </Col>
+        
+        {/* Right Column - Crane Details */}
+        <Col xs={12} lg={5} className="mb-3">
+          <CraneDetails selectedCrane={selectedCrane} />
         </Col>
       </Row>
     </Col>

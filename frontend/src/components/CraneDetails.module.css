@@ -1,0 +1,332 @@
+.detailsCard {
+  height: 100%;
+  min-height: 400px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.detailsCard:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.detailsCard .card-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+  border: none;
+  padding: 16px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.detailsCard .card-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 3s infinite;
+}
+
+.detailsCard .card-header h6 {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  z-index: 1;
+}
+
+.detailsCard .card-body {
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+  transition: all 0.3s ease;
+}
+
+.sectionHeader:hover {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e3e8ff 100%);
+  transform: translateX(4px);
+}
+
+.sectionHeader h6 {
+  font-weight: 600;
+  font-size: 0.8rem;
+  margin: 0;
+  color: #2c3e50;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sectionHeader svg {
+  color: #667eea;
+  margin-right: 12px;
+}
+
+.distanceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f3f4;
+  transition: all 0.3s ease;
+}
+
+.distanceRow:hover {
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f4ff 100%);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0 -12px;
+}
+
+.distanceRow:last-child {
+  border-bottom: none;
+}
+
+.distanceLabel {
+  font-size: 0.7rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.distanceValue {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.distanceValue.highlight {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
+.locationCard {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.locationCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
+  border-color: #667eea;
+}
+
+.locationLabel {
+  font-size: 0.6rem;
+  color: #6c757d;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.locationCoordinates {
+  font-size: 0.65rem;
+  color: #2c3e50;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.locationTimestamp {
+  font-size: 0.55rem;
+  color: #6c757d;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.activityBadge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  margin-top: 8px;
+  display: inline-block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.activityBadge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.statItem {
+  padding: 16px 8px;
+  text-align: center;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 10px;
+  border: 1px solid #e9ecef;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.statItem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.statItem:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15);
+  border-color: #667eea;
+}
+
+.statItem:hover::before {
+  transform: scaleX(1);
+}
+
+.statValue {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  z-index: 1;
+}
+
+.statLabel {
+  font-size: 0.65rem;
+  color: #6c757d;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  z-index: 1;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 2px dashed #dee2e6;
+  transition: all 0.3s ease;
+}
+
+.emptyState:hover {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f0f4ff 0%, #e3e8ff 100%);
+}
+
+.emptyState svg {
+  color: #6c757d;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.emptyState:hover svg {
+  color: #667eea;
+  transform: scale(1.1);
+}
+
+.emptyState p {
+  color: #6c757d;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .detailsCard {
+    border-radius: 8px;
+  }
+  
+  .detailsCard .card-header {
+    border-radius: 8px 8px 0 0;
+    padding: 12px 16px;
+  }
+  
+  .detailsCard .card-body {
+    padding: 16px;
+  }
+  
+  .sectionHeader {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  
+  .sectionHeader h6 {
+    font-size: 0.75rem;
+  }
+  
+  .distanceRow {
+    padding: 6px 0;
+  }
+  
+  .distanceLabel {
+    font-size: 0.65rem;
+  }
+  
+  .distanceValue {
+    font-size: 0.75rem;
+  }
+  
+  .locationCard {
+    padding: 10px;
+  }
+  
+  .locationCoordinates {
+    font-size: 0.6rem;
+  }
+  
+  .statValue {
+    font-size: 1.1rem;
+  }
+  
+  .statLabel {
+    font-size: 0.6rem;
+  }
+  
+  .statItem {
+    padding: 12px 6px;
+  }
+} 

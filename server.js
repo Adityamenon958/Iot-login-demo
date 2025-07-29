@@ -23,6 +23,7 @@ const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
 const CraneLog = require("./backend/models/CraneLog");
+const { calculateAllCraneDistances, getCurrentDateString } = require("./backend/utils/locationUtils");
 
 // ✅ Environment-based timezone helper function
 function getCurrentTimeInIST() {
@@ -671,7 +672,7 @@ if (latestLog.DigitalInput1 === "1") {
     const now = getCurrentTimeInIST();
     const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
     
-    console.log(`�� DEBUG: Latest time parsed: ${latestTime}`);
+    console.log(`�� DEBUG: Latest time parsed: ${latestTimeIST}`);
     console.log(`🔍 DEBUG: Current time: ${now}`);
     console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
     
@@ -727,41 +728,46 @@ if (latestLog.DigitalInput1 === "1") {
       for (const deviceId of craneDevices) {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
         
-        // Get logs within the period - Filter by actual Timestamp, not createdAt
-        const periodLogs = await CraneLog.find(deviceFilter).lean();
+        // Get ALL logs for this device (not just within period)
+        const allDeviceLogs = await CraneLog.find(deviceFilter).lean();
         
-        // Filter by timestamp after fetching
-        const filteredPeriodLogs = periodLogs.filter(log => {
-          const logTime = parseTimestamp(log.Timestamp);
-          if (!logTime) return false;
-          return logTime >= startDate && logTime <= endDate;
-        });
-
-        if (filteredPeriodLogs.length === 0) continue;
-
         // Sort by timestamp
-        filteredPeriodLogs.sort((a, b) => {
+        allDeviceLogs.sort((a, b) => {
           const aTimestamp = parseTimestamp(a.Timestamp);
           const bTimestamp = parseTimestamp(b.Timestamp);
           if (!aTimestamp || !bTimestamp) return 0;
           return aTimestamp - bTimestamp;
         });
 
-        // ✅ NEW: Use periodic data logic - Calculate consecutive periods
-        const workingPeriods = calculateConsecutivePeriods(filteredPeriodLogs, 'working');
+        if (allDeviceLogs.length === 0) continue;
 
-        // Process working periods within the period
+        // ✅ NEW: Use periodic data logic - Calculate consecutive periods from ALL logs
+        const workingPeriods = calculateConsecutivePeriods(allDeviceLogs, 'working');
+
+        // Process working periods - check if they overlap with the period
         workingPeriods.forEach(period => {
           if (!period.isOngoing) {
-            // Completed period within the time range
-            periodCompletedHours += period.duration;
+            // Completed period - check if it overlaps with our period
+            const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
+            const periodStart = period.startTime.getTime();
+            const queryStart = startDate.getTime();
+            const queryEnd = endDate.getTime();
+            
+            // Check if period overlaps with query period
+            if (periodStart < queryEnd && periodEnd > queryStart) {
+              // Calculate overlap
+              const overlapStart = Math.max(periodStart, queryStart);
+              const overlapEnd = Math.min(periodEnd, queryEnd);
+              const overlapHours = (overlapEnd - overlapStart) / (1000 * 60 * 60);
+              periodCompletedHours += overlapHours;
+            }
           } else {
             // Ongoing period - check if it started within this period
-            if (period.startTime >= startDate) {
+            if (period.startTime >= startDate && period.startTime <= endDate) {
               // Session started within this period, calculate ongoing hours from period start
               const ongoingDuration = calculatePeriodDuration(period.startTime);
               periodOngoingHours += ongoingDuration;
-            } else {
+            } else if (period.startTime < startDate) {
               // Session started before this period, calculate ongoing hours from period start
               const ongoingDuration = calculatePeriodDuration(startDate);
               periodOngoingHours += ongoingDuration;
@@ -804,6 +810,56 @@ if (latestLog.DigitalInput1 === "1") {
 
   } catch (err) {
     console.error("❌ Crane overview fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET: Fetch crane daily movement distances
+app.get("/api/crane/movement", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { date } = req.query;
+    
+    console.log('🔍 User requesting crane movement data:', { role, companyName, date });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Use provided date or current date
+    const targetDate = date || getCurrentDateString();
+    
+    // ✅ Get all crane logs for the target date
+    const allCraneLogs = await CraneLog.find(companyFilter).lean();
+    
+    // ✅ Filter logs for the target date
+    const dateFilteredLogs = allCraneLogs.filter(log => {
+      const logDate = log.Timestamp.split(' ')[0]; // Extract date part
+      return logDate === targetDate;
+    });
+    
+    if (dateFilteredLogs.length === 0) {
+      return res.json({
+        date: targetDate,
+        craneDistances: {},
+        totalDistance: 0,
+        averageDistance: 0
+      });
+    }
+    
+    // ✅ Calculate distances using location utils
+    const { craneDistances, totalDistance, averageDistance } = calculateAllCraneDistances(dateFilteredLogs, targetDate);
+    
+    console.log(`✅ Crane movement data calculated for ${Object.keys(craneDistances).length} cranes on ${targetDate}`);
+    
+    res.json({
+      date: targetDate,
+      craneDistances,
+      totalDistance,
+      averageDistance
+    });
+    
+  } catch (err) {
+    console.error("❌ Crane movement fetch error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
