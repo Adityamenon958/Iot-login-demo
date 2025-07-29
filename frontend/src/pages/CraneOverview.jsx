@@ -258,14 +258,15 @@ export default function CraneOverview() {
                 Crane Activity Trend
               </h6>
             </Card.Header>
-            <Card.Body className="p-2" style={{ height: '150px', padding: '8px !important' }}>
+            <Card.Body className="p-2" style={{ padding: '8px !important', minHeight: '400px' }}>
               {/* Upper Half - Line Chart Section */}
               <div 
                 style={{ 
-                  height: '50%', 
+                  height: '50%',
                   backgroundColor: '#f8f9fa',
                   borderBottom: '1px solid #dee2e6',
-                  marginBottom: '4px'
+                  marginBottom: '4px',
+                  minHeight: '180px'
                 }}
               >
                 <MonthlyChart />
@@ -274,8 +275,9 @@ export default function CraneOverview() {
               {/* Lower Half - Bar Chart Section */}
               <div 
                 style={{ 
-                  height: '50%', 
-                  backgroundColor: '#f8f9fa' 
+                  height: '50%',
+                  backgroundColor: '#f8f9fa',
+                  minHeight: '180px'
                 }}
               >
                 <CraneBarChart />
