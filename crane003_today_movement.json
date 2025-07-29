@@ -1,0 +1,38 @@
+[
+  {
+    "craneCompany": "Gsn Soln",
+    "DeviceID": "CRANE003",
+    "Timestamp": "29/07/2025 06:00:00",
+    "Longitude": "77.2090",
+    "Latitude": "28.6139",
+    "DigitalInput1": "1",
+    "DigitalInput2": "0"
+  },
+  {
+    "craneCompany": "Gsn Soln",
+    "DeviceID": "CRANE003",
+    "Timestamp": "29/07/2025 06:15:00",
+    "Longitude": "77.2093",
+    "Latitude": "28.6142",
+    "DigitalInput1": "1",
+    "DigitalInput2": "0"
+  },
+  {
+    "craneCompany": "Gsn Soln",
+    "DeviceID": "CRANE003",
+    "Timestamp": "29/07/2025 06:30:00",
+    "Longitude": "77.2098",
+    "Latitude": "28.6144",
+    "DigitalInput1": "1",
+    "DigitalInput2": "0"
+  },
+  {
+    "craneCompany": "Gsn Soln",
+    "DeviceID": "CRANE003",
+    "Timestamp": "29/07/2025 06:45:00",
+    "Longitude": "77.2102",
+    "Latitude": "28.6146",
+    "DigitalInput1": "1",
+    "DigitalInput2": "0"
+  }
+] 

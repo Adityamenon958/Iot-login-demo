@@ -472,6 +472,12 @@
     }
   }
 
+  @media (max-width: 799px) {
+    .main, .mainCO, .craneMain, .dynamicDbMain {
+      width: 100% !important;
+    }
+  }
+
     @media (max-width: 992px) {
       .panelLCAT{
         margin-top: 6px;

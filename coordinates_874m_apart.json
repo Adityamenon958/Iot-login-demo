@@ -1,0 +1,14 @@
+[
+  {
+    "pointId": "POINT_A",
+    "latitude": "28.6139",
+    "longitude": "77.2090",
+    "description": "Base position - Delhi area"
+  },
+  {
+    "pointId": "POINT_B",
+    "latitude": "28.6218",
+    "longitude": "77.2090", 
+    "description": "874m North of POINT_A"
+  }
+] 
