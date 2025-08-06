@@ -75,7 +75,8 @@ function calculateConsecutivePeriods(logs, statusType) {
     
     // Determine status based on statusType
     if (statusType === 'working') {
-      currentStatus = log.DigitalInput1;
+      // ✅ NEW: Exclude periods where both inputs are "1" (maintenance priority)
+      currentStatus = (log.DigitalInput1 === "1" && log.DigitalInput2 === "0") ? "1" : "0";
     } else if (statusType === 'maintenance') {
       currentStatus = log.DigitalInput2;
     } else if (statusType === 'idle') {
@@ -786,11 +787,11 @@ if (latestLog.DigitalInput1 === "1") {
   console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
 }
 
-      // ✅ Check current status for crane counts
-      if (latestLog.DigitalInput1 === "1") {
-        activeCranes++;
-      } else if (latestLog.DigitalInput2 === "1") {
+      // ✅ Check current status for crane counts (MAINTENANCE PRIORITY)
+      if (latestLog.DigitalInput2 === "1") {
         underMaintenance++;
+      } else if (latestLog.DigitalInput1 === "1") {
+        activeCranes++;
       } else {
         inactiveCranes++;
       }
@@ -2097,14 +2098,14 @@ app.get("/api/crane/status", authenticateToken, async (req, res) => {
     let isOperating = false;
     let isDown = false;
     
-    if (latestLog.DigitalInput1 === "1") {
-      status = "Operating";
-      statusColor = "success";
-      isOperating = true;
-    } else if (latestLog.DigitalInput2 === "1") {
+    if (latestLog.DigitalInput2 === "1") {
       status = "Maintenance";
       statusColor = "warning";
       isDown = true;
+    } else if (latestLog.DigitalInput1 === "1") {
+      status = "Operating";
+      statusColor = "success";
+      isOperating = true;
     } else {
       status = "Idle";
       statusColor = "info";
