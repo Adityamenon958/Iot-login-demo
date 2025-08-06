@@ -517,7 +517,7 @@ app.delete('/api/devices/:id', async (req, res) => {
   }
 });
 
-// ✅ POST: Receive crane data from edge device/router (DEBUG VERSION)
+// ✅ POST: Receive crane data from edge device/router (UPDATED FOR NEW FORMAT)
 app.post("/api/crane/log", async (req, res) => {
   try {
     console.log('🔍 DEBUG - Request headers:', req.headers);
@@ -525,42 +525,61 @@ app.post("/api/crane/log", async (req, res) => {
     console.log('🔍 DEBUG - Request body:', JSON.stringify(req.body, null, 2));
     console.log('🔍 DEBUG - Request body keys:', Object.keys(req.body || {}));
     
-    // ✅ Extract data from request body
-    const { craneCompany, DeviceID, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
+    let transformedData = null;
     
-    console.log('🔍 DEBUG - Extracted values:');
-    console.log('  craneCompany:', craneCompany);
-    console.log('  DeviceID:', DeviceID);
-    console.log('  Timestamp:', Timestamp);
-    console.log('  Longitude:', Longitude);
-    console.log('  Latitude:', Latitude);
-    console.log('  DigitalInput1:', DigitalInput1);
-    console.log('  DigitalInput2:', DigitalInput2);
+    // ✅ Check if this is the new format (array of objects with dataType)
+    if (Array.isArray(req.body) && req.body.length > 0 && req.body[0].dataType) {
+      console.log('🔄 Processing NEW format data...');
+      
+      // ✅ Transform new format to old format
+      transformedData = transformNewFormatToOld(req.body);
+      
+      console.log('✅ Transformed data:', transformedData);
+      
+    } else {
+      console.log('🔄 Processing OLD format data...');
+      
+      // ✅ Use existing format directly
+      const { craneCompany, DeviceID, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
+      
+      transformedData = {
+        craneCompany,
+        DeviceID,
+        Timestamp,
+        Longitude,
+        Latitude,
+        DigitalInput1,
+        DigitalInput2
+      };
+    }
+    
+    console.log('🔍 DEBUG - Final extracted values:');
+    console.log('  craneCompany:', transformedData.craneCompany);
+    console.log('  DeviceID:', transformedData.DeviceID);
+    console.log('  Timestamp:', transformedData.Timestamp);
+    console.log('  Longitude:', transformedData.Longitude);
+    console.log('  Latitude:', transformedData.Latitude);
+    console.log('  DigitalInput1:', transformedData.DigitalInput1);
+    console.log('  DigitalInput2:', transformedData.DigitalInput2);
     
     // ✅ Validate required fields
-    if (!craneCompany || !DeviceID || !Timestamp || !Longitude || !Latitude || !DigitalInput1 || !DigitalInput2) {
-      console.log('❌ Missing required fields:', { 
-        craneCompany: !!craneCompany, 
-        DeviceID: !!DeviceID, 
-        Timestamp: !!Timestamp, 
-        Longitude: !!Longitude, 
-        Latitude: !!Latitude, 
-        DigitalInput1: !!DigitalInput1, 
-        DigitalInput2: !!DigitalInput2 
+    if (!transformedData.craneCompany || !transformedData.DeviceID || !transformedData.Timestamp || 
+        !transformedData.Longitude || !transformedData.Latitude || 
+        !transformedData.DigitalInput1 || !transformedData.DigitalInput2) {
+      console.log('❌ Missing required fields after transformation:', { 
+        craneCompany: !!transformedData.craneCompany, 
+        DeviceID: !!transformedData.DeviceID, 
+        Timestamp: !!transformedData.Timestamp, 
+        Longitude: !!transformedData.Longitude, 
+        Latitude: !!transformedData.Latitude, 
+        DigitalInput1: !!transformedData.DigitalInput1, 
+        DigitalInput2: !!transformedData.DigitalInput2 
       });
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: "Missing required fields after transformation" });
     }
 
     // ✅ Create new crane log entry
-    const craneLog = new CraneLog({
-      craneCompany,
-      DeviceID,
-      Timestamp,
-      Longitude,
-      Latitude,
-      DigitalInput1,
-      DigitalInput2
-    });
+    const craneLog = new CraneLog(transformedData);
     
     // ✅ Save to database
     const savedLog = await craneLog.save();
@@ -580,6 +599,75 @@ app.post("/api/crane/log", async (req, res) => {
     res.status(500).json({ error: "Failed to save crane data" });
   }
 });
+
+// ✅ Helper function to transform new format to old format
+function transformNewFormatToOld(dataArray) {
+  try {
+    console.log('🔄 Starting transformation of new format data...');
+    
+    // ✅ Initialize with default values
+    let transformedData = {
+      craneCompany: null,
+      DeviceID: null,
+      Timestamp: null,
+      Longitude: "0.000000",
+      Latitude: "0.000000",
+      DigitalInput1: "0",
+      DigitalInput2: "0"
+    };
+    
+    // ✅ Process each object in the array
+    dataArray.forEach((item, index) => {
+      console.log(`🔍 Processing item ${index + 1}:`, item);
+      
+      // ✅ Extract common fields (should be same for all items)
+      if (!transformedData.craneCompany) transformedData.craneCompany = item.craneCompany;
+      if (!transformedData.DeviceID) transformedData.DeviceID = item.DeviceID;
+      if (!transformedData.Timestamp) transformedData.Timestamp = item.Timestamp;
+      
+      // ✅ Parse data based on dataType
+      try {
+        const parsedData = JSON.parse(item.data);
+        
+        switch (item.dataType) {
+          case "Gps":
+            if (Array.isArray(parsedData) && parsedData.length >= 2) {
+              transformedData.Latitude = parsedData[0].toString();
+              transformedData.Longitude = parsedData[1].toString();
+              console.log(`✅ GPS data parsed: lat=${transformedData.Latitude}, lon=${transformedData.Longitude}`);
+            }
+            break;
+            
+          case "maintenance":
+            if (Array.isArray(parsedData) && parsedData.length >= 1) {
+              transformedData.DigitalInput2 = parsedData[0].toString();
+              console.log(`✅ Maintenance data parsed: DigitalInput2=${transformedData.DigitalInput2}`);
+            }
+            break;
+            
+          case "Ignition":
+            if (Array.isArray(parsedData) && parsedData.length >= 1) {
+              transformedData.DigitalInput1 = parsedData[0].toString();
+              console.log(`✅ Ignition data parsed: DigitalInput1=${transformedData.DigitalInput1}`);
+            }
+            break;
+            
+          default:
+            console.log(`⚠️ Unknown dataType: ${item.dataType}`);
+        }
+      } catch (parseError) {
+        console.error(`❌ Error parsing data for ${item.dataType}:`, parseError);
+      }
+    });
+    
+    console.log('✅ Transformation completed:', transformedData);
+    return transformedData;
+    
+  } catch (error) {
+    console.error('❌ Error in transformNewFormatToOld:', error);
+    throw error;
+  }
+}
 
 // ✅ GET: Fetch crane overview data for dashboard (with periodic data logic)
 app.get("/api/crane/overview", authenticateToken, async (req, res) => {
