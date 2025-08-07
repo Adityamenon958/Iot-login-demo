@@ -37,6 +37,7 @@ export default function CraneOverview() {
   const [error, setError] = useState(null);
   const [selectedCrane, setSelectedCrane] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [dashboardData, setDashboardData] = useState({
     totalWorkingHours: 0,
     completedHours: 0,
@@ -53,7 +54,6 @@ export default function CraneOverview() {
   });
 
   // ✅ Fetch crane overview data from backend
-  useEffect(() => {
     const fetchCraneOverview = async () => {
       try {
         setLoading(true);
@@ -64,6 +64,8 @@ export default function CraneOverview() {
         });
         
         setDashboardData(response.data);
+      setLastUpdated(new Date());
+      console.log('✅ Dashboard data refreshed at:', new Date().toLocaleTimeString());
       } catch (err) {
         console.error('❌ Failed to fetch crane overview:', err);
         setError('Failed to load crane data');
@@ -72,8 +74,24 @@ export default function CraneOverview() {
       }
     };
 
+  // ✅ Initial data fetch
+  useEffect(() => {
     fetchCraneOverview();
   }, []);
+
+  // ✅ Auto-refresh every minute (60 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing dashboard data...');
+      fetchCraneOverview();
+    }, 60000); // 60 seconds = 1 minute
+
+    // ✅ Cleanup interval on component unmount
+    return () => {
+      console.log('🧹 Cleaning up auto-refresh interval');
+      clearInterval(interval);
+    };
+  }, []); // Empty dependency array - runs once on mount
 
   // ✅ Handler for crane selection
   const handleCraneSelect = (craneData) => {
@@ -212,35 +230,60 @@ export default function CraneOverview() {
       {/* ✅ Section 1: Header */}
       <div className="mb-2 d-flex justify-content-between align-items-center">
         <div>
-          <h6 className="mb-0">Crane Overview Dashboard</h6>
-          <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
-            Overview of all crane operations and status
-          </p>
+        <h6 className="mb-0">Crane Overview Dashboard</h6>
+        <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
+          Overview of all crane operations and status
+        </p>
+          {/* ✅ Auto-refresh indicator */}
+          {lastUpdated && (
+            <p className="text-success mb-0" style={{ fontSize: '0.6rem', marginTop: '2px' }}>
+              🔄 Auto-refresh: Last updated at {lastUpdated.toLocaleTimeString()}
+            </p>
+          )}
         </div>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={handleExportModal}
-          style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '8px 16px',
-            fontSize: '0.8rem',
-            fontWeight: '500',
-            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseOver={(e) => {
-            e.target.style.transform = 'translateY(-2px)';
-            e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-          }}
-          onMouseOut={(e) => {
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
-          }}
-        >
-          📊 Export Report
-        </button>
+        <div className="d-flex gap-2">
+          {/* ✅ Manual refresh button */}
+          <button
+            className="btn btn-outline-secondary btn-sm"
+            onClick={fetchCraneOverview}
+            disabled={loading}
+            style={{
+              borderRadius: '8px',
+              padding: '8px 12px',
+              fontSize: '0.8rem',
+              fontWeight: '500',
+              transition: 'all 0.3s ease'
+            }}
+            title="Refresh data now"
+          >
+            {loading ? '🔄' : '🔄'} Refresh
+          </button>
+          
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleExportModal}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '0.8rem',
+              fontWeight: '500',
+              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+            }}
+          >
+            📊 Export Report
+          </button>
+        </div>
       </div>
 
       {/* ✅ Section 2: Top Row - 4 Summary Cards */}
@@ -262,7 +305,7 @@ export default function CraneOverview() {
               {/* Upper Half - Line Chart Section */}
               <div 
                 style={{ 
-                  height: '50%',
+                  height: '50%', 
                   backgroundColor: '#f8f9fa',
                   borderBottom: '1px solid #dee2e6',
                   marginBottom: '4px',
@@ -275,7 +318,7 @@ export default function CraneOverview() {
               {/* Lower Half - Bar Chart Section */}
               <div 
                 style={{ 
-                  height: '50%',
+                  height: '50%', 
                   backgroundColor: '#f8f9fa',
                   minHeight: '180px'
                 }}

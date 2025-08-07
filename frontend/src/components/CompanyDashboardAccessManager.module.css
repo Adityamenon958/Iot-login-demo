@@ -1,0 +1,476 @@
+/* Modern Dashboard Access Manager Styles */
+.dashboardAccessContainer {
+  background: #ffffff;
+  border-radius: 1.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+  margin: 1rem 0;
+}
+
+.headerSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #f0f4f8;
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.headerIcon {
+  font-size: 1.75rem;
+  color: #3b82f6;
+}
+
+.saveAllButton {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  white-space: nowrap;
+}
+
+.saveAllButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+}
+
+.saveAllButton:disabled {
+  background: #94a3b8;
+  transform: none;
+  box-shadow: none;
+}
+
+.companyCard {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.companyCard:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+.companyHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.companyName {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.companyIcon {
+  color: #3b82f6;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.saveButton {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.saveButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.saveButton:disabled {
+  background: #94a3b8;
+  transform: none;
+  box-shadow: none;
+}
+
+.permissionsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.permissionItem {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.permissionItem:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.permissionItem.allowed {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+}
+
+.permissionItem.denied {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%);
+}
+
+.permissionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.permissionName {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.permissionIcon {
+  font-size: 1.1rem;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.permissionControls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.radioGroup {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.radioOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.radioOption:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.radioOption.allow {
+  color: #059669;
+}
+
+.radioOption.deny {
+  color: #dc2626;
+}
+
+.radioOption input[type="radio"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.radioOption.allow input[type="radio"]:checked {
+  accent-color: #10b981;
+}
+
+.radioOption.deny input[type="radio"]:checked {
+  accent-color: #ef4444;
+}
+
+.statusIndicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.statusIndicator.allowed {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.statusIndicator.denied {
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.alertContainer {
+  margin-bottom: 1.5rem;
+}
+
+.alert {
+  border-radius: 0.75rem;
+  border: none;
+  padding: 1rem 1.5rem;
+  font-weight: 500;
+}
+
+.alertSuccess {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  color: #065f46;
+  border-left: 4px solid #10b981;
+}
+
+.alertDanger {
+  background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%);
+  color: #991b1b;
+  border-left: 4px solid #ef4444;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background: #ffffff;
+  border-radius: 1.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.loadingSpinner {
+  color: #3b82f6;
+  margin-bottom: 1rem;
+}
+
+.loadingText {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.accessDeniedContainer {
+  text-align: center;
+  padding: 3rem;
+  background: #ffffff;
+  border-radius: 1.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.accessDeniedIcon {
+  font-size: 3rem;
+  color: #ef4444;
+  margin-bottom: 1rem;
+}
+
+.accessDeniedTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1rem;
+}
+
+.accessDeniedText {
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.accessDeniedRole {
+  background: #f1f5f9;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  display: inline-block;
+  font-weight: 600;
+  color: #374151;
+  margin: 0.5rem;
+}
+
+.noCompaniesContainer {
+  text-align: center;
+  padding: 3rem;
+  background: #ffffff;
+  border-radius: 1.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.noCompaniesIcon {
+  font-size: 3rem;
+  color: #f59e0b;
+  margin-bottom: 1rem;
+}
+
+.noCompaniesTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1rem;
+}
+
+.noCompaniesText {
+  color: #64748b;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .permissionsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .permissionsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+  
+  .headerSection {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  
+  .headerTitle {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboardAccessContainer {
+    padding: 1.5rem;
+    margin: 0.5rem 0;
+  }
+
+  .permissionsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .companyHeader {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .companyName {
+    font-size: 1.1rem;
+  }
+
+  .radioGroup {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .radioOption {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .permissionItem {
+    padding: 0.75rem;
+  }
+
+  .headerTitle {
+    font-size: 1.1rem;
+  }
+
+  .saveAllButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .dashboardAccessContainer {
+    padding: 1rem;
+  }
+
+  .headerTitle {
+    font-size: 1rem;
+  }
+
+  .companyName {
+    font-size: 1rem;
+  }
+
+  .permissionItem {
+    padding: 0.75rem;
+  }
+
+  .radioOption {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .permissionName {
+    font-size: 0.9rem;
+  }
+
+  .saveButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboardAccessContainer {
+    padding: 0.75rem;
+  }
+
+  .companyCard {
+    padding: 1rem;
+  }
+
+  .permissionItem {
+    padding: 0.5rem;
+  }
+
+  .radioOption {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .permissionName {
+    font-size: 0.85rem;
+  }
+} 

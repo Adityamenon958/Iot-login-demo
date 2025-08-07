@@ -23,6 +23,7 @@ const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
 const CraneLog = require("./backend/models/CraneLog");
+const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 
 // ✅ Environment-based timezone helper function
@@ -539,18 +540,18 @@ app.post("/api/crane/log", async (req, res) => {
       
     } else {
       console.log('🔄 Processing OLD format data...');
-      
+    
       // ✅ Use existing format directly
       const { craneCompany, DeviceID, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
       
       transformedData = {
-        craneCompany,
-        DeviceID,
-        Timestamp,
-        Longitude,
-        Latitude,
-        DigitalInput1,
-        DigitalInput2
+      craneCompany,
+      DeviceID,
+      Timestamp,
+      Longitude,
+      Latitude,
+      DigitalInput1,
+      DigitalInput2
       };
     }
     
@@ -821,7 +822,7 @@ if (latestLog.DigitalInput1 === "1") {
         
         // Get ALL logs for this device (not just within period)
         const allDeviceLogs = await CraneLog.find(deviceFilter).lean();
-        
+
         // Sort by timestamp
         allDeviceLogs.sort((a, b) => {
           const aTimestamp = parseTimestamp(a.Timestamp);
@@ -3095,6 +3096,122 @@ app.get("/api/levelsensor/uids", authenticateToken, async (req, res) => {
 
 
 
+
+// ✅ Company Dashboard Access Control APIs
+
+// Get all companies with dashboard access
+app.get("/api/company-dashboard-access", authenticateToken, async (req, res) => {
+  try {
+    const { role } = req.user;
+    
+    if (role !== 'superadmin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all companies from User model (filter out empty/null values)
+    const companies = await User.distinct('companyName');
+    const validCompanies = companies.filter(companyName => 
+      companyName && companyName.trim() !== '' && companyName !== null && companyName !== undefined
+    );
+    
+    console.log('🔍 Found companies:', validCompanies);
+    
+    // Get or create access records for each company
+    const accessData = await Promise.all(
+      validCompanies.map(async (companyName) => {
+        try {
+          let access = await CompanyDashboardAccess.findOne({ companyName });
+          
+          if (!access) {
+            // Create default access
+            access = new CompanyDashboardAccess({
+              companyName: companyName.trim(),
+              dashboardAccess: {
+                home: true,
+                dashboard: true,
+                craneOverview: false,
+                elevatorOverview: false,
+                craneDashboard: false,
+                reports: true,
+                addUsers: true,
+                addDevices: true,
+                subscription: true,
+                settings: true
+              }
+            });
+            await access.save();
+            console.log('✅ Created access record for:', companyName);
+          }
+          
+          return access;
+        } catch (err) {
+          console.error('❌ Error processing company:', companyName, err);
+          return null;
+        }
+      })
+    );
+
+    // Filter out any null results
+    const validAccessData = accessData.filter(access => access !== null);
+
+    res.json({ companies: validAccessData });
+  } catch (err) {
+    console.error('Error fetching company dashboard access:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update company dashboard access
+app.put("/api/company-dashboard-access/:companyName", authenticateToken, async (req, res) => {
+  try {
+    const { role } = req.user;
+    const { companyName } = req.params;
+    const { dashboardAccess } = req.body;
+    
+    if (role !== 'superadmin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const access = await CompanyDashboardAccess.findOneAndUpdate(
+      { companyName },
+      { 
+        dashboardAccess,
+        lastUpdated: new Date(),
+        updatedBy: req.user.email
+      },
+      { new: true, upsert: true }
+    );
+
+    res.json({ success: true, access });
+  } catch (err) {
+    console.error('Error updating company dashboard access:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Check if user can access specific dashboard
+app.get("/api/check-dashboard-access/:dashboardName", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { dashboardName } = req.params;
+    
+    if (role === 'superadmin') {
+      return res.json({ hasAccess: true });
+    }
+
+    const access = await CompanyDashboardAccess.findOne({ companyName });
+    
+    if (!access) {
+      return res.json({ hasAccess: false });
+    }
+
+    const hasAccess = access.dashboardAccess[dashboardName] || false;
+    res.json({ hasAccess });
+  } catch (err) {
+    console.error('Error checking dashboard access:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // ✅ Logout
 app.post('/api/logout', (req, res) => {

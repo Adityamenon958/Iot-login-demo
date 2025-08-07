@@ -13,6 +13,7 @@ import AddDevice from './pages/AddDevices';
 import Subscription from './pages/Subscription';
 import FullPageSpinner from './components/FullPageSpinner';
 import LoginCarousel from './components/LoginCarousel';
+import RouteGuard from './components/RouteGuard';
 import './App.css';
 import DynamicDb from './components/DynamicDb';
 import CraneDashboard from './pages/CraneDashboard';
@@ -44,10 +45,32 @@ function App() {
         <Route path="device" element={<Navigate to="GS-1234" replace />} />
         <Route path="device/:deviceId" element={<DynamicDb />} />
         <Route path="crane" element={<CraneDashboard />} />
-        <Route path="crane-overview" element={<CraneOverview />} />
-        <Route path="elevator-overview" element={<ElevatorOverview />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<Settings />} />
+        
+        {/* ✅ Protected Routes with Access Control */}
+        <Route path="crane-overview" element={
+          <RouteGuard requiredAccess="craneOverview">
+            <CraneOverview />
+          </RouteGuard>
+        } />
+        
+        <Route path="elevator-overview" element={
+          <RouteGuard requiredAccess="elevatorOverview">
+            <ElevatorOverview />
+          </RouteGuard>
+        } />
+        
+        <Route path="reports" element={
+          <RouteGuard requiredAccess="reports">
+            <ReportsPage />
+          </RouteGuard>
+        } />
+        
+        <Route path="settings" element={
+          <RouteGuard requiredAccess="settings">
+            <Settings />
+          </RouteGuard>
+        } />
+        
         <Route
           path="/dashboard/managecompany"
           element={
@@ -56,17 +79,29 @@ function App() {
             </AddUser>
           }
         />
+        
         <Route
           path="/dashboard/adduser"
           element={
+            <RouteGuard requiredAccess="addUsers">
             <AddUser2>
               <AddUserHome />
             </AddUser2>
+            </RouteGuard>
           }
         />
         
-        <Route path="adddevice" element={<AddDevice />} />
-        <Route path="subscription" element={<Subscription />} />
+        <Route path="adddevice" element={
+          <RouteGuard requiredAccess="addDevices">
+            <AddDevice />
+          </RouteGuard>
+        } />
+        
+        <Route path="subscription" element={
+          <RouteGuard requiredAccess="subscription">
+            <Subscription />
+          </RouteGuard>
+        } />
       </Route>
     </Routes>
   );
