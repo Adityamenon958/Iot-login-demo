@@ -108,44 +108,37 @@ export default function Sidebar({ isOpen, closeSidebar }) {
 
   const handleLogout = async () => {
     try {
-      await axios.post('/api/logout', {}, { withCredentials: true }); // ✅ Clears cookie
+      await axios.post('/api/logout', {}, { withCredentials: true });
+      googleLogout();
       navigate('/');
     } catch (err) {
-      console.error("Logout error:", err.message);
-      alert("Logout failed");
+      console.error("Logout failed:", err.message);
+      navigate('/');
     }
   };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        sidebarRef.current &&
-        !sidebarRef.current.contains(event.target) &&
-        isOpen
-      ) {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
         closeSidebar();
       }
     };
 
     if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen, closeSidebar]);
 
-  // Show loading spinner while checking access
-  if (accessLoading && role !== 'superadmin') {
+  if (accessLoading) {
     return (
-      <div className={`${styles.sidebarWrapper} ${isOpen ? styles.open : ''}`} ref={sidebarRef}>
+      <div className={`${styles.sidebarWrapper} ${isOpen ? styles.open : ''}`}>
         <Col xs={12} md={3} lg={2} xl={2} className={`${styles.sidebar} p-0 pt-4`}>
           <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
-            <div className="text-center">
-              <Spinner animation="border" size="sm" />
-              <p className="mt-2" style={{ fontSize: '0.8rem' }}>Loading...</p>
-            </div>
+            <Spinner animation="border" variant="primary" />
           </div>
         </Col>
       </div>
@@ -194,13 +187,6 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           </Button>
           )}
 
-          {role === "superadmin" && (
-            <Button className={`${styles.iconButton2} ${location.pathname === '/dashboard/managecompany' ? styles.active2 : ''}`} onClick={() => navigate('/dashboard/managecompany')}>
-              <HiOutlineOfficeBuilding size={25} className={`${styles.navText} me-2`} />
-              <div className={`${styles.Text} text-nowrap`}>Manage Company</div>
-            </Button>
-          )}
-
           {/* ✅ Manage Company - Superadmin only */}
           {role === "superadmin" && (
             <Button className={`${styles.iconButton2} ${location.pathname === '/dashboard/managecompany' ? styles.active2 : ''}`} onClick={() => navigate('/dashboard/managecompany')}>
@@ -209,8 +195,8 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             </Button>
           )}
 
-          {/* ✅ Add Users - Check access for non-superadmin */}
-          {(role === "admin" && companyAccess.addUsers) && (
+          {/* ✅ Add Users - Check access for non-superadmin OR allow superadmin */}
+          {((role === "admin" && companyAccess.addUsers) || role === "superadmin") && (
             <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adduser' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adduser')} disabled={subscriptionStatus !== 'active'}>
               <UserPlus size={20} className={`${styles.navText} me-2`} />
               Add Users

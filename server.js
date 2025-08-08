@@ -694,9 +694,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         underMaintenance: 0,
         craneDevices: [], // ✅ Add crane devices to response
         quickStats: {
-          todayOperations: 0,
-          thisWeekOperations: 0,
-          thisMonthOperations: 0
+          today: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
+          thisWeek: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
+          thisMonth: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
+          thisYear: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 }
         }
       });
     }
@@ -749,44 +750,44 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       });
 
       // ✅ Check for ongoing session (latest log) - ADD THIS DEBUG
-const latestLog = deviceLogs[deviceLogs.length - 1];
-if (latestLog.DigitalInput1 === "1") {
-  console.log(`🔍 DEBUG: Crane ${deviceId} is currently operating`);
-  console.log(`🔍 DEBUG: Latest timestamp: ${latestLog.Timestamp}`);
-  
-  try {
-    const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-    const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-    const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-    // ✅ Create IST time - keep in IST for ongoing calculation
-    const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-    
-    const now = getCurrentTimeInIST();
-    const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
-    
-    console.log(`�� DEBUG: Latest time parsed: ${latestTimeIST}`);
-    console.log(`🔍 DEBUG: Current time: ${now}`);
-    console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
-    
-    // ✅ Handle ongoing sessions with environment-based timezone logic
-    if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
-      deviceOngoingHours = ongoingHoursDiff;
-      hasOngoingSession = true;
-      console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
-    } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
-      // ✅ Timezone issue - treat as ongoing session from latest timestamp
-      deviceOngoingHours = Math.abs(ongoingHoursDiff);
-      hasOngoingSession = true;
-      console.log(`✅ Crane ${deviceId} ongoing session (timezone adjusted): ${latestLog.Timestamp} to now = ${deviceOngoingHours.toFixed(2)} hours`);
-    } else {
-      console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
-    }
-  } catch (err) {
-    console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
-  }
-} else {
-  console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
-}
+      const latestLog = deviceLogs[deviceLogs.length - 1];
+      if (latestLog.DigitalInput1 === "1") {
+        console.log(`🔍 DEBUG: Crane ${deviceId} is currently operating`);
+        console.log(`🔍 DEBUG: Latest timestamp: ${latestLog.Timestamp}`);
+        
+        try {
+          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+          // ✅ Create IST time - keep in IST for ongoing calculation
+          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+          
+          const now = getCurrentTimeInIST();
+          const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+          
+          console.log(` DEBUG: Latest time parsed: ${latestTimeIST}`);
+          console.log(`🔍 DEBUG: Current time: ${now}`);
+          console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
+          
+          // ✅ Handle ongoing sessions with environment-based timezone logic
+          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
+            deviceOngoingHours = ongoingHoursDiff;
+            hasOngoingSession = true;
+            console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
+          } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
+            // ✅ Timezone issue - treat as ongoing session from latest timestamp
+            deviceOngoingHours = Math.abs(ongoingHoursDiff);
+            hasOngoingSession = true;
+            console.log(`✅ Crane ${deviceId} ongoing session (timezone adjusted): ${latestLog.Timestamp} to now = ${deviceOngoingHours.toFixed(2)} hours`);
+          } else {
+            console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
+          }
+        } catch (err) {
+          console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
+        }
+      } else {
+        console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
+      }
 
       // ✅ Check current status for crane counts (MAINTENANCE PRIORITY)
       if (latestLog.DigitalInput2 === "1") {
@@ -805,25 +806,35 @@ if (latestLog.DigitalInput1 === "1") {
       console.log(`📊 Crane ${deviceId} summary: ${deviceCompletedHours.toFixed(2)}h completed + ${deviceOngoingHours.toFixed(2)}h ongoing`);
     }
 
-    // ✅ Calculate period-based working hours
+    // ✅ Calculate period-based metrics (working, maintenance, idle)
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1); // ✅ First day of current month
     const yearStart = new Date(now.getFullYear(), 0, 1); // January 1st of current year
 
-    // ✅ NEW: Helper function to calculate working hours for a period using periodic data logic
-    async function calculateWorkingHoursForPeriod(startDate, endDate = getCurrentTimeInIST()) {
-      let periodCompletedHours = 0;
-      let periodOngoingHours = 0;
+    function overlapHours(period, startDate, endDate) {
+      const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
+      const periodStart = period.startTime.getTime();
+      const queryStart = startDate.getTime();
+      const queryEnd = endDate.getTime();
+      if (periodStart < queryEnd && periodEnd > queryStart) {
+        const overlapStart = Math.max(periodStart, queryStart);
+        const overlapEnd = Math.min(periodEnd, queryEnd);
+        return (overlapEnd - overlapStart) / (1000 * 60 * 60);
+      }
+      return 0;
+    }
+
+    async function calculateMetricsForPeriod(startDate, endDate = getCurrentTimeInIST()) {
+      let workingCompleted = 0, workingOngoing = 0;
+      let maintenanceCompleted = 0, maintenanceOngoing = 0;
+      let idleTotal = 0;
+      const periodHours = (endDate - startDate) / (1000 * 60 * 60);
 
       for (const deviceId of craneDevices) {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
-        
-        // Get ALL logs for this device (not just within period)
         const allDeviceLogs = await CraneLog.find(deviceFilter).lean();
-
-        // Sort by timestamp
         allDeviceLogs.sort((a, b) => {
           const aTimestamp = parseTimestamp(a.Timestamp);
           const bTimestamp = parseTimestamp(b.Timestamp);
@@ -831,56 +842,75 @@ if (latestLog.DigitalInput1 === "1") {
           return aTimestamp - bTimestamp;
         });
 
-        if (allDeviceLogs.length === 0) continue;
+        // If no logs for this device → the entire period is idle for this device
+        if (allDeviceLogs.length === 0) { 
+          idleTotal += Math.max(0, periodHours); 
+          continue; 
+        }
 
-        // ✅ NEW: Use periodic data logic - Calculate consecutive periods from ALL logs
         const workingPeriods = calculateConsecutivePeriods(allDeviceLogs, 'working');
+        const maintenancePeriods = calculateConsecutivePeriods(allDeviceLogs, 'maintenance');
 
-        // Process working periods - check if they overlap with the period
+        // Per-device accumulators
+        let dWorkingCompleted = 0, dWorkingOngoing = 0;
+        let dMaintenanceCompleted = 0, dMaintenanceOngoing = 0;
+
+        // Working periods (per device)
         workingPeriods.forEach(period => {
           if (!period.isOngoing) {
-            // Completed period - check if it overlaps with our period
-            const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
-            const periodStart = period.startTime.getTime();
-            const queryStart = startDate.getTime();
-            const queryEnd = endDate.getTime();
-            
-            // Check if period overlaps with query period
-            if (periodStart < queryEnd && periodEnd > queryStart) {
-              // Calculate overlap
-              const overlapStart = Math.max(periodStart, queryStart);
-              const overlapEnd = Math.min(periodEnd, queryEnd);
-              const overlapHours = (overlapEnd - overlapStart) / (1000 * 60 * 60);
-              periodCompletedHours += overlapHours;
-            }
+            dWorkingCompleted += overlapHours(period, startDate, endDate);
           } else {
-            // Ongoing period - check if it started within this period
-            if (period.startTime >= startDate && period.startTime <= endDate) {
-              // Session started within this period, calculate ongoing hours from period start
-              const ongoingDuration = calculatePeriodDuration(period.startTime);
-              periodOngoingHours += ongoingDuration;
-            } else if (period.startTime < startDate) {
-              // Session started before this period, calculate ongoing hours from period start
-              const ongoingDuration = calculatePeriodDuration(startDate);
-              periodOngoingHours += ongoingDuration;
-            }
+            const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
+            const duration = calculatePeriodDuration(effectiveStart, endDate, true);
+            dWorkingOngoing += duration;
           }
         });
+
+        // Maintenance periods (per device)
+        maintenancePeriods.forEach(period => {
+          if (!period.isOngoing) {
+            dMaintenanceCompleted += overlapHours(period, startDate, endDate);
+          } else {
+            const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
+            const duration = calculatePeriodDuration(effectiveStart, endDate, true);
+            dMaintenanceOngoing += duration;
+          }
+        });
+
+        // Compute per-device idle using per-device totals only
+        const deviceWorking = dWorkingCompleted + dWorkingOngoing;
+        const deviceMaintenance = dMaintenanceCompleted + dMaintenanceOngoing;
+        const deviceIdle = Math.max(0, periodHours - deviceWorking - deviceMaintenance);
+        idleTotal += deviceIdle;
+
+        // Add per-device totals to global totals
+        workingCompleted += dWorkingCompleted;
+        workingOngoing += dWorkingOngoing;
+        maintenanceCompleted += dMaintenanceCompleted;
+        maintenanceOngoing += dMaintenanceOngoing;
       }
 
       return {
-        completed: Math.round(periodCompletedHours * 100) / 100,
-        ongoing: Math.round(periodOngoingHours * 100) / 100,
-        total: Math.round((periodCompletedHours + periodOngoingHours) * 100) / 100
+        working: {
+          completed: Math.round(workingCompleted * 100) / 100,
+          ongoing: Math.round(workingOngoing * 100) / 100,
+          total: Math.round((workingCompleted + workingOngoing) * 100) / 100
+        },
+        maintenance: {
+          completed: Math.round(maintenanceCompleted * 100) / 100,
+          ongoing: Math.round(maintenanceOngoing * 100) / 100,
+          total: Math.round((maintenanceCompleted + maintenanceOngoing) * 100) / 100
+        },
+        idle: Math.round(idleTotal * 100) / 100
       };
     }
 
-    // ✅ Calculate working hours for all periods
-    const [todayStats, thisWeekStats, thisMonthStats, thisYearStats] = await Promise.all([
-      calculateWorkingHoursForPeriod(today),
-      calculateWorkingHoursForPeriod(weekAgo),
-      calculateWorkingHoursForPeriod(currentMonthStart), // ✅ Use current month start (July 1st)
-      calculateWorkingHoursForPeriod(yearStart)
+    // ✅ Calculate metrics for all periods in parallel
+    const [todayMetrics, weekMetrics, monthMetrics, yearMetrics] = await Promise.all([
+      calculateMetricsForPeriod(today),
+      calculateMetricsForPeriod(weekAgo),
+      calculateMetricsForPeriod(currentMonthStart),
+      calculateMetricsForPeriod(yearStart)
     ]);
 
     console.log(`📊 Final totals: ${completedHours.toFixed(2)}h completed + ${ongoingHours.toFixed(2)}h ongoing = ${totalWorkingHours.toFixed(2)}h total`);
@@ -894,10 +924,10 @@ if (latestLog.DigitalInput1 === "1") {
       underMaintenance,
       craneDevices, // ✅ Add crane devices to response
       quickStats: {
-        today: todayStats,
-        thisWeek: thisWeekStats,
-        thisMonth: thisMonthStats,
-        thisYear: thisYearStats
+        today: { completed: todayMetrics.working.completed, ongoing: todayMetrics.working.ongoing, maintenance: todayMetrics.maintenance.total, idle: todayMetrics.idle },
+        thisWeek: { completed: weekMetrics.working.completed, ongoing: weekMetrics.working.ongoing, maintenance: weekMetrics.maintenance.total, idle: weekMetrics.idle },
+        thisMonth: { completed: monthMetrics.working.completed, ongoing: monthMetrics.working.ongoing, maintenance: monthMetrics.maintenance.total, idle: monthMetrics.idle },
+        thisYear: { completed: yearMetrics.working.completed, ongoing: yearMetrics.working.ongoing, maintenance: yearMetrics.maintenance.total, idle: yearMetrics.idle }
       }
     });
 
@@ -921,6 +951,18 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
     // ✅ Use provided date or current date
     const targetDate = date || getCurrentDateString();
     
+    // ✅ Get all crane devices for this company (from crane overview logic)
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    if (craneDevices.length === 0) {
+      return res.json({
+        date: targetDate,
+        craneDistances: {},
+        totalDistance: 0,
+        averageDistance: 0
+      });
+    }
+    
     // ✅ Get all crane logs for the target date
     const allCraneLogs = await CraneLog.find(companyFilter).lean();
     
@@ -930,23 +972,60 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
       return logDate === targetDate;
     });
     
-    if (dateFilteredLogs.length === 0) {
-      return res.json({
-        date: targetDate,
-        craneDistances: {},
-        totalDistance: 0,
-        averageDistance: 0
-      });
-    }
-    
     // ✅ Calculate distances using location utils
     const { craneDistances, totalDistance, averageDistance } = calculateAllCraneDistances(dateFilteredLogs, targetDate);
     
-    console.log(`✅ Crane movement data calculated for ${Object.keys(craneDistances).length} cranes on ${targetDate}`);
+    // ✅ NEW: Ensure ALL cranes are included (even with 0m distance)
+    const completeCraneDistances = {};
+    
+    // ✅ Add cranes with movement data
+    Object.keys(craneDistances).forEach(deviceId => {
+      completeCraneDistances[deviceId] = craneDistances[deviceId];
+    });
+    
+    // ✅ Add cranes with 0m distance (no movement data)
+    for (const deviceId of craneDevices) {
+      if (!completeCraneDistances[deviceId]) {
+        // ✅ Find any log for this crane to get location data (not just for target date)
+        const craneLogs = allCraneLogs.filter(log => log.DeviceID === deviceId);
+        
+        if (craneLogs.length > 0) {
+          // ✅ Use the most recent log for location data
+          craneLogs.sort((a, b) => {
+            const aTimestamp = parseTimestamp(a.Timestamp);
+            const bTimestamp = parseTimestamp(b.Timestamp);
+            if (!aTimestamp || !bTimestamp) return 0;
+            return bTimestamp - aTimestamp; // Sort by most recent first
+          });
+          
+          const mostRecentLog = craneLogs[0];
+          completeCraneDistances[deviceId] = {
+            deviceId,
+            distance: 0,
+            startLocation: {
+              lat: mostRecentLog.Latitude,
+              lon: mostRecentLog.Longitude,
+              timestamp: mostRecentLog.Timestamp
+            },
+            endLocation: {
+              lat: mostRecentLog.Latitude,
+              lon: mostRecentLog.Longitude,
+              timestamp: mostRecentLog.Timestamp
+            }
+          };
+        } else {
+          // ✅ No logs at all for this crane - skip it for now
+          console.log(`⚠️ No logs found for crane ${deviceId}`);
+          continue;
+        }
+      }
+    }
+    
+    console.log(`✅ Crane movement data calculated for ${Object.keys(completeCraneDistances).length} cranes on ${targetDate}`);
     
     res.json({
       date: targetDate,
-      craneDistances,
+      craneDistances: completeCraneDistances,
       totalDistance,
       averageDistance
     });

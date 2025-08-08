@@ -30,21 +30,27 @@ function calculateDailyDistance(craneLogs, targetDate) {
   let previousLat = null;
   let previousLon = null;
   
+  // ✅ Filter out logs with invalid GPS data first
+  const validGPSLogs = craneLogs.filter(log => {
+    return validateGPSData(log.Latitude, log.Longitude) && 
+           parseFloat(log.Latitude) !== 0 && 
+           parseFloat(log.Longitude) !== 0;
+  });
+  
+  if (validGPSLogs.length < 2) {
+    console.log(`⚠️ Not enough valid GPS data for distance calculation. Valid logs: ${validGPSLogs.length}`);
+    return 0;
+  }
+  
   // Sort logs by timestamp
-  craneLogs.sort((a, b) => {
+  validGPSLogs.sort((a, b) => {
     const aTime = new Date(a.Timestamp.split(' ')[1]);
     const bTime = new Date(b.Timestamp.split(' ')[1]);
     return aTime - bTime;
   });
   
-  for (let i = 0; i < craneLogs.length; i++) {
-    const log = craneLogs[i];
-    
-    // Validate GPS data
-    if (!validateGPSData(log.Latitude, log.Longitude)) {
-      console.log(`⚠️ Invalid GPS data for ${log.DeviceID}: ${log.Latitude}, ${log.Longitude}`);
-      continue;
-    }
+  for (let i = 0; i < validGPSLogs.length; i++) {
+    const log = validGPSLogs[i];
     
     const currentLat = parseFloat(log.Latitude);
     const currentLon = parseFloat(log.Longitude);
@@ -52,6 +58,7 @@ function calculateDailyDistance(craneLogs, targetDate) {
     if (previousLat !== null && previousLon !== null) {
       const distance = calculateDistance(previousLat, previousLon, currentLat, currentLon);
       totalDistance += distance;
+      console.log(`📍 Distance from ${previousLat},${previousLon} to ${currentLat},${currentLon} = ${distance}m`);
     }
     
     previousLat = currentLat;
@@ -81,23 +88,48 @@ function calculateAllCraneDistances(allCraneLogs, targetDate) {
     const craneLogs = craneGroups[deviceId];
     const distance = calculateDailyDistance(craneLogs, targetDate);
     
-    if (distance > 0) {
+    // ✅ Filter valid GPS logs for location data
+    const validGPSLogs = craneLogs.filter(log => {
+      return validateGPSData(log.Latitude, log.Longitude) && 
+             parseFloat(log.Latitude) !== 0 && 
+             parseFloat(log.Longitude) !== 0;
+    });
+    
+    if (distance > 0 && validGPSLogs.length > 0) {
       craneDistances[deviceId] = {
         deviceId,
         distance: Math.round(distance * 100) / 100,
         startLocation: {
-          lat: craneLogs[0].Latitude,
-          lon: craneLogs[0].Longitude,
-          timestamp: craneLogs[0].Timestamp
+          lat: validGPSLogs[0].Latitude,
+          lon: validGPSLogs[0].Longitude,
+          timestamp: validGPSLogs[0].Timestamp
         },
         endLocation: {
-          lat: craneLogs[craneLogs.length - 1].Latitude,
-          lon: craneLogs[craneLogs.length - 1].Longitude,
-          timestamp: craneLogs[craneLogs.length - 1].Timestamp
+          lat: validGPSLogs[validGPSLogs.length - 1].Latitude,
+          lon: validGPSLogs[validGPSLogs.length - 1].Longitude,
+          timestamp: validGPSLogs[validGPSLogs.length - 1].Timestamp
         }
       };
       
       totalDistance += distance;
+      craneCount++;
+    } else if (validGPSLogs.length === 1) {
+      // ✅ Handle case with only one valid GPS point (no movement, but has location)
+      craneDistances[deviceId] = {
+        deviceId,
+        distance: 0,
+        startLocation: {
+          lat: validGPSLogs[0].Latitude,
+          lon: validGPSLogs[0].Longitude,
+          timestamp: validGPSLogs[0].Timestamp
+        },
+        endLocation: {
+          lat: validGPSLogs[0].Latitude,
+          lon: validGPSLogs[0].Longitude,
+          timestamp: validGPSLogs[0].Timestamp
+        }
+      };
+      
       craneCount++;
     }
   });

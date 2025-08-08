@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Col, Row, Card } from 'react-bootstrap';
+import { Col, Row, Card, Button } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
 // ✅ Import icons from react-icons
 import { PiCraneDuotone, PiTimerDuotone, PiBandaidsFill } from "react-icons/pi";
@@ -52,6 +52,7 @@ export default function CraneOverview() {
         thisYear: { completed: 0, ongoing: 0, total: 0 }
       }
   });
+  const [activeTab, setActiveTab] = useState('working');
 
   // ✅ Fetch crane overview data from backend
     const fetchCraneOverview = async () => {
@@ -332,41 +333,81 @@ export default function CraneOverview() {
         {/* Right Column - Messages & Stats */}
         <Col xs={12} lg={5} className="mb-2">
           <Row>
-            {/* Quick Stats */}
+            {/* Quick Stats WITH TABS (Only this block changed) */}
             <Col xs={12} className="mb-2">
               <Card className="border-0 shadow-sm">
                 <Card.Header className="py-2 bg-white border-bottom">
-                  <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
-                    Quick Statistics
-                  </h6>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
+                      Quick Statistics
+                    </h6>
+                    <div className="d-flex gap-1">
+                      <Button
+                        size="sm"
+                        variant={activeTab === 'working' ? 'primary' : 'outline-secondary'}
+                        onClick={() => setActiveTab('working')}
+                        style={{ fontSize: '0.6rem', padding: '0.25rem 0.5rem' }}
+                      >
+                        Working
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={activeTab === 'idle' ? 'primary' : 'outline-secondary'}
+                        onClick={() => setActiveTab('idle')}
+                        style={{ fontSize: '0.6rem', padding: '0.25rem 0.5rem' }}
+                      >
+                        Idle
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={activeTab === 'maintenance' ? 'primary' : 'outline-secondary'}
+                        onClick={() => setActiveTab('maintenance')}
+                        style={{ fontSize: '0.6rem', padding: '0.25rem 0.5rem' }}
+                      >
+                        Maint
+                      </Button>
+                    </div>
+                  </div>
                 </Card.Header>
                 <Card.Body className="p-2">
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>Today:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(dashboardData.quickStats?.today?.completed || 0)}
-                      {!loading && dashboardData.quickStats?.today?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.today.ongoing)} ongoing`}
+                      {loading ? '...' : formatHoursToHoursMinutes(
+                        activeTab === 'working' ? (dashboardData.quickStats?.today?.completed || 0) + (dashboardData.quickStats?.today?.ongoing || 0) :
+                        activeTab === 'idle' ? (dashboardData.quickStats?.today?.idle || 0) :
+                        (dashboardData.quickStats?.today?.maintenance || 0)
+                      )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Week:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(dashboardData.quickStats?.thisWeek?.completed || 0)}
-                      {!loading && dashboardData.quickStats?.thisWeek?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.thisWeek.ongoing)} ongoing`}
+                      {loading ? '...' : formatHoursToHoursMinutes(
+                        activeTab === 'working' ? (dashboardData.quickStats?.thisWeek?.completed || 0) + (dashboardData.quickStats?.thisWeek?.ongoing || 0) :
+                        activeTab === 'idle' ? (dashboardData.quickStats?.thisWeek?.idle || 0) :
+                        (dashboardData.quickStats?.thisWeek?.maintenance || 0)
+                      )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Month:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(dashboardData.quickStats?.thisMonth?.completed || 0)}
-                      {!loading && dashboardData.quickStats?.thisMonth?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.thisMonth.ongoing)} ongoing`}
+                      {loading ? '...' : formatHoursToHoursMinutes(
+                        activeTab === 'working' ? (dashboardData.quickStats?.thisMonth?.completed || 0) + (dashboardData.quickStats?.thisMonth?.ongoing || 0) :
+                        activeTab === 'idle' ? (dashboardData.quickStats?.thisMonth?.idle || 0) :
+                        (dashboardData.quickStats?.thisMonth?.maintenance || 0)
+                      )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span style={{ fontSize: '0.6rem' }}>This Year:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(dashboardData.quickStats?.thisYear?.completed || 0)}
-                      {!loading && dashboardData.quickStats?.thisYear?.ongoing > 0 && ` + ${formatHoursToHoursMinutes(dashboardData.quickStats.thisYear.ongoing)} ongoing`}
+                      {loading ? '...' : formatHoursToHoursMinutes(
+                        activeTab === 'working' ? (dashboardData.quickStats?.thisYear?.completed || 0) + (dashboardData.quickStats?.thisYear?.ongoing || 0) :
+                        activeTab === 'idle' ? (dashboardData.quickStats?.thisYear?.idle || 0) :
+                        (dashboardData.quickStats?.thisYear?.maintenance || 0)
+                      )}
                     </span>
                   </div>
                 </Card.Body>

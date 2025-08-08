@@ -1,6 +1,7 @@
 import React from 'react';
-import { Card, Badge, Row, Col } from 'react-bootstrap';
-import { PiMapPin, PiTimer, PiRuler, PiCraneDuotone } from 'react-icons/pi';
+import { Card, Badge, Row, Col, Button, Tooltip, OverlayTrigger } from 'react-bootstrap';
+import { PiMapPin, PiTimer, PiRuler, PiCraneDuotone, PiArrowUpRight } from 'react-icons/pi';
+import { getGoogleMapsUrl, getGoogleMapsRouteUrl, openGoogleMaps, isValidCoordinates } from '../utils/mapUtils';
 import styles from './CraneDetails.module.css';
 
 export default function CraneDetails({ selectedCrane }) {
@@ -14,7 +15,17 @@ export default function CraneDetails({ selectedCrane }) {
   
   // ✅ Helper function to format coordinates
   const formatCoordinates = (lat, lon) => {
-    return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}`;
+    if (!isValidCoordinates(lat, lon)) {
+      return 'Invalid coordinates';
+    }
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    
+    if (latNum === 0 && lonNum === 0) {
+      return 'No location data';
+    }
+    
+    return `${latNum.toFixed(4)}, ${lonNum.toFixed(4)}`;
   };
   
   // ✅ Helper function to format timestamp
@@ -27,6 +38,7 @@ export default function CraneDetails({ selectedCrane }) {
   
   // ✅ Helper function to get movement status
   const getMovementStatus = (distance) => {
+    if (distance === 0) return { text: 'No Activity', color: 'secondary' };
     if (distance < 100) return { text: 'Low Activity', color: 'success' };
     if (distance < 500) return { text: 'Normal Activity', color: 'primary' };
     if (distance < 1000) return { text: 'High Activity', color: 'warning' };
@@ -102,6 +114,33 @@ export default function CraneDetails({ selectedCrane }) {
                 <div className={styles.locationTimestamp}>
                   {formatTimestamp(selectedCrane.startLocation.timestamp)}
                 </div>
+                {/* ✅ Google Maps Button for Start Location */}
+                <OverlayTrigger
+                  placement="top"
+                  overlay={
+                    <Tooltip>
+                      {selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0 
+                        ? 'No location data available' 
+                        : 'View start location on Google Maps'}
+                    </Tooltip>
+                  }
+                >
+                  <Button
+                    size="sm"
+                    variant="outline-primary"
+                    className="mt-2 w-100"
+                    onClick={() => {
+                      const url = getGoogleMapsUrl(selectedCrane.startLocation.lat, selectedCrane.startLocation.lon);
+                      openGoogleMaps(url);
+                    }}
+                    disabled={!isValidCoordinates(selectedCrane.startLocation.lat, selectedCrane.startLocation.lon)}
+                  >
+                    <PiMapPin size={14} className="me-1" />
+                    {selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0 
+                      ? 'No Location Data' 
+                      : 'View on Map'}
+                  </Button>
+                </OverlayTrigger>
               </div>
             </Col>
             <Col xs={6}>
@@ -113,9 +152,80 @@ export default function CraneDetails({ selectedCrane }) {
                 <div className={styles.locationTimestamp}>
                   {formatTimestamp(selectedCrane.endLocation.timestamp)}
                 </div>
+                {/* ✅ Google Maps Button for End Location */}
+                <OverlayTrigger
+                  placement="top"
+                  overlay={
+                    <Tooltip>
+                      {selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0 
+                        ? 'No location data available' 
+                        : 'View end location on Google Maps'}
+                    </Tooltip>
+                  }
+                >
+                  <Button
+                    size="sm"
+                    variant="outline-primary"
+                    className="mt-2 w-100"
+                    onClick={() => {
+                      const url = getGoogleMapsUrl(selectedCrane.endLocation.lat, selectedCrane.endLocation.lon);
+                      openGoogleMaps(url);
+                    }}
+                    disabled={!isValidCoordinates(selectedCrane.endLocation.lat, selectedCrane.endLocation.lon)}
+                  >
+                    <PiMapPin size={14} className="me-1" />
+                    {selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0 
+                      ? 'No Location Data' 
+                      : 'View on Map'}
+                  </Button>
+                </OverlayTrigger>
               </div>
             </Col>
           </Row>
+          
+          {/* ✅ Route View Button */}
+          {selectedCrane.distance > 0 && (
+            <div className="mt-3">
+              <OverlayTrigger
+                placement="top"
+                overlay={
+                  <Tooltip>
+                    {(selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0) ||
+                     (selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0)
+                      ? 'No location data available for route' 
+                      : 'View the route from start to end location'}
+                  </Tooltip>
+                }
+              >
+                <Button
+                  size="sm"
+                  variant="outline-success"
+                  className="w-100"
+                  onClick={() => {
+                    const url = getGoogleMapsRouteUrl(
+                      selectedCrane.startLocation.lat,
+                      selectedCrane.startLocation.lon,
+                      selectedCrane.endLocation.lat,
+                      selectedCrane.endLocation.lon
+                    );
+                    openGoogleMaps(url);
+                  }}
+                  disabled={
+                    !isValidCoordinates(selectedCrane.startLocation.lat, selectedCrane.startLocation.lon) ||
+                    !isValidCoordinates(selectedCrane.endLocation.lat, selectedCrane.endLocation.lon) ||
+                    (selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0) ||
+                    (selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0)
+                  }
+                >
+                  <PiArrowUpRight size={14} className="me-1" />
+                  {(selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0) ||
+                   (selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0)
+                    ? 'No Route Data' 
+                    : 'View Route'}
+                </Button>
+              </OverlayTrigger>
+            </div>
+          )}
         </div>
         
         {/* Statistics */}

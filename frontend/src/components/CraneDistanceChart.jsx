@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Spinner, Alert } from 'react-bootstrap';
+import { Card, Form, Spinner, Alert, Button, Tooltip, OverlayTrigger } from 'react-bootstrap';
+import { PiMapPin } from 'react-icons/pi';
+import { getGoogleMapsUrl, openGoogleMaps, isValidCoordinates } from '../utils/mapUtils';
 import axios from 'axios';
 import styles from './CraneDistanceChart.module.css';
 
@@ -63,7 +65,7 @@ export default function CraneDistanceChart({ onCraneSelect }) {
     onCraneSelect(craneData);
   };
   
-  // ✅ Sort cranes by distance (highest first)
+  // ✅ Sort cranes by distance (highest first) - now includes all cranes
   const sortedCranes = movementData?.craneDistances ? 
     Object.values(movementData.craneDistances).sort((a, b) => b.distance - a.distance) : [];
   
@@ -116,7 +118,6 @@ export default function CraneDistanceChart({ onCraneSelect }) {
                   <div 
                     key={crane.deviceId}
                     className={styles.craneBar}
-                    onClick={() => handleCraneClick(crane)}
                   >
                     <div className={styles.craneLabel}>
                       <span className={styles.craneName}>{crane.deviceId}</span>
@@ -126,16 +127,42 @@ export default function CraneDistanceChart({ onCraneSelect }) {
                       <div 
                         className={styles.bar}
                         style={{ 
-                          width: `${Math.min((crane.distance / Math.max(...sortedCranes.map(c => c.distance))) * 100, 100)}%` 
+                          width: `${crane.distance > 0 ? Math.min((crane.distance / Math.max(...sortedCranes.map(c => c.distance))) * 100, 100) : 0}%` 
                         }}
+                        onClick={() => handleCraneClick(crane)}
                       />
                     </div>
+                    {/* ✅ Quick Location Button */}
+                    <OverlayTrigger
+                      placement="top"
+                      overlay={
+                        <Tooltip>
+                          {crane.endLocation.lat === 0 && crane.endLocation.lon === 0
+                            ? 'No location data available'
+                            : 'View crane location on Google Maps'}
+                        </Tooltip>
+                      }
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline-secondary"
+                        className={`${styles.locationButton}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const url = getGoogleMapsUrl(crane.endLocation.lat, crane.endLocation.lon);
+                          openGoogleMaps(url);
+                        }}
+                        disabled={!isValidCoordinates(crane.endLocation.lat, crane.endLocation.lon)}
+                      >
+                        <PiMapPin size={12} />
+                      </Button>
+                    </OverlayTrigger>
                   </div>
                 ))
               ) : (
                 <div className="text-center py-3">
                   <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>
-                    No movement data available for {selectedDate}
+                    No cranes available for {selectedDate}
                   </p>
                 </div>
               )}
