@@ -16,6 +16,10 @@ import MaintenanceUpdates from '../components/MaintenanceUpdates';
 import CraneDistanceChart from '../components/CraneDistanceChart';
 import CraneDetails from '../components/CraneDetails';
 import ExportModal from '../components/ExportModal';
+// ✅ Import background refresh hook and components
+import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
+import { SmoothValueTransition, SmoothNumberTransition, SmoothTimeTransition } from '../components/SmoothValueTransition';
+import { LastUpdatedTimestamp } from '../components/LastUpdatedTimestamp';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -33,66 +37,45 @@ function formatHoursToHoursMinutes(decimalHours) {
 }
 
 export default function CraneOverview() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [selectedCrane, setSelectedCrane] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [dashboardData, setDashboardData] = useState({
+  const [activeTab, setActiveTab] = useState('working');
+
+  // ✅ Background refresh hook for dashboard data
+  const {
+    data: dashboardData,
+    lastUpdated,
+    error,
+    isInitialized,
+    manualRefresh
+  } = useBackgroundRefresh(
+    async () => {
+      const response = await axios.get('/api/crane/overview', { 
+        withCredentials: true 
+      });
+      return response.data;
+    },
+    30000 // 30 seconds refresh interval
+  );
+
+  // ✅ Initialize with default data
+  const defaultData = {
     totalWorkingHours: 0,
     completedHours: 0,
     ongoingHours: 0,
     activeCranes: 0,
     inactiveCranes: 0,
     underMaintenance: 0,
-          quickStats: {
-        today: { completed: 0, ongoing: 0, total: 0 },
-        thisWeek: { completed: 0, ongoing: 0, total: 0 },
-        thisMonth: { completed: 0, ongoing: 0, total: 0 },
-        thisYear: { completed: 0, ongoing: 0, total: 0 }
-      }
-  });
-  const [activeTab, setActiveTab] = useState('working');
+    quickStats: {
+      today: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
+      thisWeek: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
+      thisMonth: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
+      thisYear: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 }
+    }
+  };
 
-  // ✅ Fetch crane overview data from backend
-    const fetchCraneOverview = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await axios.get('/api/crane/overview', { 
-          withCredentials: true 
-        });
-        
-        setDashboardData(response.data);
-      setLastUpdated(new Date());
-      console.log('✅ Dashboard data refreshed at:', new Date().toLocaleTimeString());
-      } catch (err) {
-        console.error('❌ Failed to fetch crane overview:', err);
-        setError('Failed to load crane data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-  // ✅ Initial data fetch
-  useEffect(() => {
-    fetchCraneOverview();
-  }, []);
-
-  // ✅ Auto-refresh every minute (60 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing dashboard data...');
-      fetchCraneOverview();
-    }, 60000); // 60 seconds = 1 minute
-
-    // ✅ Cleanup interval on component unmount
-    return () => {
-      console.log('🧹 Cleaning up auto-refresh interval');
-      clearInterval(interval);
-    };
-  }, []); // Empty dependency array - runs once on mount
+  // ✅ Use dashboard data or default
+  const currentData = dashboardData || defaultData;
 
   // ✅ Handler for crane selection
   const handleCraneSelect = (craneData) => {
@@ -104,37 +87,41 @@ export default function CraneOverview() {
     setShowExportModal(true);
   };
 
+  // ✅ Calculate total cranes for fraction display
+  const totalCranes = (currentData.activeCranes || 0) + (currentData.inactiveCranes || 0) + (currentData.underMaintenance || 0);
+
   // ✅ Define card data for better maintainability
   const summaryCards = [
     {
       id: 1,
       title: `Total Working Hours (${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()})`,
-      value: dashboardData.quickStats?.thisMonth?.completed || 0,  // ✅ Use current month's completed hours
-      ongoingHours: dashboardData.quickStats?.thisMonth?.ongoing || 0,  // ✅ Use current month's ongoing hours
+      subtitle: `${totalCranes} Total Cranes`,
+      value: currentData.quickStats?.thisMonth?.completed || 0,  // ✅ Use current month's completed hours
+      ongoingHours: currentData.quickStats?.thisMonth?.ongoing || 0,  // ✅ Use current month's ongoing hours
       gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
       icon: PiTimerDuotone,
       iconSize: 60
     },
     {
       id: 2,
-      title: "Active Cranes",
-      value: dashboardData.activeCranes,
+      title: `${currentData.activeCranes || 0}/${totalCranes} Active Cranes`,
+      value: currentData.activeCranes,
       gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
       icon: PiCraneDuotone,
       iconSize: 60
     },
     {
       id: 3,
-      title: "Inactive Cranes",
-      value: dashboardData.inactiveCranes,
+      title: `${currentData.inactiveCranes || 0}/${totalCranes} Idle Cranes`,
+      value: currentData.inactiveCranes,
       gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
       icon: GiNightSleep,
       iconSize: 60
     },
     {
       id: 4,
-      title: "Under Maintenance",
-      value: dashboardData.underMaintenance,
+      title: `${currentData.underMaintenance || 0}/${totalCranes} Under Maintenance`,
+      value: currentData.underMaintenance,
       gradient: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
       icon: PiBandaidsFill,
       iconSize: 60
@@ -172,11 +159,37 @@ export default function CraneOverview() {
             <div className="d-flex justify-content-between align-items-start">
               <div>
                 <h3 className="mb-1 fw-bold" style={{ fontSize: '1.8rem' }}>
-                  {loading ? '...' : displayValue}
+                  {!isInitialized ? '...' : (
+                    card.id === 1 ? (
+                      // ✅ Working Hours with smooth transitions
+                      <SmoothTimeTransition
+                        value={card.value}
+                        formatFunction={(value) => {
+                          const ongoingHours = card.ongoingHours || 0;
+                          if (ongoingHours > 0) {
+                            return `${formatHoursToHoursMinutes(Math.max(0, value))} + ${formatHoursToHoursMinutes(ongoingHours)} ongoing`;
+                          } else {
+                            return formatHoursToHoursMinutes(Math.max(0, value));
+                          }
+                        }}
+                      />
+                    ) : (
+                      // ✅ Other cards with smooth number transitions
+                      <SmoothNumberTransition
+                        value={Math.max(0, card.value)}
+                      />
+                    )
+                  )}
                 </h3>
                 <p className="mb-0" style={{ fontSize: '0.75rem', opacity: 0.9 }}>
-                  {card.title}
+                  {!isInitialized ? '...' : card.title}
                 </p>
+                {/* ✅ Show subtitle for Working Hours card */}
+                {card.id === 1 && card.subtitle && (
+                  <p className="mb-0 mt-1" style={{ fontSize: '0.65rem', opacity: 0.7 }}>
+                    {card.subtitle}
+                  </p>
+                )}
               </div>
               <div style={{ opacity: 0.8 }}>
                 <IconComponent size={card.iconSize} />
@@ -188,8 +201,8 @@ export default function CraneOverview() {
     );
   };
 
-  // ✅ Show loading state
-  if (loading) {
+  // ✅ Show initial loading state
+  if (!isInitialized) {
     return (
       <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
         <div className="d-flex justify-content-center align-items-center" style={{ height: '400px' }}>
@@ -204,50 +217,23 @@ export default function CraneOverview() {
     );
   }
 
-  // ✅ Show error state
-  if (error) {
-    return (
-      <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
-        <div className="d-flex justify-content-center align-items-center" style={{ height: '400px' }}>
-          <div className="text-center">
-            <div className="text-danger mb-3">
-              <i className="fas fa-exclamation-triangle fa-2x"></i>
-            </div>
-            <p className="text-danger">{error}</p>
-            <button 
-              className="btn btn-outline-primary btn-sm"
-              onClick={() => window.location.reload()}
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </Col>
-    );
-  }
-
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
       {/* ✅ Section 1: Header */}
       <div className="mb-2 d-flex justify-content-between align-items-center">
         <div>
-        <h6 className="mb-0">Crane Overview Dashboard</h6>
-        <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
-          Overview of all crane operations and status
-        </p>
-          {/* ✅ Auto-refresh indicator */}
-          {lastUpdated && (
-            <p className="text-success mb-0" style={{ fontSize: '0.6rem', marginTop: '2px' }}>
-              🔄 Auto-refresh: Last updated at {lastUpdated.toLocaleTimeString()}
-            </p>
-          )}
+          <h6 className="mb-0">Crane Overview Dashboard</h6>
+          <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
+            Overview of all crane operations and status
+          </p>
+          {/* ✅ Last updated timestamp */}
+          <LastUpdatedTimestamp lastUpdated={lastUpdated} />
         </div>
         <div className="d-flex gap-2">
           {/* ✅ Manual refresh button */}
           <button
             className="btn btn-outline-secondary btn-sm"
-            onClick={fetchCraneOverview}
-            disabled={loading}
+            onClick={manualRefresh}
             style={{
               borderRadius: '8px',
               padding: '8px 12px',
@@ -257,7 +243,7 @@ export default function CraneOverview() {
             }}
             title="Refresh data now"
           >
-            {loading ? '🔄' : '🔄'} Refresh
+            🔄 Refresh
           </button>
           
           <button
@@ -373,40 +359,60 @@ export default function CraneOverview() {
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>Today:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(
-                        activeTab === 'working' ? (dashboardData.quickStats?.today?.completed || 0) + (dashboardData.quickStats?.today?.ongoing || 0) :
-                        activeTab === 'idle' ? (dashboardData.quickStats?.today?.idle || 0) :
-                        (dashboardData.quickStats?.today?.maintenance || 0)
+                      {!isInitialized ? '...' : (
+                        <SmoothTimeTransition
+                          value={
+                            activeTab === 'working' ? (currentData.quickStats?.today?.completed || 0) + (currentData.quickStats?.today?.ongoing || 0) :
+                            activeTab === 'idle' ? (currentData.quickStats?.today?.idle || 0) :
+                            (currentData.quickStats?.today?.maintenance || 0)
+                          }
+                          formatFunction={formatHoursToHoursMinutes}
+                        />
                       )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Week:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(
-                        activeTab === 'working' ? (dashboardData.quickStats?.thisWeek?.completed || 0) + (dashboardData.quickStats?.thisWeek?.ongoing || 0) :
-                        activeTab === 'idle' ? (dashboardData.quickStats?.thisWeek?.idle || 0) :
-                        (dashboardData.quickStats?.thisWeek?.maintenance || 0)
+                      {!isInitialized ? '...' : (
+                        <SmoothTimeTransition
+                          value={
+                            activeTab === 'working' ? (currentData.quickStats?.thisWeek?.completed || 0) + (currentData.quickStats?.thisWeek?.ongoing || 0) :
+                            activeTab === 'idle' ? (currentData.quickStats?.thisWeek?.idle || 0) :
+                            (currentData.quickStats?.thisWeek?.maintenance || 0)
+                          }
+                          formatFunction={formatHoursToHoursMinutes}
+                        />
                       )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span style={{ fontSize: '0.6rem' }}>This Month:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(
-                        activeTab === 'working' ? (dashboardData.quickStats?.thisMonth?.completed || 0) + (dashboardData.quickStats?.thisMonth?.ongoing || 0) :
-                        activeTab === 'idle' ? (dashboardData.quickStats?.thisMonth?.idle || 0) :
-                        (dashboardData.quickStats?.thisMonth?.maintenance || 0)
+                      {!isInitialized ? '...' : (
+                        <SmoothTimeTransition
+                          value={
+                            activeTab === 'working' ? (currentData.quickStats?.thisMonth?.completed || 0) + (currentData.quickStats?.thisMonth?.ongoing || 0) :
+                            activeTab === 'idle' ? (currentData.quickStats?.thisMonth?.idle || 0) :
+                            (currentData.quickStats?.thisMonth?.maintenance || 0)
+                          }
+                          formatFunction={formatHoursToHoursMinutes}
+                        />
                       )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span style={{ fontSize: '0.6rem' }}>This Year:</span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
-                      {loading ? '...' : formatHoursToHoursMinutes(
-                        activeTab === 'working' ? (dashboardData.quickStats?.thisYear?.completed || 0) + (dashboardData.quickStats?.thisYear?.ongoing || 0) :
-                        activeTab === 'idle' ? (dashboardData.quickStats?.thisYear?.idle || 0) :
-                        (dashboardData.quickStats?.thisYear?.maintenance || 0)
+                      {!isInitialized ? '...' : (
+                        <SmoothTimeTransition
+                          value={
+                            activeTab === 'working' ? (currentData.quickStats?.thisYear?.completed || 0) + (currentData.quickStats?.thisYear?.ongoing || 0) :
+                            activeTab === 'idle' ? (currentData.quickStats?.thisYear?.idle || 0) :
+                            (currentData.quickStats?.thisYear?.maintenance || 0)
+                          }
+                          formatFunction={formatHoursToHoursMinutes}
+                        />
                       )}
                     </span>
                   </div>
