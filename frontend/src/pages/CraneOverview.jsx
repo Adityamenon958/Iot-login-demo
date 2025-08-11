@@ -77,6 +77,47 @@ export default function CraneOverview() {
   // ✅ Use dashboard data or default
   const currentData = dashboardData || defaultData;
 
+  // ✅ Helper function to get formatted date labels for Quick Statistics
+  const getDateLabels = () => {
+    const now = new Date();
+    
+    // Today's date
+    const todayLabel = now.toLocaleDateString('en-US', { 
+      day: '2-digit', 
+      month: 'short' 
+    });
+    
+    // This Week: 7 days ago to today (rolling window - matches backend logic)
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const weekStartLabel = weekAgo.toLocaleDateString('en-US', { 
+      day: '2-digit', 
+      month: 'short' 
+    });
+    const weekEndLabel = now.toLocaleDateString('en-US', { 
+      day: '2-digit', 
+      month: 'short' 
+    });
+    
+    // This Month
+    const monthLabel = now.toLocaleDateString('en-US', { 
+      month: 'short' 
+    });
+    
+    // This Year
+    const yearLabel = now.getFullYear().toString();
+    
+    return {
+      today: todayLabel,
+      thisWeek: `${weekStartLabel} - ${weekEndLabel}`,
+      thisMonth: monthLabel,
+      thisYear: yearLabel
+    };
+  };
+
+  // ✅ Get date labels
+  const dateLabels = getDateLabels();
+
   // ✅ Handler for crane selection
   const handleCraneSelect = (craneData) => {
     setSelectedCrane(craneData);
@@ -357,7 +398,9 @@ export default function CraneOverview() {
                 </Card.Header>
                 <Card.Body className="p-2">
                   <div className="d-flex justify-content-between mb-1">
-                    <span style={{ fontSize: '0.6rem' }}>Today:</span>
+                    <span style={{ fontSize: '0.6rem' }}>
+                      Today ({dateLabels.today}):
+                    </span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
                       {!isInitialized ? '...' : (
                         <SmoothTimeTransition
@@ -372,7 +415,9 @@ export default function CraneOverview() {
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
-                    <span style={{ fontSize: '0.6rem' }}>This Week:</span>
+                    <span style={{ fontSize: '0.6rem' }}>
+                      This Week ({dateLabels.thisWeek}):
+                    </span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
                       {!isInitialized ? '...' : (
                         <SmoothTimeTransition
@@ -387,7 +432,9 @@ export default function CraneOverview() {
                     </span>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
-                    <span style={{ fontSize: '0.6rem' }}>This Month:</span>
+                    <span style={{ fontSize: '0.6rem' }}>
+                      This Month ({dateLabels.thisMonth}):
+                    </span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
                       {!isInitialized ? '...' : (
                         <SmoothTimeTransition
@@ -402,7 +449,9 @@ export default function CraneOverview() {
                     </span>
                   </div>
                   <div className="d-flex justify-content-between">
-                    <span style={{ fontSize: '0.6rem' }}>This Year:</span>
+                    <span style={{ fontSize: '0.6rem' }}>
+                      This Year ({dateLabels.thisYear}):
+                    </span>
                     <span className="fw-bold" style={{ fontSize: '0.6rem' }}>
                       {!isInitialized ? '...' : (
                         <SmoothTimeTransition

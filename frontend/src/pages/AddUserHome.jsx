@@ -3,7 +3,16 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Col, Row, Form, Button, Spinner, Modal } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
+import validationStyles from "./AddUserHome.module.css";
 import "./MainContent.css";
+import { 
+  validateEmail, 
+  validatePassword, 
+  getStrengthColor, 
+  getStrengthText, 
+  getRequirementIcon, 
+  getRequirementColor 
+} from '../lib/validation.js';
 
 export default function AddUserHome() {
   const navigate = useNavigate();
@@ -17,6 +26,12 @@ export default function AddUserHome() {
     name: '',
   });
 
+  // ✅ Validation state management
+  const [validation, setValidation] = useState({
+    email: { isValid: false, message: '', status: 'neutral' },
+    password: { isValid: false, strength: 'weak', requirements: {}, message: '', status: 'neutral' }
+  });
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -25,7 +40,6 @@ export default function AddUserHome() {
   const [sortByDateAsc, setSortByDateAsc] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [selectAllUsers, setSelectAllUsers] = useState(false);
-
 
   useEffect(() => {
     const fetchUserInfo = async () => {
@@ -69,19 +83,57 @@ export default function AddUserHome() {
     }
   };
 
+  // ✅ Enhanced form change handler with validation
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [name]: value
     }));
+
+    // ✅ Real-time validation
+    if (name === 'email') {
+      const emailValidation = validateEmail(value);
+      setValidation(prev => ({
+        ...prev,
+        email: {
+          ...emailValidation,
+          status: value ? (emailValidation.isValid ? 'valid' : 'invalid') : 'neutral'
+        }
+      }));
+    }
+
+    if (name === 'password') {
+      const passwordValidation = validatePassword(value);
+      setValidation(prev => ({
+        ...prev,
+        password: {
+          ...passwordValidation,
+          status: value ? (passwordValidation.isValid ? 'valid' : 'invalid') : 'neutral'
+        }
+      }));
+    }
   };
 
+  // ✅ Enhanced form submission with validation
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // ✅ Final validation check before submission
+    const emailValidation = validateEmail(formData.email);
+    const passwordValidation = validatePassword(formData.password);
+
+    if (!emailValidation.isValid || !passwordValidation.isValid) {
+      alert('Please fix validation errors before submitting');
+      return;
+    }
 
     try {
       const res = await axios.post('/api/users', formData, { withCredentials: true });
       alert(res.data.message);
+      
+      // ✅ Reset form with validation state
       setFormData({
         companyName: formData.companyName,
         contactInfo: '',
@@ -90,11 +142,29 @@ export default function AddUserHome() {
         role: 'user',
         name: '',
       });
+      
+      // ✅ Reset validation state
+      setValidation({
+        email: { isValid: false, message: '', status: 'neutral' },
+        password: { isValid: false, strength: 'weak', requirements: {}, message: '', status: 'neutral' }
+      });
+      
       fetchUsers(formData.companyName);
       setShowModal(false);
     } catch (err) {
       console.error(err.response?.data || err.message);
       alert(err.response?.data?.message || "Something went wrong ❌");
+    }
+  };
+
+  // ✅ Get strength bar width percentage
+  const getStrengthWidth = (strength) => {
+    switch (strength) {
+      case 'excellent': return '100%';
+      case 'strong': return '80%';
+      case 'medium': return '60%';
+      case 'weak': return '30%';
+      default: return '0%';
     }
   };
 
@@ -128,7 +198,7 @@ export default function AddUserHome() {
         </Col>
       </Row>
 
-      {/* Modal for Add User Form */}
+      {/* ✅ Enhanced Modal for Add User Form */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
         <Modal.Header closeButton className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center">
           <Modal.Title>Add New User</Modal.Title>
@@ -137,21 +207,144 @@ export default function AddUserHome() {
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Full Name</Form.Label>
-              <Form.Control type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Enter Full name" className="custom_input1" />
+              <Form.Control 
+                type="text" 
+                name="name" 
+                value={formData.name} 
+                onChange={handleChange} 
+                placeholder="Enter Full name" 
+                className="custom_input1" 
+                required
+              />
             </Form.Group>
+            
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Contact Info</Form.Label>
-              <Form.Control type="text" name="contactInfo" value={formData.contactInfo} onChange={handleChange} placeholder="Enter contact info" className="custom_input1" />
+              <Form.Control 
+                type="text" 
+                name="contactInfo" 
+                value={formData.contactInfo} 
+                onChange={handleChange} 
+                placeholder="Enter contact info" 
+                className="custom_input1" 
+              />
             </Form.Group>
+            
+            {/* ✅ Enhanced Email Field with Validation */}
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Email ID</Form.Label>
-              <Form.Control type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter email" className="custom_input1" />
+              <div className={validationStyles.inputGroup}>
+                <Form.Control 
+                  type="email" 
+                  name="email" 
+                  value={formData.email} 
+                  onChange={handleChange} 
+                  placeholder="Enter email" 
+                  className={`custom_input1 ${validationStyles.formControl} ${validationStyles[validation.email.status]}`}
+                  required
+                />
+                {formData.email && (
+                  <span className={validationStyles.validationIcon}>
+                    {validation.email.isValid ? '✅' : '❌'}
+                  </span>
+                )}
+              </div>
+              {/* ✅ Email validation feedback */}
+              {formData.email && (
+                <div className={`${validationStyles.emailValidation} ${validationStyles[validation.email.status]}`}>
+                  <span>{validation.email.isValid ? '✅' : '❌'}</span>
+                  <span>{validation.email.message}</span>
+                </div>
+              )}
             </Form.Group>
+            
+            {/* ✅ Enhanced Password Field with Strength Meter */}
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Password</Form.Label>
-              <Form.Control type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter password" className="custom_input1" />
+              <div className={validationStyles.inputGroup}>
+                <Form.Control 
+                  type="password" 
+                  name="password" 
+                  value={formData.password} 
+                  onChange={handleChange} 
+                  placeholder="Enter password" 
+                  className={`custom_input1 ${validationStyles.formControl} ${validationStyles[validation.password.status]}`}
+                  required
+                />
+                {formData.password && (
+                  <span className={validationStyles.validationIcon}>
+                    {validation.password.isValid ? '✅' : '❌'}
+                  </span>
+                )}
+              </div>
+              
+              {/* ✅ Password strength meter */}
+              {formData.password && (
+                <div className={validationStyles.passwordStrengthMeter}>
+                  <div className={validationStyles.strengthBar}>
+                    <div 
+                      className={`${validationStyles.strengthFill} ${validationStyles.animated}`}
+                      style={{
+                        width: getStrengthWidth(validation.password.strength),
+                        backgroundColor: getStrengthColor(validation.password.strength)
+                      }}
+                    />
+                  </div>
+                  <div className={validationStyles.strengthText}>
+                    Password Strength: <strong style={{ color: getStrengthColor(validation.password.strength) }}>
+                      {getStrengthText(validation.password.strength)}
+                    </strong>
+                  </div>
+                  
+                  {/* ✅ Password requirements checklist */}
+                  <div className={validationStyles.requirementsList}>
+                    <div className={validationStyles.requirementItem}>
+                      <span className={validationStyles.requirementIcon} style={{ color: getRequirementColor(validation.password.requirements.length) }}>
+                        {getRequirementIcon(validation.password.requirements.length)}
+                      </span>
+                      <span>At least 8 characters</span>
+                    </div>
+                    <div className={validationStyles.requirementItem}>
+                      <span className={validationStyles.requirementIcon} style={{ color: getRequirementColor(validation.password.requirements.uppercase) }}>
+                        {getRequirementIcon(validation.password.requirements.uppercase)}
+                      </span>
+                      <span>At least 1 uppercase letter</span>
+                    </div>
+                    <div className={validationStyles.requirementItem}>
+                      <span className={validationStyles.requirementIcon} style={{ color: getRequirementColor(validation.password.requirements.lowercase) }}>
+                        {getRequirementIcon(validation.password.requirements.lowercase)}
+                      </span>
+                      <span>At least 1 lowercase letter</span>
+                    </div>
+                    <div className={validationStyles.requirementItem}>
+                      <span className={validationStyles.requirementIcon} style={{ color: getRequirementColor(validation.password.requirements.number) }}>
+                        {getRequirementIcon(validation.password.requirements.number)}
+                      </span>
+                      <span>At least 1 number</span>
+                    </div>
+                    <div className={validationStyles.requirementItem}>
+                      <span className={validationStyles.requirementIcon} style={{ color: getRequirementColor(validation.password.requirements.symbol) }}>
+                        {getRequirementIcon(validation.password.requirements.symbol)}
+                      </span>
+                      <span>At least 1 special character</span>
+                    </div>
+                    <div className={validationStyles.requirementItem}>
+                      <span className={validationStyles.requirementIcon} style={{ color: getRequirementColor(validation.password.requirements.notCommon) }}>
+                        {getRequirementIcon(validation.password.requirements.notCommon)}
+                      </span>
+                      <span>Not a common password</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </Form.Group>
-            <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">
+            
+            <Button 
+              variant="primary" 
+              type="submit" 
+              className={`w-100 signIn1 mb-2 ${validationStyles.submitButton}`}
+              disabled={!validation.email.isValid || !validation.password.isValid}
+            >
               Submit
             </Button>
           </Form>
