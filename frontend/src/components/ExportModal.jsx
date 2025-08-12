@@ -205,7 +205,31 @@ export default function ExportModal({ show, onHide, companyName }) {
       const individualResponse = await axios.get('/api/crane/crane-stats', { withCredentials: true });
       const individualData = individualResponse.data;
       
-      // ✅ 3. Get real movement data for selected cranes and dates
+      // ✅ 3. Get real sessions data from backend
+      let sessionsData = [];
+      try {
+        // ✅ Call the new sessions endpoint
+        const sessionsResponse = await axios.get('/api/crane/sessions', {
+          params: { 
+            cranes: selectedCranes.join(','),
+            months: selectedMonths.join(',')
+          },
+          withCredentials: true
+        });
+        
+        if (sessionsResponse.data.success && sessionsResponse.data.sessions) {
+          sessionsData = sessionsResponse.data.sessions;
+          console.log('✅ Real sessions data fetched from endpoint:', sessionsData.length, 'sessions');
+        } else {
+          console.log('⚠️ Sessions endpoint returned no data');
+        }
+      } catch (sessionsErr) {
+        console.log('⚠️ Sessions endpoint error:', sessionsErr.message);
+        // Don't fallback to overview data - we want real sessions
+        sessionsData = [];
+      }
+      
+      // ✅ 4. Get real movement data for selected cranes and dates
       const movementData = {};
       const movementAnalysis = { byCrane: {} };
       
@@ -258,14 +282,18 @@ export default function ExportModal({ show, onHide, companyName }) {
         }
       });
       
+      // ✅ 5. Add sessions data to overview data for PDF generation
+      overviewData.sessionsData = sessionsData;
+      
       console.log('✅ Real data fetched successfully:', {
         overview: !!overviewData,
         individual: !!individualData,
+        sessionsCount: sessionsData.length,
         movementCranes: Object.keys(movementAnalysis.byCrane).length,
         monthlyData: Object.keys(movementData).length
       });
       
-      // ✅ 4. Create real data structure for PDF
+      // ✅ 6. Create real data structure for PDF
       const realData = createRealPDFData(
         overviewData,
         individualData,
@@ -294,47 +322,13 @@ export default function ExportModal({ show, onHide, companyName }) {
   const createRealPDFData = (overviewData, individualData, movementAnalysis, movementData, selectedCranes, selectedMonths) => {
     console.log('🔍 Creating real PDF data from actual dashboard data...');
     
-    // ✅ Extract sessions data from overview
-    const sessionsData = [];
-    if (overviewData.quickStats && individualData.craneData) {
-      // Create session data from the overview stats
-      individualData.craneData.forEach(craneStats => {
-        if (selectedCranes.includes(craneStats.craneId) && craneStats.workingHours > 0) {
-          // ✅ Calculate completed vs ongoing hours
-          let ongoingHours = 0;
-          if (craneStats.craneId === 'CRANE001' && overviewData.quickStats?.thisMonth?.ongoing) {
-            ongoingHours = overviewData.quickStats.thisMonth.ongoing;
-          }
-          
-          const completedHours = craneStats.workingHours - ongoingHours;
-          
-          // ✅ Add working session if crane has working hours
-          if (craneStats.workingHours > 0) {
-            sessionsData.push({
-              craneId: craneStats.craneId,
-              sessionType: 'Working',
-              startTime: '06/08/2025 15:31:32', // Real timestamp from logs
-              endTime: '06/08/2025 15:38:32',   // Real timestamp from logs
-              duration: craneStats.workingHours,
-              startLocation: { lat: '28.6139', lon: '77.2090' }, // Real GPS from logs
-              endLocation: { lat: '28.6148', lon: '77.2090' }    // Real GPS from logs
-            });
-          }
-          
-          // ✅ Add maintenance session if crane has maintenance hours
-          if (craneStats.maintenanceHours > 0) {
-            sessionsData.push({
-              craneId: craneStats.craneId,
-              sessionType: 'Maintenance',
-              startTime: '06/08/2025 15:38:32', // Real timestamp from logs
-              endTime: '06/08/2025 15:40:32',   // Real timestamp from logs
-              duration: craneStats.maintenanceHours,
-              startLocation: { lat: '28.6148', lon: '77.2090' }, // Real GPS from logs
-              endLocation: { lat: '28.6139', lon: '77.2090' }    // Real GPS from logs
-            });
-          }
-        }
-      });
+    // ✅ Use real sessions data from backend (already fetched in fetchComprehensiveData)
+    const sessionsData = overviewData.sessionsData || [];
+    
+    if (sessionsData.length > 0) {
+      console.log('✅ Using real sessions data from backend:', sessionsData.length, 'sessions');
+    } else {
+      console.log('⚠️ No real sessions data available');
     }
     
     // ✅ Create real cumulative stats from overview data
@@ -404,11 +398,26 @@ export default function ExportModal({ show, onHide, companyName }) {
       }
     });
     
+    // ✅ Add time period information for the report
+    const timePeriods = {
+      selectedMonths: selectedMonths,
+      selectedCranes: selectedCranes,
+      reportGeneratedAt: new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    };
+    
     console.log('✅ Real data creation complete:', {
       sessionsCount: sessionsData.length,
       hasCumulativeStats: !!cumulativeStats,
       hasMovementAnalysis: !!movementAnalysis,
-      monthlyDataCount: Object.keys(monthlyMovementData).length
+      monthlyDataCount: Object.keys(monthlyMovementData).length,
+      timePeriods: timePeriods
     });
     
     return {
@@ -416,6 +425,7 @@ export default function ExportModal({ show, onHide, companyName }) {
       cumulativeStats,
       movementAnalysis,
       monthlyMovementData,
+      timePeriods, // ✅ NEW: Added time period information
       summary: {
         totalCranes: selectedCranes.length,
         totalMonths: selectedMonths.length,

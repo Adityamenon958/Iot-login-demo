@@ -1111,49 +1111,52 @@ function generateSessionsData(allCraneLogs, selectedCranes) {
     const workingPeriods = calculateConsecutivePeriods(craneLogs, 'working');
     const maintenancePeriods = calculateConsecutivePeriods(craneLogs, 'maintenance');
     
-    // Add working sessions
+    // ✅ Add working sessions (both completed and ongoing)
     workingPeriods.forEach(period => {
-      if (!period.isOngoing) {
-        sessionsData.push({
-          craneId,
-          sessionType: 'Working',
-          startTime: period.startTimestamp,
-          endTime: period.endTimestamp,
-          duration: period.duration,
-          startLocation: {
-            lat: period.startLocation?.lat || 'N/A',
-            lon: period.startLocation?.lon || 'N/A'
-          },
-          endLocation: {
-            lat: period.endLocation?.lat || 'N/A',
-            lon: period.endLocation?.lon || 'N/A'
-          }
-        });
-      }
+      const sessionData = {
+        craneId,
+        sessionType: 'Working',
+        // Keep original formatted strings from logs to avoid Invalid Date
+        startTime: period.startTimestamp,
+        endTime: period.isOngoing ? 'Running' : period.endTimestamp,
+        duration: period.duration,
+        isOngoing: period.isOngoing,
+        startLocation: {
+          lat: period.logs[0]?.Latitude || 'N/A',
+          lon: period.logs[0]?.Longitude || 'N/A'
+        },
+        endLocation: {
+          lat: period.isOngoing ? 'N/A' : (period.logs[period.logs.length - 1]?.Latitude || 'N/A'),
+          lon: period.isOngoing ? 'N/A' : (period.logs[period.logs.length - 1]?.Longitude || 'N/A')
+        }
+      };
+      sessionsData.push(sessionData);
     });
     
-    // Add maintenance sessions
+    // ✅ Add maintenance sessions (both completed and ongoing)
     maintenancePeriods.forEach(period => {
-      if (!period.isOngoing) {
-        sessionsData.push({
-          craneId,
-          sessionType: 'Maintenance',
-          startTime: period.startTimestamp,
-          endTime: period.endTimestamp,
-          duration: period.duration,
-          startLocation: {
-            lat: period.startLocation?.lat || 'N/A',
-            lon: period.startLocation?.lon || 'N/A'
-          },
-          endLocation: {
-            lat: period.endLocation?.lat || 'N/A',
-            lon: period.endLocation?.lon || 'N/A'
-          }
-        });
-      }
+      const sessionData = {
+        craneId,
+        sessionType: 'Maintenance',
+        // Keep original formatted strings from logs to avoid Invalid Date
+        startTime: period.startTimestamp,
+        endTime: period.isOngoing ? 'Running' : period.endTimestamp,
+        duration: period.duration,
+        isOngoing: period.isOngoing,
+        startLocation: {
+          lat: period.logs[0]?.Latitude || 'N/A',
+          lon: period.logs[0]?.Longitude || 'N/A'
+        },
+        endLocation: {
+          lat: period.isOngoing ? 'N/A' : (period.logs[period.logs.length - 1]?.Latitude || 'N/A'),
+          lon: period.isOngoing ? 'N/A' : (period.logs[period.logs.length - 1]?.Longitude || 'N/A')
+        }
+      };
+      sessionsData.push(sessionData);
     });
   }
   
+  console.log(`✅ Generated ${sessionsData.length} sessions for ${selectedCranes.length} cranes`);
   return sessionsData;
 }
 
@@ -3304,6 +3307,46 @@ app.post('/api/logout', (req, res) => {
   res.json({ message: 'Logged out successfully ✅' });
 });
 
+// ✅ API endpoint to get crane sessions data for PDF export
+app.get('/api/crane/sessions', authenticateToken, async (req, res) => {
+  try {
+    const { cranes, months } = req.query;
+    const { role, companyName } = req.user;
+
+    console.log('🔍 User requesting crane sessions data:', { role, companyName, cranes, months });
+
+    if (role !== 'superadmin' && role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin or superadmin required.' });
+    }
+
+    const selectedCranes = cranes ? cranes.split(',') : [];
+    const selectedMonths = months ? months.split(',') : [];
+
+    if (selectedCranes.length === 0) {
+      return res.status(400).json({ message: 'No cranes selected' });
+    }
+
+    // Build company filter consistent with overview route
+    const companyFilter = (role !== 'superadmin') ? { craneCompany: companyName } : {};
+
+    const craneLogs = await CraneLog.find({
+      ...companyFilter,
+      DeviceID: { $in: selectedCranes }
+    }).sort({ Timestamp: 1 });
+
+    if (craneLogs.length === 0) {
+      return res.json({ success: true, sessions: [], message: 'No crane logs found for selected cranes' });
+    }
+
+    const sessionsData = generateSessionsData(craneLogs, selectedCranes);
+
+    res.json({ success: true, sessions: sessionsData, totalSessions: sessionsData.length, selectedCranes, selectedMonths });
+  } catch (error) {
+    console.error('❌ Error fetching crane sessions:', error);
+    res.status(500).json({ message: 'Failed to fetch crane sessions data', error: error.message });
+  }
+});
+
 // ✅ Serve frontend
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
@@ -3316,4 +3359,48 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Removed duplicate late sessions route (handled by EARLY route above)
+
+// removed duplicate early sessions route
+
+// ✅ EARLY SESSIONS API (must be before static and catch-all routes)
+app.get('/api/crane/sessions', authenticateToken, async (req, res) => {
+  try {
+    const { cranes, months } = req.query;
+    const { role, companyName } = req.user;
+
+    console.log('🔍 [EARLY] User requesting crane sessions data:', { role, companyName, cranes, months });
+
+    if (role !== 'superadmin' && role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin or superadmin required.' });
+    }
+
+    const selectedCranes = cranes ? cranes.split(',') : [];
+    const selectedMonths = months ? months.split(',') : [];
+
+    if (selectedCranes.length === 0) {
+      return res.status(400).json({ message: 'No cranes selected' });
+    }
+
+    // Build company filter consistent with overview route
+    const companyFilter = (role !== 'superadmin') ? { craneCompany: companyName } : {};
+
+    const craneLogs = await CraneLog.find({
+      ...companyFilter,
+      DeviceID: { $in: selectedCranes }
+    }).sort({ Timestamp: 1 });
+
+    if (craneLogs.length === 0) {
+      return res.json({ success: true, sessions: [], message: 'No crane logs found for selected cranes' });
+    }
+
+    const sessionsData = generateSessionsData(craneLogs, selectedCranes);
+
+    res.json({ success: true, sessions: sessionsData, totalSessions: sessionsData.length, selectedCranes, selectedMonths });
+  } catch (error) {
+    console.error('❌ [EARLY] Error fetching crane sessions:', error);
+    res.status(500).json({ message: 'Failed to fetch crane sessions data', error: error.message });
+  }
 });

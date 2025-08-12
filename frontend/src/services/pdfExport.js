@@ -94,12 +94,45 @@ export class PDFExportService {
     this.doc.setFontSize(12);
     this.doc.setFont('helvetica', 'normal');
     
-    const { sessionsData, cumulativeStats, movementAnalysis, summary } = data;
+    const { sessionsData, cumulativeStats, movementAnalysis, summary, timePeriods } = data;
     
     // ✅ Calculate completed vs ongoing hours
     const completedHours = Math.round(cumulativeStats.overall.workingCompleted * 100) / 100;
     const ongoingHours = Math.round(cumulativeStats.overall.workingOngoing * 100) / 100;
     const totalWorkingHours = completedHours + ongoingHours;
+    
+    // ✅ Add time period information (without emojis to avoid encoding issues)
+    if (timePeriods) {
+      this.doc.setFontSize(11);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.text('Analysis Period:', this.margin, this.yPosition);
+      this.yPosition += 6;
+      
+      this.doc.setFontSize(10);
+      this.doc.setFont('helvetica', 'normal');
+      
+      // Show selected months
+      if (timePeriods.selectedMonths && timePeriods.selectedMonths.length > 0) {
+        const monthsText = timePeriods.selectedMonths.join(', ');
+        this.doc.text(`  Months: ${monthsText}`, this.margin + 5, this.yPosition);
+        this.yPosition += 5;
+      }
+      
+      // Show selected cranes
+      if (timePeriods.selectedCranes && timePeriods.selectedCranes.length > 0) {
+        const cranesText = timePeriods.selectedCranes.join(', ');
+        this.doc.text(`  Cranes: ${cranesText}`, this.margin + 5, this.yPosition);
+        this.yPosition += 5;
+      }
+      
+      // Show report generation time
+      if (timePeriods.reportGeneratedAt) {
+        this.doc.text(`  Generated: ${timePeriods.reportGeneratedAt}`, this.margin + 5, this.yPosition);
+        this.yPosition += 5;
+      }
+      
+      this.yPosition += 5;
+    }
     
     const summaryData = [
       { label: 'Total Cranes Analyzed', value: summary.totalCranes },
@@ -161,13 +194,13 @@ export class PDFExportService {
       return;
     }
 
-    // Table headers
-    const headers = ['Crane', 'Type', 'Start Time', 'End Time', 'Duration (h)', 'Start Location', 'End Location'];
-    const colWidths = [25, 30, 35, 40, 25, 30, 30];
+    // ✅ Fixed table layout to prevent cropping
+    const headers = ['Crane', 'Type', 'Start Time', 'End Time', 'Duration', 'Start Location', 'End Location'];
+    const colWidths = [22, 25, 32, 32, 20, 28, 28]; // Adjusted widths to fit page
     let xPos = this.margin;
 
     // Draw headers
-    this.doc.setFontSize(9);
+    this.doc.setFontSize(8); // Smaller font for headers
     this.doc.setFont('helvetica', 'bold');
     headers.forEach((header, index) => {
       this.doc.text(header, xPos, this.yPosition);
@@ -177,7 +210,7 @@ export class PDFExportService {
     this.yPosition += 8;
 
     // Draw data rows
-    this.doc.setFontSize(8);
+    this.doc.setFontSize(7); // Smaller font for data to fit more content
     this.doc.setFont('helvetica', 'normal');
     
     sessionsData.forEach(session => {
@@ -188,24 +221,31 @@ export class PDFExportService {
       }
 
       xPos = this.margin;
+      
+      // ✅ Handle ongoing sessions (show "Running" for end time)
+      const endTime = session.endTime === 'Session Data' || !session.endTime ? 'Running' : session.endTime;
+      const endLocation = session.endLocation?.lat === 'N/A' ? 'N/A' : `${session.endLocation?.lat}, ${session.endLocation?.lon}`;
+      
       const rowData = [
         session.craneId,
         session.sessionType,
-        session.startTime,
-        session.endTime,
+        session.startTime === 'Session Data' ? 'N/A' : session.startTime,
+        endTime,
         this.formatHoursToHoursMinutes(session.duration),
-        `${session.startLocation.lat}, ${session.startLocation.lon}`,
-        `${session.endLocation.lat}, ${session.endLocation.lon}`
+        session.startLocation?.lat === 'N/A' ? 'N/A' : `${session.startLocation?.lat}, ${session.startLocation?.lon}`,
+        endLocation
       ];
       
       rowData.forEach((cell, index) => {
-        // Truncate long text with better handling for End Time
-        let maxWidth = colWidths[index] - 2;
-        let truncatedCell = this.truncateText(cell, maxWidth);
+        // ✅ Better text truncation for each column
+        let maxWidth = colWidths[index] - 1;
+        let truncatedCell = this.truncateText(cell.toString(), maxWidth);
         
-        // ✅ Special handling for End Time column to prevent cutoff
-        if (index === 3 && cell === 'Currently Active') { // End Time column
-          truncatedCell = 'Active';
+        // ✅ Special handling for specific columns
+        if (index === 3 && cell === 'Running') { // End Time column
+          truncatedCell = 'Running';
+        } else if (index === 4) { // Duration column
+          truncatedCell = this.formatHoursToHoursMinutes(session.duration);
         }
         
         this.doc.text(truncatedCell, xPos, this.yPosition);
@@ -219,8 +259,27 @@ export class PDFExportService {
   }
 
   // ✅ Add cumulative statistics
-  addCumulativeStatistics(cumulativeStats) {
+  addCumulativeStatistics(cumulativeStats, timePeriods) {
     this.addSectionTitle('Cumulative Statistics');
+    
+    // ✅ Add time period information (without emojis)
+    if (timePeriods) {
+      this.doc.setFontSize(10);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.text('Data Period:', this.margin, this.yPosition);
+      this.yPosition += 6;
+      
+      this.doc.setFontSize(9);
+      this.doc.setFont('helvetica', 'normal');
+      
+      if (timePeriods.selectedMonths && timePeriods.selectedMonths.length > 0) {
+        const monthsText = timePeriods.selectedMonths.join(', ');
+        this.doc.text(`  Period: ${monthsText}`, this.margin + 5, this.yPosition);
+        this.yPosition += 5;
+      }
+      
+      this.yPosition += 5;
+    }
     
     this.doc.setFontSize(12);
     this.doc.setFont('helvetica', 'bold');
@@ -484,7 +543,7 @@ export class PDFExportService {
   // ✅ Generate and download comprehensive PDF
   async generatePDF(data) {
     try {
-      const { companyName, reportDate, sessionsData, cumulativeStats, movementAnalysis, monthlyMovementData } = data;
+      const { companyName, reportDate, sessionsData, cumulativeStats, movementAnalysis, monthlyMovementData, timePeriods } = data;
       
       console.log('🔍 Starting PDF generation with data:', {
         companyName,
@@ -492,7 +551,8 @@ export class PDFExportService {
         sessionsCount: sessionsData?.length,
         hasCumulativeStats: !!cumulativeStats,
         hasMovementAnalysis: !!movementAnalysis,
-        hasMonthlyData: !!monthlyMovementData
+        hasMonthlyData: !!monthlyMovementData,
+        hasTimePeriods: !!timePeriods
       });
       
       this.initDocument(companyName, reportDate);
@@ -505,10 +565,11 @@ export class PDFExportService {
       await this.addChartsSection();
       console.log('✅ Charts section added');
       
-      this.addSessionsTable(sessionsData);
+      // ✅ Add sessions table (restore working logic)
+      this.addSessionsTable(sessionsData || []);
       console.log('✅ Sessions table added');
       
-      this.addCumulativeStatistics(cumulativeStats);
+      this.addCumulativeStatistics(cumulativeStats, timePeriods);
       console.log('✅ Cumulative statistics added');
       
       this.addMovementAnalysis(movementAnalysis);
