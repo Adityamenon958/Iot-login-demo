@@ -40,17 +40,13 @@ export class PDFExportService {
     this.doc.text(`Company: ${companyName}`, this.margin, this.yPosition);
     
     this.yPosition += 8;
-    // ✅ Add current time to report date
-    const currentTime = new Date().toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
+    // ✅ Show only the report date in DD/MM/YYYY format
+    const formattedDate = new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      month: '2-digit',
+      year: 'numeric'
     });
-    this.doc.text(`Report Date: ${reportDate} at ${currentTime}`, this.margin, this.yPosition);
+    this.doc.text(`Report Date: ${formattedDate}`, this.margin, this.yPosition);
     
     this.yPosition += 15;
     this.addSeparator();
@@ -134,14 +130,19 @@ export class PDFExportService {
       this.yPosition += 5;
     }
     
+    // ✅ Period label for inline display
+    const periodLabel = (timePeriods && Array.isArray(timePeriods.selectedMonths) && timePeriods.selectedMonths.length > 0)
+      ? timePeriods.selectedMonths.join(', ')
+      : 'Selected Period';
+    
     const summaryData = [
       { label: 'Total Cranes Analyzed', value: summary.totalCranes },
       { label: 'Total Sessions Recorded', value: summary.totalSessions },
       { label: 'Total Logs Processed', value: summary.totalLogs },
       { label: 'Analysis Period', value: `${summary.totalMonths} month(s)` },
-      { label: 'Total Working Hours', value: `${this.formatHoursToHoursMinutes(completedHours)} + ${this.formatHoursToHoursMinutes(ongoingHours)} ongoing` },
-      { label: 'Total Maintenance Hours', value: `${this.formatHoursToHoursMinutes(cumulativeStats.overall.maintenance)}` },
-      { label: 'Total Distance Traveled', value: `${this.calculateTotalDistance(movementAnalysis)}m` }
+      { label: `Total Working Hours (${periodLabel})`, value: `${this.formatHoursToHoursMinutes(completedHours)} + ${this.formatHoursToHoursMinutes(ongoingHours)} ongoing` },
+      { label: `Total Maintenance Hours (${periodLabel})`, value: `${this.formatHoursToHoursMinutes(cumulativeStats.overall.maintenance)}` },
+      { label: `Total Distance Traveled (${periodLabel})`, value: `${this.calculateTotalDistance(movementAnalysis)}m` }
     ];
 
     summaryData.forEach(stat => {
