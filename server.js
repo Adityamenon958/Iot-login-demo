@@ -3347,6 +3347,125 @@ app.get('/api/crane/sessions', authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ Filtered working totals for first card (safe, standalone)
+app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const cranesParam = (req.query.cranes || '').trim();
+    const selectedCranes = cranesParam ? cranesParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const startStr = (req.query.start || '').trim();
+    const endStr = (req.query.end || '').trim();
+
+    // Company filter matches overview logic
+    const companyFilter = role !== 'superadmin' ? { craneCompany: companyName } : {};
+
+    // Determine crane list
+    const allCranes = await CraneLog.distinct('DeviceID', companyFilter);
+    const cranes = selectedCranes.length > 0 ? selectedCranes : allCranes;
+    if (cranes.length === 0) {
+      return res.json({ success: true, workingCompleted: 0, workingOngoing: 0, cranesCount: 0, cranesList: [], period: null });
+    }
+
+    // Determine period
+    const now = getCurrentTimeInIST();
+    let startDate, endDate;
+    if (startStr && endStr) {
+      const [ys, ms, ds] = startStr.split('-').map(Number);
+      const [ye, me, de] = endStr.split('-').map(Number);
+      startDate = new Date(ys, ms - 1, ds, 0, 0, 0);
+      endDate = new Date(ye, me - 1, de, 23, 59, 59);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+      endDate = now;
+    }
+
+    let workingCompleted = 0;
+    let workingOngoing = 0;
+
+    for (const deviceId of cranes) {
+      // ✅ Fetch all logs and filter in JavaScript for accurate date comparison
+      const allLogs = await CraneLog.find({ 
+        ...companyFilter, 
+        DeviceID: deviceId
+      }).lean().sort({ Timestamp: 1 });
+
+      // Filter logs by date range in JavaScript
+      let logs = allLogs;
+      if (startStr && endStr) {
+        logs = allLogs.filter(log => {
+          const logTimestamp = parseTimestamp(log.Timestamp);
+          if (!logTimestamp) return false;
+          return logTimestamp >= startDate && logTimestamp <= endDate;
+        });
+        
+        // ✅ Debug logging
+        console.log(`🔍 [working-totals] Date filter for ${deviceId}:`, {
+          startStr,
+          endStr,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          totalLogs: allLogs.length,
+          filteredLogs: logs.length
+        });
+      }
+
+      // ✅ Debug logging
+      console.log(`🔍 [working-totals] Found ${logs.length} logs for ${deviceId} with date filter`);
+      if (logs.length > 0) {
+        console.log(`🔍 [working-totals] First log: ${logs[0].Timestamp}, Last log: ${logs[logs.length - 1].Timestamp}`);
+      }
+
+      if (logs.length === 0) continue;
+
+      // ✅ Use the same working hours logic as overview endpoint
+      let currentWorkingStart = null;
+      let isCurrentlyWorking = false;
+
+      for (let i = 0; i < logs.length; i++) {
+        const log = logs[i];
+        const timestamp = parseTimestamp(log.Timestamp);
+        if (!timestamp) continue;
+
+        const isWorking = (log.DigitalInput1 === "1" && log.DigitalInput2 === "0");
+        
+        if (isWorking && !isCurrentlyWorking) {
+          // Start of working period
+          currentWorkingStart = timestamp;
+          isCurrentlyWorking = true;
+        } else if (!isWorking && isCurrentlyWorking) {
+          // End of working period
+          if (currentWorkingStart) {
+            const duration = (timestamp - currentWorkingStart) / (1000 * 60 * 60); // hours
+            workingCompleted += duration;
+            currentWorkingStart = null;
+          }
+          isCurrentlyWorking = false;
+        }
+      }
+
+      // Handle ongoing working session
+      if (isCurrentlyWorking && currentWorkingStart) {
+        const effectiveStart = currentWorkingStart < startDate ? startDate : currentWorkingStart;
+        // Use current time for ongoing sessions, not end of day
+        const duration = (now - effectiveStart) / (1000 * 60 * 60); // hours
+        workingOngoing += duration;
+      }
+    }
+
+    res.json({
+      success: true,
+      workingCompleted: Math.round(workingCompleted * 100) / 100,
+      workingOngoing: Math.round(workingOngoing * 100) / 100,
+      cranesCount: cranes.length,
+      cranesList: cranes,
+      period: { start: startDate.toISOString(), end: endDate.toISOString() }
+    });
+  } catch (err) {
+    console.error('❌ working-totals error:', err);
+    res.status(500).json({ success: false, message: 'Failed to compute working totals' });
+  }
+});
+
 // ✅ Serve frontend
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 

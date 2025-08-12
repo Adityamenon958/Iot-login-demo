@@ -20,6 +20,8 @@ import ExportModal from '../components/ExportModal';
 import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
 import { SmoothValueTransition, SmoothNumberTransition, SmoothTimeTransition } from '../components/SmoothValueTransition';
 import { LastUpdatedTimestamp } from '../components/LastUpdatedTimestamp';
+import FilterChips from '../components/FilterChips';
+import FiltersButton from '../components/FiltersButton';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -40,8 +42,11 @@ export default function CraneOverview() {
   const [selectedCrane, setSelectedCrane] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeTab, setActiveTab] = useState('working');
+  const [filters, setFilters] = useState({ cranes: [], start: '', end: '' });
+  const [appliedFilters, setAppliedFilters] = useState({ cranes: [], start: '', end: '' });
+  const [filteredTotals, setFilteredTotals] = useState(null);
 
-  // ✅ Background refresh hook for dashboard data
+  // ✅ Background refresh hook for dashboard data (restored)
   const {
     data: dashboardData,
     lastUpdated,
@@ -58,7 +63,7 @@ export default function CraneOverview() {
     30000 // 30 seconds refresh interval
   );
 
-  // ✅ Initialize with default data
+  // ✅ Initialize with default data (restored)
   const defaultData = {
     totalWorkingHours: 0,
     completedHours: 0,
@@ -74,75 +79,101 @@ export default function CraneOverview() {
     }
   };
 
-  // ✅ Use dashboard data or default
+  // ✅ Use dashboard data or default (restored)
   const currentData = dashboardData || defaultData;
 
-  // ✅ Helper function to get formatted date labels for Quick Statistics
+  // ✅ Available cranes from overview (once loaded) (restored)
+  const availableCranes = (dashboardData?.craneDevices || []).sort();
+
+  // ✅ Helper function to get formatted date labels for Quick Statistics (restored)
   const getDateLabels = () => {
     const now = new Date();
-    
-    // Today's date
-    const todayLabel = now.toLocaleDateString('en-US', { 
-      day: '2-digit', 
-      month: 'short' 
-    });
-    
-    // This Week: 7 days ago to today (rolling window - matches backend logic)
+    const todayLabel = now.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    
-    const weekStartLabel = weekAgo.toLocaleDateString('en-US', { 
-      day: '2-digit', 
-      month: 'short' 
-    });
-    const weekEndLabel = now.toLocaleDateString('en-US', { 
-      day: '2-digit', 
-      month: 'short' 
-    });
-    
-    // This Month
-    const monthLabel = now.toLocaleDateString('en-US', { 
-      month: 'short' 
-    });
-    
-    // This Year
+    const weekStartLabel = weekAgo.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+    const weekEndLabel = now.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+    const monthLabel = now.toLocaleDateString('en-US', { month: 'short' });
     const yearLabel = now.getFullYear().toString();
-    
-    return {
-      today: todayLabel,
-      thisWeek: `${weekStartLabel} - ${weekEndLabel}`,
-      thisMonth: monthLabel,
-      thisYear: yearLabel
-    };
+    return { today: todayLabel, thisWeek: `${weekStartLabel} - ${weekEndLabel}`, thisMonth: monthLabel, thisYear: yearLabel };
   };
 
-  // ✅ Get date labels
+  // ✅ Get date labels (restored)
   const dateLabels = getDateLabels();
 
-  // ✅ Handler for crane selection
+  // ✅ Handler for crane selection (restored)
   const handleCraneSelect = (craneData) => {
     setSelectedCrane(craneData);
   };
 
-  // ✅ Handler for export modal
+  // ✅ Handler for export modal (restored)
   const handleExportModal = () => {
     setShowExportModal(true);
   };
 
-  // ✅ Calculate total cranes for fraction display
+  // ✅ Calculate total cranes for fraction display (restored)
   const totalCranes = (currentData.activeCranes || 0) + (currentData.inactiveCranes || 0) + (currentData.underMaintenance || 0);
 
-  // ✅ Define card data for better maintainability
+  // Apply from FiltersButton will call this
+  const onApplyFilters = (f) => {
+    setAppliedFilters(f || { cranes: [], start: '', end: '' });
+  };
+
+  // Fetch filtered totals for first card when applied filters change
+  useEffect(() => {
+    const hasCrane = appliedFilters.cranes && appliedFilters.cranes.length > 0;
+    const hasRange = appliedFilters.start && appliedFilters.end;
+    if (!hasCrane && !hasRange) { setFilteredTotals(null); return; }
+    const load = async () => {
+      try {
+        const params = {};
+        if (hasCrane) params.cranes = appliedFilters.cranes.join(',');
+        if (hasRange) { params.start = appliedFilters.start; params.end = appliedFilters.end; }
+        const resp = await axios.get('/api/crane/working-totals', { params, withCredentials: true });
+        if (resp.data?.success) setFilteredTotals(resp.data);
+        else setFilteredTotals(null);
+      } catch (e) { console.error('working totals error', e); setFilteredTotals(null); }
+    };
+    load();
+  }, [appliedFilters.cranes, appliedFilters.start, appliedFilters.end]);
+
+  // Helper to format period title
+  const formatPeriodTitle = () => {
+    if (appliedFilters.start && appliedFilters.end) {
+      const s = new Date(appliedFilters.start);
+      const e = new Date(appliedFilters.end);
+      const fmt = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      return `Total Working Hours (${fmt(s)} – ${fmt(e)})`;
+    }
+    return `Total Working Hours (${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()})`;
+  };
+
+  // Build first card data
+  const workingCompleted = filteredTotals ? filteredTotals.workingCompleted : (currentData.quickStats?.thisMonth?.completed || 0);
+  const workingOngoing = filteredTotals ? filteredTotals.workingOngoing : (currentData.quickStats?.thisMonth?.ongoing || 0);
+  const cranesCount = filteredTotals ? filteredTotals.cranesCount : totalCranes;
+  const cranesList = filteredTotals ? filteredTotals.cranesList : [];
+
+  // When filters are applied, show the filtered totals
+  const isFiltered = !!filteredTotals;
+  const firstCardValue = workingCompleted;
+  const firstCardOngoing = workingOngoing;
+
+  const firstCard = {
+    id: 1,
+    title: formatPeriodTitle(),
+    subtitle: filteredTotals
+      ? `${cranesCount} Total Cranes${cranesList.length === 1 ? ` (${cranesList[0]})` : cranesList.length > 1 ? ` (${cranesList.slice(0,2).join(', ')}${cranesList.length>2 ? `, +${cranesList.length-2}`:''})` : ''}`
+      : `${totalCranes} Total Cranes`,
+    value: firstCardValue,
+    ongoingHours: firstCardOngoing,
+    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    icon: PiTimerDuotone,
+    iconSize: 60
+  };
+
+  // Replace first item in summaryCards
   const summaryCards = [
-    {
-      id: 1,
-      title: `Total Working Hours (${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()})`,
-      subtitle: `${totalCranes} Total Cranes`,
-      value: currentData.quickStats?.thisMonth?.completed || 0,  // ✅ Use current month's completed hours
-      ongoingHours: currentData.quickStats?.thisMonth?.ongoing || 0,  // ✅ Use current month's ongoing hours
-      gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      icon: PiTimerDuotone,
-      iconSize: 60
-    },
+    firstCard,
     {
       id: 2,
       title: `${currentData.activeCranes || 0}/${totalCranes} Active Cranes`,
@@ -270,7 +301,16 @@ export default function CraneOverview() {
           {/* ✅ Last updated timestamp */}
           <LastUpdatedTimestamp lastUpdated={lastUpdated} />
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 align-items-center">
+          {/* ✅ Compact filters: chips + button */}
+          <FilterChips filters={filters} onClick={() => { /* open via button click */ }} />
+          <FiltersButton
+            cranes={availableCranes}
+            initial={filters}
+            onApply={onApplyFilters}
+            onReset={() => setFilters({ cranes: [], start: '', end: '' })}
+          />
+
           {/* ✅ Manual refresh button */}
           <button
             className="btn btn-outline-secondary btn-sm"
