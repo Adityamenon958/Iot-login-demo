@@ -18,6 +18,37 @@ export const getGoogleMapsRouteUrl = (startLat, startLon, endLat, endLon) => {
   return `https://www.google.com/maps/dir/${startLat},${startLon}/${endLat},${endLon}`;
 };
 
+// ✅ Generate Google Maps URL for multi-waypoint route
+export const getGoogleMapsMultiRouteUrl = (route) => {
+  if (!route || route.length < 2) {
+    console.warn('⚠️ Invalid route data for multi-waypoint route:', route);
+    return null;
+  }
+  
+  // Validate all coordinates
+  const validRoute = route.filter(point => isValidCoordinates(point.lat, point.lon));
+  if (validRoute.length < 2) {
+    console.warn('⚠️ Not enough valid coordinates for route:', validRoute);
+    return null;
+  }
+  
+  // Start point
+  const start = validRoute[0];
+  // End point
+  const end = validRoute[validRoute.length - 1];
+  // Intermediate waypoints (if any)
+  const waypoints = validRoute.slice(1, -1);
+  
+  if (waypoints.length === 0) {
+    // Direct route
+    return `https://www.google.com/maps/dir/${start.lat},${start.lon}/${end.lat},${end.lon}`;
+  } else {
+    // ✅ FIXED: Use proper Google Maps API format for multi-waypoint routes
+    const waypointsStr = waypoints.map(point => `${point.lat},${point.lon}`).join('|');
+    return `https://www.google.com/maps/dir/?api=1&origin=${start.lat},${start.lon}&destination=${end.lat},${end.lon}&waypoints=${waypointsStr}`;
+  }
+};
+
 // ✅ Validate coordinates before opening map
 export const isValidCoordinates = (lat, lon) => {
   const latNum = parseFloat(lat);

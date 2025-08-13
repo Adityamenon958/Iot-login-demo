@@ -88,14 +88,98 @@ function calculateAllCraneDistances(allCraneLogs, targetDate) {
     const craneLogs = craneGroups[deviceId];
     const distance = calculateDailyDistance(craneLogs, targetDate);
     
-    // ✅ Filter valid GPS logs for location data
-    const validGPSLogs = craneLogs.filter(log => {
+    // ✅ Filter valid GPS logs for location data - ONLY when crane is working (ignition on)
+    const workingGPSLogs = craneLogs.filter(log => {
+      return validateGPSData(log.Latitude, log.Longitude) && 
+             parseFloat(log.Latitude) !== 0 && 
+             parseFloat(log.Longitude) !== 0 &&
+             log.DigitalInput1 === "1"; // ✅ Only include logs when crane ignition is ON
+    });
+    
+    // ✅ Fallback to all valid GPS logs if no working logs found
+    const validGPSLogs = workingGPSLogs.length > 0 ? workingGPSLogs : craneLogs.filter(log => {
       return validateGPSData(log.Latitude, log.Longitude) && 
              parseFloat(log.Latitude) !== 0 && 
              parseFloat(log.Longitude) !== 0;
     });
     
     if (distance > 0 && validGPSLogs.length > 0) {
+      // ✅ Build route from working logs
+      let route = validGPSLogs.map(log => ({
+        lat: parseFloat(log.Latitude),
+        lon: parseFloat(log.Longitude),
+        timestamp: log.Timestamp
+      }));
+      
+      // ✅ Default endLocation is the last working log
+      let endLocation = {
+        lat: validGPSLogs[validGPSLogs.length - 1].Latitude,
+        lon: validGPSLogs[validGPSLogs.length - 1].Longitude,
+        timestamp: validGPSLogs[validGPSLogs.length - 1].Timestamp
+      };
+      
+      // ✅ Find the ignition OFF log after the last working log and append to route
+      try {
+        const lastWorkingLog = validGPSLogs[validGPSLogs.length - 1];
+        console.log(`🔍 [${deviceId}] Last working log:`, {
+          timestamp: lastWorkingLog.Timestamp,
+          digitalInput1: lastWorkingLog.DigitalInput1
+        });
+        
+        const lastWorkingIndex = craneLogs.findIndex(log => 
+          log.Timestamp === lastWorkingLog.Timestamp && 
+          log.DeviceID === lastWorkingLog.DeviceID
+        );
+        
+        console.log(`🔍 [${deviceId}] Found at index:`, lastWorkingIndex, 'of', craneLogs.length);
+        
+        if (lastWorkingIndex >= 0 && lastWorkingIndex < craneLogs.length - 1) {
+          const nextLog = craneLogs[lastWorkingIndex + 1];
+          console.log(`🔍 [${deviceId}] Next log:`, {
+            timestamp: nextLog.Timestamp,
+            digitalInput1: nextLog.DigitalInput1,
+            lat: nextLog.Latitude,
+            lon: nextLog.Longitude
+          });
+          
+          if (nextLog && nextLog.DigitalInput1 === "0" && 
+              validateGPSData(nextLog.Latitude, nextLog.Longitude) &&
+              parseFloat(nextLog.Latitude) !== 0 && 
+              parseFloat(nextLog.Longitude) !== 0) {
+            console.log(`✅ [${deviceId}] Found ignition OFF log, updating end location`);
+            endLocation = {
+              lat: nextLog.Latitude,
+              lon: nextLog.Longitude,
+              timestamp: nextLog.Timestamp
+            };
+            
+            // ✅ Append ignition OFF log as final waypoint
+            route.push({
+              lat: parseFloat(nextLog.Latitude),
+              lon: parseFloat(nextLog.Longitude),
+              timestamp: nextLog.Timestamp
+            });
+            console.log(`✅ [${deviceId}] Added ignition OFF log to route as final waypoint: ${nextLog.Timestamp}`);
+          } else {
+            console.log(`⚠️ [${deviceId}] Next log is not valid ignition OFF:`, {
+              isNextLog: !!nextLog,
+              digitalInput1: nextLog?.DigitalInput1,
+              hasValidGPS: nextLog ? validateGPSData(nextLog.Latitude, nextLog.Longitude) : false,
+              lat: nextLog?.Latitude,
+              lon: nextLog?.Longitude
+            });
+          }
+        } else {
+          console.log(`⚠️ [${deviceId}] No next log available:`, {
+            lastWorkingIndex,
+            craneLogsLength: craneLogs.length
+          });
+        }
+      } catch (err) {
+        console.warn(`⚠️ Error finding ignition OFF log for ${deviceId}:`, err);
+        // Use default endLocation (last working log)
+      }
+      
       craneDistances[deviceId] = {
         deviceId,
         distance: Math.round(distance * 100) / 100,
@@ -104,17 +188,22 @@ function calculateAllCraneDistances(allCraneLogs, targetDate) {
           lon: validGPSLogs[0].Longitude,
           timestamp: validGPSLogs[0].Timestamp
         },
-        endLocation: {
-          lat: validGPSLogs[validGPSLogs.length - 1].Latitude,
-          lon: validGPSLogs[validGPSLogs.length - 1].Longitude,
-          timestamp: validGPSLogs[validGPSLogs.length - 1].Timestamp
-        }
+        endLocation: endLocation,
+        // ✅ NEW: Complete route with all waypoints + ignition OFF log
+        route: route,
+        waypointsCount: route.length
       };
       
       totalDistance += distance;
       craneCount++;
     } else if (validGPSLogs.length === 1) {
       // ✅ Handle case with only one valid GPS point (no movement, but has location)
+      const route = validGPSLogs.map(log => ({
+        lat: parseFloat(log.Latitude),
+        lon: parseFloat(log.Longitude),
+        timestamp: log.Timestamp
+      }));
+      
       craneDistances[deviceId] = {
         deviceId,
         distance: 0,
@@ -127,7 +216,10 @@ function calculateAllCraneDistances(allCraneLogs, targetDate) {
           lat: validGPSLogs[0].Latitude,
           lon: validGPSLogs[0].Longitude,
           timestamp: validGPSLogs[0].Timestamp
-        }
+        },
+        // ✅ NEW: Route with single point
+        route: route,
+        waypointsCount: 1
       };
       
       craneCount++;

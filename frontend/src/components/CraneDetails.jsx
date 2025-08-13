@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, Badge, Row, Col, Button, Tooltip, OverlayTrigger } from 'react-bootstrap';
 import { PiMapPin, PiTimer, PiRuler, PiCraneDuotone, PiArrowUpRight } from 'react-icons/pi';
-import { getGoogleMapsUrl, getGoogleMapsRouteUrl, openGoogleMaps, isValidCoordinates } from '../utils/mapUtils';
+import { getGoogleMapsUrl, getGoogleMapsRouteUrl, getGoogleMapsMultiRouteUrl, openGoogleMaps, isValidCoordinates } from '../utils/mapUtils';
 import styles from './CraneDetails.module.css';
 
 export default function CraneDetails({ selectedCrane }) {
@@ -185,47 +185,147 @@ export default function CraneDetails({ selectedCrane }) {
             </Col>
           </Row>
           
-          {/* ✅ Route View Button */}
+          {/* ✅ Enhanced Route Information */}
           {selectedCrane.distance > 0 && (
             <div className="mt-3">
-              <OverlayTrigger
-                placement="top"
-                overlay={
-                  <Tooltip>
-                    {(selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0) ||
-                     (selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0)
-                      ? 'No location data available for route' 
-                      : 'View the route from start to end location'}
-                  </Tooltip>
-                }
-              >
-                <Button
-                  size="sm"
-                  variant="outline-success"
-                  className="w-100"
-                  onClick={() => {
-                    const url = getGoogleMapsRouteUrl(
-                      selectedCrane.startLocation.lat,
-                      selectedCrane.startLocation.lon,
-                      selectedCrane.endLocation.lat,
-                      selectedCrane.endLocation.lon
-                    );
-                    openGoogleMaps(url);
-                  }}
-                  disabled={
-                    !isValidCoordinates(selectedCrane.startLocation.lat, selectedCrane.startLocation.lon) ||
-                    !isValidCoordinates(selectedCrane.endLocation.lat, selectedCrane.endLocation.lon) ||
-                    (selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0) ||
-                    (selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0)
+              <div className={styles.sectionHeader}>
+                <PiArrowUpRight size={20} />
+                <h6>
+                  Route Information
+                </h6>
+              </div>
+              
+              {/* Route Summary */}
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span className={styles.distanceLabel}>Waypoints:</span>
+                  <span className={styles.distanceValue}>
+                    {selectedCrane.waypointsCount || 'N/A'}
+                  </span>
+                </div>
+                
+                {selectedCrane.route && selectedCrane.route.length > 2 && (
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className={styles.distanceLabel}>Route Type:</span>
+                    <Badge bg="info" className="fs-6">
+                      Multi-Point Route
+                    </Badge>
+                  </div>
+                )}
+                
+                {selectedCrane.route && selectedCrane.route.length === 2 && (
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className={styles.distanceLabel}>Route Type:</span>
+                    <Badge bg="secondary" className="fs-6">
+                      Direct Route
+                    </Badge>
+                  </div>
+                )}
+                
+                {/* ✅ NEW: Route Efficiency Analysis */}
+                {selectedCrane.route && selectedCrane.route.length > 2 && (
+                  <>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <span className={styles.distanceLabel}>Route Efficiency:</span>
+                      <span className={styles.distanceValue}>
+                        {(() => {
+                          // Calculate straight-line distance vs actual distance
+                          const start = selectedCrane.route[0];
+                          const end = selectedCrane.route[selectedCrane.route.length - 1];
+                          const straightLineDistance = Math.sqrt(
+                            Math.pow(end.lat - start.lat, 2) + Math.pow(end.lon - start.lon, 2)
+                          ) * 111000; // Convert to meters (roughly)
+                          
+                          const efficiency = ((straightLineDistance / selectedCrane.distance) * 100).toFixed(1);
+                          return `${efficiency}%`;
+                        })()}
+                      </span>
+                    </div>
+                    
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <span className={styles.distanceLabel}>Avg Speed:</span>
+                      <span className={styles.distanceValue}>
+                        {(() => {
+                          if (selectedCrane.route.length < 2) return 'N/A';
+                          
+                          const startTime = new Date(selectedCrane.route[0].timestamp);
+                          const endTime = new Date(selectedCrane.route[selectedCrane.route.length - 1].timestamp);
+                          const durationHours = (endTime - startTime) / (1000 * 60 * 60);
+                          
+                          if (durationHours <= 0) return 'N/A';
+                          
+                          const avgSpeed = (selectedCrane.distance / durationHours).toFixed(1);
+                          return `${avgSpeed} m/h`;
+                        })()}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Route View Buttons */}
+              <div className="d-grid gap-2">
+                {/* View Complete Route (if multiple waypoints) */}
+                {selectedCrane.route && selectedCrane.route.length > 2 && (
+                  <OverlayTrigger
+                    placement="top"
+                    overlay={
+                      <Tooltip>
+                        View the complete route with all {selectedCrane.waypointsCount} waypoints
+                      </Tooltip>
+                    }
+                  >
+                    <Button
+                      size="sm"
+                      variant="success"
+                      className="w-100"
+                      onClick={() => {
+                        const url = getGoogleMapsMultiRouteUrl(selectedCrane.route);
+                        if (url) {
+                          openGoogleMaps(url);
+                        } else {
+                          console.error('❌ Failed to generate multi-waypoint route URL');
+                        }
+                      }}
+                    >
+                      <PiArrowUpRight size={14} className="me-1" />
+                      View Complete Route ({selectedCrane.waypointsCount} points)
+                    </Button>
+                  </OverlayTrigger>
+                )}
+                
+                {/* View Direct Route (always available) */}
+                <OverlayTrigger
+                  placement="top"
+                  overlay={
+                    <Tooltip>
+                      View direct route from start to end location
+                    </Tooltip>
                   }
                 >
-                  <PiArrowUpRight size={14} className="me-1" />
-                  {(selectedCrane.startLocation.lat === 0 && selectedCrane.startLocation.lon === 0) ||
-                   (selectedCrane.endLocation.lat === 0 && selectedCrane.endLocation.lon === 0)
-                    ? 'No Route Data' 
-                    : 'View Route'}
-                </Button>
-              </OverlayTrigger>
+                  <Button
+                    size="sm"
+                    variant="outline-success"
+                    className="w-100"
+                    onClick={() => {
+                      const url = getGoogleMapsRouteUrl(
+                        selectedCrane.startLocation.lat,
+                        selectedCrane.startLocation.lon,
+                        selectedCrane.endLocation.lat,
+                        selectedCrane.endLocation.lon
+                      );
+                      openGoogleMaps(url);
+                    }}
+                    disabled={
+                      !isValidCoordinates(selectedCrane.startLocation.lat, selectedCrane.startLocation.lon) ||
+                      !isValidCoordinates(selectedCrane.endLocation.lat, selectedCrane.endLocation.lon)
+                    }
+                  >
+                    <PiArrowUpRight size={14} className="me-1" />
+                    View Direct Route
+                  </Button>
+                </OverlayTrigger>
+              </div>
             </div>
           )}
         </div>
@@ -240,13 +340,19 @@ export default function CraneDetails({ selectedCrane }) {
           </div>
           
           <Row className="text-center">
-            <Col xs={6}>
+            <Col xs={4}>
               <div className={styles.statItem}>
                 <div className={styles.statValue}>{selectedCrane.distance}m</div>
                 <div className={styles.statLabel}>Distance</div>
               </div>
             </Col>
-            <Col xs={6}>
+            <Col xs={4}>
+              <div className={styles.statItem}>
+                <div className={styles.statValue}>{selectedCrane.waypointsCount || 'N/A'}</div>
+                <div className={styles.statLabel}>Waypoints</div>
+              </div>
+            </Col>
+            <Col xs={4}>
               <div className={styles.statItem}>
                 <div className={styles.statValue}>{status.text.split(' ')[0]}</div>
                 <div className={styles.statLabel}>Level</div>
