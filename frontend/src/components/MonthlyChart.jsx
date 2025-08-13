@@ -17,33 +17,50 @@ function formatHoursToHoursMinutes(decimalHours) {
   return `${hours}h ${minutes}m`;
 }
 
-export default function MonthlyChart() {
+export default function MonthlyChart({ selectedCranes = [], start, end }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [chartData, setChartData] = useState([]);
+  const [granularity, setGranularity] = useState('monthly');
 
-  // ✅ Fetch monthly crane statistics
+  // ✅ Fetch time-series stats
   useEffect(() => {
-    const fetchMonthlyStats = async () => {
+    const fetchStats = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const response = await axios.get('/api/crane/monthly-stats', { 
-          withCredentials: true 
+        const params = { granularity: 'auto' };
+        if (Array.isArray(selectedCranes) && selectedCranes.length > 0) {
+          params.cranes = selectedCranes.join(',');
+        }
+        if (start && end) {
+          params.start = start;
+          params.end = end;
+        }
+        
+        const response = await axios.get('/api/crane/timeseries-stats', { 
+          withCredentials: true,
+          params
         });
         
-        setChartData(response.data.monthlyData || []);
+        setGranularity(response.data.granularity || 'monthly');
+        setChartData(response.data.points || []);
       } catch (err) {
-        console.error('❌ Failed to fetch monthly stats:', err);
+        console.error('❌ Failed to fetch time-series stats:', err);
         setError('Failed to load chart data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMonthlyStats();
-  }, []);
+    fetchStats();
+  }, [JSON.stringify(selectedCranes), start, end]);
+
+  // ✅ Caption text for selected cranes
+  const cranesCaption = (Array.isArray(selectedCranes) && selectedCranes.length > 0)
+    ? (selectedCranes.length <= 2 ? selectedCranes.join(', ') : `${selectedCranes.slice(0,2).join(', ')} (+${selectedCranes.length-2})`)
+    : 'All';
 
   // ✅ Custom tooltip formatter
   const CustomTooltip = ({ active, payload, label }) => {
@@ -72,97 +89,56 @@ export default function MonthlyChart() {
     return null;
   };
 
-  // ✅ Loading state
+  // ✅ Loading and error states (unchanged)
   if (loading) {
     return (
-      <div style={{ 
-        height: '100%', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        backgroundColor: '#f8f9fa'
-      }}>
-        <p className="text-muted" style={{ fontSize: '0.65rem' }}>
-          Loading chart data...
-        </p>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa' }}>
+        <p className="text-muted" style={{ fontSize: '0.65rem' }}>Loading chart data...</p>
       </div>
     );
   }
-
-  // ✅ Error state
   if (error) {
     return (
-      <div style={{ 
-        height: '100%', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        backgroundColor: '#f8f9fa'
-      }}>
-        <p className="text-muted" style={{ fontSize: '0.65rem' }}>
-          {error}
-        </p>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa' }}>
+        <p className="text-muted" style={{ fontSize: '0.65rem' }}>{error}</p>
       </div>
     );
   }
-
-  // ✅ No data state
   if (chartData.length === 0) {
     return (
-      <div style={{ 
-        height: '100%', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        backgroundColor: '#f8f9fa'
-      }}>
-        <p className="text-muted" style={{ fontSize: '0.65rem' }}>
-          No data available
-        </p>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa' }}>
+        <p className="text-muted" style={{ fontSize: '0.65rem' }}>No data available</p>
       </div>
     );
   }
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-        <XAxis 
-          dataKey="month" 
-          stroke="#666"
-          fontSize={10}
-          tick={{ fontSize: 10 }}
-        />
-        <YAxis 
-          stroke="#666"
-          fontSize={10}
-          tick={{ fontSize: 10 }}
-          tickFormatter={(value) => formatHoursToHoursMinutes(value)}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend 
-          wrapperStyle={{ fontSize: '10px' }}
-          iconType="line"
-        />
-        <Line 
-          type="monotone" 
-          dataKey="usageHours" 
-          stroke="#2563eb" 
-          strokeWidth={2}
-          dot={{ fill: '#2563eb', strokeWidth: 2, r: 3 }}
-          activeDot={{ r: 5, stroke: '#2563eb', strokeWidth: 2 }}
-          name="Usage Hours"
-        />
-        <Line 
-          type="monotone" 
-          dataKey="maintenanceHours" 
-          stroke="#f97316" 
-          strokeWidth={2}
-          dot={{ fill: '#f97316', strokeWidth: 2, r: 3 }}
-          activeDot={{ r: 5, stroke: '#f97316', strokeWidth: 2 }}
-          name="Maintenance Hours"
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <div style={{ position: 'relative', height: '100%' }}>
+      {/* Caption for selected cranes */}
+      <div style={{ position: 'absolute', top: 6, right: 8, zIndex: 1, fontSize: '10px', color: '#6b7280' }}>
+        Cranes: {cranesCaption}
+      </div>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData} margin={{ top: 18, right: 5, left: 5, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis 
+            dataKey="label" 
+            stroke="#666"
+            fontSize={10}
+            tick={{ fontSize: 10 }}
+          />
+          <YAxis 
+            stroke="#666"
+            fontSize={10}
+            tick={{ fontSize: 10 }}
+            tickFormatter={(value) => formatHoursToHoursMinutes(value)}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ fontSize: '10px' }} iconType="line" />
+          <Line type="monotone" dataKey="usageHours" stroke="#2563eb" strokeWidth={2} dot={{ fill: '#2563eb', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, stroke: '#2563eb', strokeWidth: 2 }} name="Usage Hours" />
+          <Line type="monotone" dataKey="maintenanceHours" stroke="#f97316" strokeWidth={2} dot={{ fill: '#f97316', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, stroke: '#f97316', strokeWidth: 2 }} name="Maintenance Hours" />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 } 

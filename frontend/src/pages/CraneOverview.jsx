@@ -117,6 +117,7 @@ export default function CraneOverview() {
   // Apply from FiltersButton will call this
   const onApplyFilters = (f) => {
     setAppliedFilters(f || { cranes: [], start: '', end: '' });
+    setFilters(f || { cranes: [], start: '', end: '' });
   };
 
   // Fetch filtered totals for first card when applied filters change
@@ -318,14 +319,18 @@ export default function CraneOverview() {
             onClick={manualRefresh}
             style={{
               borderRadius: '8px',
-              padding: '8px 12px',
+              padding: '0 12px',
               fontSize: '0.8rem',
               fontWeight: '500',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              height: '36px'
             }}
             title="Refresh data now"
           >
-            🔄 Refresh
+            <span className="bi bi-arrow-repeat" /> Refresh
           </button>
           
           <button
@@ -335,11 +340,15 @@ export default function CraneOverview() {
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               border: 'none',
               borderRadius: '8px',
-              padding: '8px 16px',
+              padding: '0 12px',
               fontSize: '0.8rem',
               fontWeight: '500',
               boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              height: '36px'
             }}
             onMouseOver={(e) => {
               e.target.style.transform = 'translateY(-2px)';
@@ -350,7 +359,7 @@ export default function CraneOverview() {
               e.target.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
             }}
           >
-            📊 Export Report
+            <span className="bi bi-file-earmark-arrow-down" /> Export Report
           </button>
         </div>
       </div>
@@ -381,7 +390,11 @@ export default function CraneOverview() {
                   minHeight: '180px'
                 }}
               >
-                <MonthlyChart />
+                <MonthlyChart 
+                  selectedCranes={appliedFilters.cranes}
+                  start={appliedFilters.start}
+                  end={appliedFilters.end}
+                />
               </div>
               
               {/* Lower Half - Bar Chart Section */}
@@ -392,7 +405,11 @@ export default function CraneOverview() {
                   minHeight: '180px'
                 }}
               >
-                <CraneBarChart />
+                <CraneBarChart 
+                  selectedCranes={appliedFilters.cranes}
+                  start={appliedFilters.start}
+                  end={appliedFilters.end}
+                />
               </div>
             </Card.Body>
           </Card>

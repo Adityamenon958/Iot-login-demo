@@ -17,7 +17,7 @@ function formatHoursToHoursMinutes(decimalHours) {
   return `${hours}h ${minutes}m`;
 }
 
-export default function CraneBarChart() {
+export default function CraneBarChart({ selectedCranes = [], start, end }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [chartData, setChartData] = useState([]);
@@ -29,8 +29,18 @@ export default function CraneBarChart() {
         setLoading(true);
         setError(null);
         
+        const params = {};
+        if (Array.isArray(selectedCranes) && selectedCranes.length > 0) {
+          params.cranes = selectedCranes.join(',');
+        }
+        if (start && end) {
+          params.start = start;
+          params.end = end;
+        }
+        
         const response = await axios.get('/api/crane/crane-stats', { 
-          withCredentials: true 
+          withCredentials: true,
+          params
         });
         
         setChartData(response.data.craneData || []);
@@ -43,7 +53,7 @@ export default function CraneBarChart() {
     };
 
     fetchCraneStats();
-  }, []);
+  }, [JSON.stringify(selectedCranes), start, end]);
 
   // ✅ Custom tooltip formatter
   const CustomTooltip = ({ active, payload, label }) => {

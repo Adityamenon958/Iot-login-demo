@@ -1437,43 +1437,74 @@ app.get("/api/crane/available-months", authenticateToken, async (req, res) => {
 app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
   try {
     const { role, companyName } = req.user;
+    const { cranes, start, end } = req.query;
     
-    console.log('🔍 User requesting monthly crane stats:', { role, companyName });
+    console.log('🔍 User requesting monthly crane stats:', { role, companyName, cranes, start, end });
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane devices for this company
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ All devices for the company
+    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
     
-    if (craneDevices.length === 0) {
+    // ✅ Narrow down to requested cranes if provided
+    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
+    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    
+    if (selectedDevices.length === 0) {
       return res.json({ monthlyData: [] });
     }
 
-    // ✅ Calculate last 6 months data
+    const toISTDate = (yyyy_mm_dd, endOfDay = false) => {
+      const [y, m, d] = (yyyy_mm_dd || '').split('-').map(Number);
+      if (!y || !m || !d) return null;
+      return endOfDay ? new Date(y, m - 1, d, 23, 59, 59) : new Date(y, m - 1, d, 0, 0, 0);
+    };
+
     const now = getCurrentTimeInIST();
+
+    // ✅ Build month buckets (default last 6 months, or based on provided range)
+    const monthBuckets = [];
+    if (start && end) {
+      const rangeStart = toISTDate(start, false);
+      const rangeEnd = toISTDate(end, true);
+      if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) {
+        return res.json({ monthlyData: [] });
+      }
+      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+      while (cursor <= lastMonth) {
+        const ms = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+        const me = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
+        const label = `${ms.toLocaleString('default', { month: 'short' })} ${ms.getFullYear()}`;
+        monthBuckets.push({ start: ms, end: me, label });
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      }
+    } else {
+      for (let i = 5; i >= 0; i--) {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const ms = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+        const me = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
+        const label = `${monthDate.toLocaleString('default', { month: 'short' })} ${monthDate.getFullYear()}`;
+        monthBuckets.push({ start: ms, end: me, label });
+      }
+    }
+
     const monthlyData = [];
-    
-    // ✅ Generate last 6 months (including current month)
-    for (let i = 5; i >= 0; i--) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthName = monthDate.toLocaleString('default', { month: 'short' });
-      const monthYear = `${monthName} ${monthDate.getFullYear()}`;
-      
-      // ✅ Calculate start and end of month
-      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
-      
+
+    for (const bucket of monthBuckets) {
+      const monthStart = bucket.start;
+      let monthEnd = bucket.end;
+      const nowClamp = getCurrentTimeInIST();
+      if (monthEnd > nowClamp) monthEnd = nowClamp;
       let monthUsageHours = 0;
       let monthMaintenanceHours = 0;
 
-      // ✅ Calculate for each crane device
-      for (const deviceId of craneDevices) {
+      // ✅ Calculate for each selected device
+      for (const deviceId of selectedDevices) {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
-        
-        // Get all logs for this device
         const deviceLogs = await CraneLog.find(deviceFilter).lean();
-        
+
         // Filter logs within this month
         const monthLogs = deviceLogs.filter(log => {
           try {
@@ -1496,85 +1527,53 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
           const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
           const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
           const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-          
           const [bDate, bTime] = b.Timestamp.split(' ');
           const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
           const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
           const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
-          
           return aTimestamp - bTimestamp;
         });
 
-        // ✅ NEW: Calculate usage hours using periodic data logic
+        // Working periods
         const workingPeriods = calculateConsecutivePeriods(monthLogs, 'working');
-        
         for (const period of workingPeriods) {
           if (period.isOngoing) {
-            // For ongoing sessions, calculate from period start to current time
-            const periodStart = period.startTime;
-            const currentTime = getCurrentTimeInIST();
-            
-            // If ongoing session started before this month, count from month start
-            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
-            const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+            const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
+            const duration = calculatePeriodDuration(effectiveStart, getCurrentTimeInIST(), true);
             monthUsageHours += duration;
           } else {
-            // For completed sessions, calculate from period start to period end
-            const periodStart = period.startTime;
-            const periodEnd = period.endTime;
-            
-            // If session started before this month, count from month start
-            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
-            // If session ended after this month, count until month end
-            const effectiveEnd = periodEnd > monthEnd ? monthEnd : periodEnd;
-            
+            const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
+            const effectiveEnd = period.endTime > monthEnd ? monthEnd : period.endTime;
             const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
             monthUsageHours += duration;
           }
         }
 
-        // ✅ NEW: Calculate maintenance hours using periodic data logic
+        // Maintenance periods
         const maintenancePeriods = calculateConsecutivePeriods(monthLogs, 'maintenance');
-        
         for (const period of maintenancePeriods) {
           if (period.isOngoing) {
-            // For ongoing sessions, calculate from period start to current time
-            const periodStart = period.startTime;
-            const currentTime = getCurrentTimeInIST();
-            
-            // If ongoing session started before this month, count from month start
-            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
-            const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+            const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
+            const duration = calculatePeriodDuration(effectiveStart, getCurrentTimeInIST(), true);
             monthMaintenanceHours += duration;
           } else {
-            // For completed sessions, calculate from period start to period end
-            const periodStart = period.startTime;
-            const periodEnd = period.endTime;
-            
-            // If session started before this month, count from month start
-            const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
-            // If session ended after this month, count until month end
-            const effectiveEnd = periodEnd > monthEnd ? monthEnd : periodEnd;
-            
+            const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
+            const effectiveEnd = period.endTime > monthEnd ? monthEnd : period.endTime;
             const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
             monthMaintenanceHours += duration;
           }
         }
-
-        // ✅ REMOVED: Old ongoing session logic - now handled by calculateConsecutivePeriods()
       }
 
       monthlyData.push({
-        month: monthYear,
+        month: bucket.label,
         usageHours: Math.round(monthUsageHours * 100) / 100,
         maintenanceHours: Math.round(monthMaintenanceHours * 100) / 100
       });
     }
 
     console.log(`✅ Monthly crane stats calculated for ${monthlyData.length} months`);
-    
     res.json({ monthlyData });
-
   } catch (err) {
     console.error("❌ Monthly crane stats fetch error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -1585,45 +1584,66 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
 app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
   try {
     const { role, companyName } = req.user;
+    const { cranes, start, end } = req.query;
     
-    console.log('🔍 User requesting individual crane stats:', { role, companyName });
+    console.log('🔍 User requesting individual crane stats:', { role, companyName, cranes, start, end });
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane devices for this company
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ All devices for the company
+    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
     
-    if (craneDevices.length === 0) {
+    // ✅ Narrow down devices by query if provided
+    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
+    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    
+    if (selectedDevices.length === 0) {
       return res.json({ craneData: [] });
     }
 
-    // ✅ Calculate last 6 months period
-    const now = getCurrentTimeInIST();
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const periodStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1);
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const toISTDate = (yyyy_mm_dd, endOfDay = false) => {
+      const [y, m, d] = (yyyy_mm_dd || '').split('-').map(Number);
+      if (!y || !m || !d) return null;
+      return endOfDay ? new Date(y, m - 1, d, 23, 59, 59) : new Date(y, m - 1, d, 0, 0, 0);
+    };
+
+    // ✅ Determine period
+    let periodStart, periodEnd;
+    if (start && end) {
+      periodStart = toISTDate(start, false);
+      periodEnd = toISTDate(end, true);
+      if (!periodStart || !periodEnd || periodStart > periodEnd) {
+        return res.json({ craneData: [] });
+      }
+    } else {
+      const now = getCurrentTimeInIST();
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      periodStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1);
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
     
-    // ✅ Calculate total period hours (6 months)
-    const totalPeriodHours = (periodEnd - periodStart) / (1000 * 60 * 60);
+    // ✅ Calculate total hours in the selected period
+    // Clamp end to now if it's in the future
+const nowForClamp = getCurrentTimeInIST();
+const effectivePeriodEnd = periodEnd > nowForClamp ? nowForClamp : periodEnd;
+const totalPeriodHours = (effectivePeriodEnd - periodStart) / (1000 * 60 * 60);
     
     const craneData = [];
 
-    // ✅ Calculate stats for each crane
-    for (const deviceId of craneDevices) {
+    // ✅ Calculate stats for each selected device
+    for (const deviceId of selectedDevices) {
       const deviceFilter = { ...companyFilter, DeviceID: deviceId };
-      
-      // Get all logs for this device
       const deviceLogs = await CraneLog.find(deviceFilter).lean();
       
-      // Filter logs within the 6-month period
+      // Filter logs within the period
       const periodLogs = deviceLogs.filter(log => {
         try {
           const [datePart, timePart] = log.Timestamp.split(' ');
           const [day, month, year] = datePart.split('/').map(Number);
           const [hour, minute, second] = timePart.split(':').map(Number);
           const logTime = new Date(year, month - 1, day, hour, minute, second);
-          return logTime >= periodStart && logTime <= periodEnd;
+          return logTime >= periodStart && logTime <= effectivePeriodEnd;
         } catch (err) {
           console.error(`❌ Error parsing timestamp for crane stats filtering:`, err);
           return false;
@@ -1631,7 +1651,6 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
       });
 
       if (periodLogs.length === 0) {
-        // ✅ No data for this crane in the period
         craneData.push({
           craneId: deviceId,
           workingHours: 0,
@@ -1641,71 +1660,52 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
         continue;
       }
 
-        // Sort by timestamp
-        periodLogs.sort((a, b) => {
-          const [aDate, aTime] = a.Timestamp.split(' ');
-          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-          
-          const [bDate, bTime] = b.Timestamp.split(' ');
-          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
-          
-          return aTimestamp - bTimestamp;
-        });
+      // Sort by timestamp
+      periodLogs.sort((a, b) => {
+        const [aDate, aTime] = a.Timestamp.split(' ');
+        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        const [bDate, bTime] = b.Timestamp.split(' ');
+        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        return aTimestamp - bTimestamp;
+      });
 
       let workingHours = 0;
       let maintenanceHours = 0;
 
-      // ✅ NEW: Calculate working hours using periodic data logic
+      // Working periods
       const workingPeriods = calculateConsecutivePeriods(periodLogs, 'working');
-      
       for (const period of workingPeriods) {
         if (period.isOngoing) {
-          // For ongoing sessions, calculate from period start to current time
-          const periodStart = period.startTime;
-          const currentTime = getCurrentTimeInIST();
-          
-          // If ongoing session started before this period, count from period start
-          const effectiveStart = periodStart < periodStart ? periodStart : periodStart;
-          const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+          const effectiveStart = period.startTime < periodStart ? periodStart : period.startTime;
+          const duration = calculatePeriodDuration(effectiveStart, getCurrentTimeInIST(), true);
           workingHours += duration;
         } else {
-          // For completed sessions, calculate from period start to period end
-          const periodStart = period.startTime;
-          const periodEnd = period.endTime;
-          
-          const duration = calculatePeriodDuration(periodStart, periodEnd, false);
+          const effectiveStart = period.startTime < periodStart ? periodStart : period.startTime;
+          const effectiveEnd = period.endTime > effectivePeriodEnd ? effectivePeriodEnd : period.endTime;
+          const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
           workingHours += duration;
         }
       }
 
-      // ✅ NEW: Calculate maintenance hours using periodic data logic
+      // Maintenance periods
       const maintenancePeriods = calculateConsecutivePeriods(periodLogs, 'maintenance');
-      
       for (const period of maintenancePeriods) {
         if (period.isOngoing) {
-          // For ongoing sessions, calculate from period start to current time
-          const periodStart = period.startTime;
-          const currentTime = getCurrentTimeInIST();
-          
-          const duration = calculatePeriodDuration(periodStart, currentTime, true);
+          const effectiveStart = period.startTime < periodStart ? periodStart : period.startTime;
+          const duration = calculatePeriodDuration(effectiveStart, getCurrentTimeInIST(), true);
           maintenanceHours += duration;
         } else {
-          // For completed sessions, calculate from period start to period end
-          const periodStart = period.startTime;
-          const periodEnd = period.endTime;
-          
-          const duration = calculatePeriodDuration(periodStart, periodEnd, false);
+          const effectiveStart = period.startTime < periodStart ? periodStart : period.startTime;
+          const effectiveEnd = period.endTime > effectivePeriodEnd ? effectivePeriodEnd : period.endTime;
+          const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
           maintenanceHours += duration;
         }
       }
 
-      // ✅ REMOVED: Old ongoing session logic - now handled by calculateConsecutivePeriods()
-
-      // ✅ Calculate inactive hours
       const inactiveHours = Math.max(0, totalPeriodHours - workingHours - maintenanceHours);
 
       craneData.push({
@@ -1717,9 +1717,7 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
     }
 
     console.log(`✅ Individual crane stats calculated for ${craneData.length} cranes`);
-    
     res.json({ craneData });
-
   } catch (err) {
     console.error("❌ Individual crane stats fetch error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -1776,8 +1774,14 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
     const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
     const monthName = monthStart.toLocaleString('default', { month: 'long', year: 'numeric' });
     
-    // ✅ Calculate total hours in the month
-    const totalHours = (monthEnd - monthStart) / (1000 * 60 * 60);
+    // ✅ Clamp end to now if target month is the current month
+    const nowForClampPM = getCurrentTimeInIST();
+    const effectiveMonthEnd = (targetYear === nowForClampPM.getFullYear() && targetMonth === nowForClampPM.getMonth())
+      ? (monthEnd > nowForClampPM ? nowForClampPM : monthEnd)
+      : monthEnd;
+    
+    // ✅ Calculate total hours in the (effective) month period
+    const totalHours = (effectiveMonthEnd - monthStart) / (1000 * 60 * 60);
     
     let totalWorkingHours = 0;
     let totalMaintenanceHours = 0;
@@ -1796,8 +1800,8 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
           const [day, month, year] = datePart.split('/').map(Number);
           const [hour, minute, second] = timePart.split(':').map(Number);
           const logTime = new Date(year, month - 1, day, hour, minute, second);
-          return logTime >= monthStart && logTime <= monthEnd;
-        } catch (err) {
+          return logTime >= monthStart && logTime <= effectiveMonthEnd;
+  } catch (err) {
           console.error(`❌ Error parsing timestamp for previous month filtering:`, err);
           return false;
         }
@@ -1829,8 +1833,8 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
           const periodStart = period.startTime;
           const currentTime = getCurrentTimeInIST();
           
-          // If ongoing session started before this month, count from month start
-          const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
+          // If ongoing session started before this period, count from period start
+          const effectiveStart = periodStart < periodStart ? periodStart : periodStart;
           const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
           totalWorkingHours += duration;
         } else {
@@ -1943,6 +1947,12 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
     const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
     const monthName = monthStart.toLocaleString('default', { month: 'long', year: 'numeric' });
     
+    // ✅ Clamp end to now if target is the current month
+    const nowForClampMaint = getCurrentTimeInIST();
+    const effectiveMonthEnd = (targetYear === nowForClampMaint.getFullYear() && targetMonth === nowForClampMaint.getMonth())
+      ? (monthEnd > nowForClampMaint ? nowForClampMaint : monthEnd)
+      : monthEnd;
+    
     let totalMaintenanceHours = 0;
     let totalSessions = 0;
     const craneData = [];
@@ -1961,7 +1971,7 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
           const [day, month, year] = datePart.split('/').map(Number);
           const [hour, minute, second] = timePart.split(':').map(Number);
           const logTime = new Date(year, month - 1, day, hour, minute, second);
-          return logTime >= monthStart && logTime <= monthEnd;
+          return logTime >= monthStart && logTime <= effectiveMonthEnd;
   } catch (err) {
           console.error(`❌ Error parsing timestamp for maintenance filtering:`, err);
           return false;
@@ -2054,7 +2064,8 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
               const startTimeIST = new Date(startYear, startMonth - 1, startDay, startHour, startMinute, startSecond);
               
               const currentTime = getCurrentTimeInIST();
-              sessionDuration = (currentTime - startTimeIST) / (1000 * 60 * 60);
+              const endClamp = currentTime > effectiveMonthEnd ? effectiveMonthEnd : currentTime;
+              sessionDuration = (endClamp - startTimeIST) / (1000 * 60 * 60);
               craneMaintenanceHours += sessionDuration;
               craneSessions++;
               console.log(`✅ Found ongoing maintenance session for ${deviceId}: ${sessionStart} to ongoing = ${sessionDuration.toFixed(2)}h`);
@@ -3466,6 +3477,124 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ Flexible time-series stats (EARLY, before static)
+app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { cranes, start, end, granularity } = req.query;
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
+    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
+    const toStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+    const toEndOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+    const now = getCurrentTimeInIST();
+    let rangeStart, rangeEnd;
+    if (start && end) {
+      const [ys, ms, ds] = start.split('-').map(Number);
+      const [ye, me, de] = end.split('-').map(Number);
+      rangeStart = new Date(ys, ms - 1, ds, 0, 0, 0);
+      rangeEnd = new Date(ye, me - 1, de, 23, 59, 59);
+      if (rangeEnd > now) rangeEnd = now;
+    } else {
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      rangeStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1, 0, 0, 0);
+      rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+    if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const rangeDays = Math.max(1, Math.ceil((toStartOfDay(rangeEnd) - toStartOfDay(rangeStart)) / msPerDay) + 1);
+    let mode = (granularity || 'auto').toLowerCase();
+    if (mode === 'auto') {
+      if (rangeDays <= 31) mode = 'daily';
+      else if (rangeDays <= 180) mode = 'weekly';
+      else mode = 'monthly';
+    }
+    const buckets = [];
+    if (mode === 'daily') {
+      let cursor = toStartOfDay(rangeStart);
+      while (cursor <= rangeEnd) {
+        const dayStart = toStartOfDay(cursor);
+        const dayEnd = toEndOfDay(cursor);
+        buckets.push({ start: dayStart, end: dayEnd, label: dayStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) });
+        cursor = new Date(cursor.getTime() + msPerDay);
+      }
+    } else if (mode === 'weekly') {
+      let cursor = toStartOfDay(rangeStart);
+      while (cursor <= rangeEnd) {
+        const weekStart = toStartOfDay(cursor);
+        const weekEnd = toEndOfDay(new Date(cursor.getTime() + 6 * msPerDay));
+        buckets.push({ start: weekStart, end: weekEnd > rangeEnd ? rangeEnd : weekEnd, label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` });
+        cursor = new Date(cursor.getTime() + 7 * msPerDay);
+      }
+    } else {
+      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+      while (cursor <= lastMonth) {
+        const ms = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+        const me = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
+        const label = `${ms.toLocaleString('default', { month: 'short' })} ${ms.getFullYear()}`;
+        buckets.push({ start: ms, end: me > rangeEnd ? rangeEnd : me, label });
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      }
+    }
+    // Precompute periods per device across the whole range, then clip to each bucket
+    const devicePeriods = {};
+    for (const deviceId of selectedDevices) {
+      const deviceLogs = await CraneLog.find({ ...companyFilter, DeviceID: deviceId }).lean();
+      const rangeLogs = deviceLogs.filter(log => {
+        try {
+          const [dp, tp] = log.Timestamp.split(' ');
+          const [d, m, y] = dp.split('/').map(Number);
+          const [hh, mm, ss] = tp.split(':').map(Number);
+          const t = new Date(y, m - 1, d, hh, mm, ss);
+          return t >= rangeStart && t <= rangeEnd;
+        } catch { return false; }
+      }).sort((a, b2) => {
+        const [ad, at] = a.Timestamp.split(' ');
+        const [ad1, am1, ay1] = ad.split('/').map(Number);
+        const [ah, ami, as] = at.split(':').map(Number);
+        const aT = new Date(ay1, am1 - 1, ad1, ah, ami, as);
+        const [bd, bt] = b2.Timestamp.split(' ');
+        const [bd1, bm1, by1] = bd.split('/').map(Number);
+        const [bh, bmi, bs] = bt.split(':').map(Number);
+        const bT = new Date(by1, bm1 - 1, bd1, bh, bmi, bs);
+        return aT - bT;
+      });
+      devicePeriods[deviceId] = {
+        working: calculateConsecutivePeriods(rangeLogs, 'working'),
+        maintenance: calculateConsecutivePeriods(rangeLogs, 'maintenance')
+      };
+    }
+
+    const points = [];
+    for (const b of buckets) {
+      let usage = 0, maint = 0;
+      for (const deviceId of selectedDevices) {
+        const periods = devicePeriods[deviceId] || { working: [], maintenance: [] };
+        for (const p of periods.working) {
+          const startClip = p.startTime < b.start ? b.start : p.startTime;
+          const pEnd = p.isOngoing ? (getCurrentTimeInIST() < b.end ? getCurrentTimeInIST() : b.end) : p.endTime;
+          const endClip = pEnd > b.end ? b.end : pEnd;
+          if (endClip > startClip) usage += calculatePeriodDuration(startClip, endClip, false);
+        }
+        for (const p of periods.maintenance) {
+          const startClip = p.startTime < b.start ? b.start : p.startTime;
+          const pEnd = p.isOngoing ? (getCurrentTimeInIST() < b.end ? getCurrentTimeInIST() : b.end) : p.endTime;
+          const endClip = pEnd > b.end ? b.end : pEnd;
+          if (endClip > startClip) maint += calculatePeriodDuration(startClip, endClip, false);
+        }
+      }
+      points.push({ label: b.label, usageHours: Math.round(usage * 100) / 100, maintenanceHours: Math.round(maint * 100) / 100 });
+    }
+    return res.json({ granularity: mode, points });
+  } catch (err) {
+    console.error("❌ Timeseries stats fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ✅ Serve frontend
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
@@ -3521,5 +3650,160 @@ app.get('/api/crane/sessions', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('❌ [EARLY] Error fetching crane sessions:', error);
     res.status(500).json({ message: 'Failed to fetch crane sessions data', error: error.message });
+  }
+});
+
+// ✅ GET: Flexible time-series stats for line chart (daily/weekly/monthly)
+app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { cranes, start, end, granularity } = req.query;
+
+    // Company scope
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+
+    // Devices
+    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
+    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
+
+    // Date helpers
+    const toStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+    const toEndOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+
+    // Range
+    const now = getCurrentTimeInIST();
+    let rangeStart, rangeEnd;
+    if (start && end) {
+      const [ys, ms, ds] = start.split('-').map(Number);
+      const [ye, me, de] = end.split('-').map(Number);
+      rangeStart = new Date(ys, ms - 1, ds, 0, 0, 0);
+      rangeEnd = new Date(ye, me - 1, de, 23, 59, 59);
+      if (rangeEnd > now) rangeEnd = now;
+    } else {
+      // Default: last 6 months monthly buckets
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      rangeStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1, 0, 0, 0);
+      rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+    if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
+
+    // Decide granularity
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const rangeDays = Math.max(1, Math.ceil((toStartOfDay(rangeEnd) - toStartOfDay(rangeStart)) / msPerDay) + 1);
+    let mode = (granularity || 'auto').toLowerCase();
+    if (mode === 'auto') {
+      if (rangeDays <= 31) mode = 'daily';
+      else if (rangeDays <= 180) mode = 'weekly';
+      else mode = 'monthly';
+    }
+
+    // Build buckets
+    const buckets = [];
+    if (mode === 'daily') {
+      let cursor = toStartOfDay(rangeStart);
+      while (cursor <= rangeEnd) {
+        const dayStart = toStartOfDay(cursor);
+        const dayEnd = toEndOfDay(cursor);
+        buckets.push({ start: dayStart, end: dayEnd, label: dayStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) });
+        cursor = new Date(cursor.getTime() + msPerDay);
+      }
+    } else if (mode === 'weekly') {
+      // Buckets of 7 days starting at rangeStart
+      let cursor = toStartOfDay(rangeStart);
+      while (cursor <= rangeEnd) {
+        const weekStart = toStartOfDay(cursor);
+        const weekEnd = toEndOfDay(new Date(cursor.getTime() + 6 * msPerDay));
+        buckets.push({ start: weekStart, end: weekEnd > rangeEnd ? rangeEnd : weekEnd, label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` });
+        cursor = new Date(cursor.getTime() + 7 * msPerDay);
+      }
+    } else {
+      // monthly
+      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+      while (cursor <= lastMonth) {
+        const ms = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+        const me = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
+        const label = `${ms.toLocaleString('default', { month: 'short' })} ${ms.getFullYear()}`;
+        buckets.push({ start: ms, end: me > rangeEnd ? rangeEnd : me, label });
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      }
+    }
+
+    const points = [];
+
+    // Aggregate by bucket
+    for (const b of buckets) {
+      let usage = 0;
+      let maint = 0;
+
+      for (const deviceId of selectedDevices) {
+        const deviceFilter = { ...companyFilter, DeviceID: deviceId };
+        const deviceLogs = await CraneLog.find(deviceFilter).lean();
+
+        const bucketLogs = deviceLogs.filter(log => {
+          try {
+            const [datePart, timePart] = log.Timestamp.split(' ');
+            const [d, m, y] = datePart.split('/').map(Number);
+            const [hh, mm, ss] = timePart.split(':').map(Number);
+            const t = new Date(y, m - 1, d, hh, mm, ss);
+            return t >= b.start && t <= b.end;
+          } catch (e) { return false; }
+        });
+        if (bucketLogs.length === 0) continue;
+
+        bucketLogs.sort((a, b2) => {
+          const [ad, at] = a.Timestamp.split(' ');
+          const [ad1, am1, ay1] = ad.split('/').map(Number);
+          const [ah, ami, as] = at.split(':').map(Number);
+          const aT = new Date(ay1, am1 - 1, ad1, ah, ami, as);
+          const [bd, bt] = b2.Timestamp.split(' ');
+          const [bd1, bm1, by1] = bd.split('/').map(Number);
+          const [bh, bmi, bs] = bt.split(':').map(Number);
+          const bT = new Date(by1, bm1 - 1, bd1, bh, bmi, bs);
+          return aT - bT;
+        });
+
+        const workingPeriods = calculateConsecutivePeriods(bucketLogs, 'working');
+        for (const p of workingPeriods) {
+          if (p.isOngoing) {
+            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
+            let endClamp = getCurrentTimeInIST();
+            if (endClamp > b.end) endClamp = b.end;
+            const duration = calculatePeriodDuration(effectiveStart, endClamp, true);
+            usage += duration;
+          } else {
+            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
+            const effectiveEnd = p.endTime > b.end ? b.end : p.endTime;
+            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
+            usage += duration;
+          }
+        }
+
+        const maintenancePeriods = calculateConsecutivePeriods(bucketLogs, 'maintenance');
+        for (const p of maintenancePeriods) {
+          if (p.isOngoing) {
+            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
+            let endClamp = getCurrentTimeInIST();
+            if (endClamp > b.end) endClamp = b.end;
+            const duration = calculatePeriodDuration(effectiveStart, endClamp, true);
+            maint += duration;
+          } else {
+            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
+            const effectiveEnd = p.endTime > b.end ? b.end : p.endTime;
+            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
+            maint += duration;
+          }
+        }
+      }
+
+      points.push({ label: b.label, usageHours: Math.round(usage * 100) / 100, maintenanceHours: Math.round(maint * 100) / 100 });
+    }
+
+    return res.json({ granularity: mode, points });
+  } catch (err) {
+    console.error("❌ Timeseries stats fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });

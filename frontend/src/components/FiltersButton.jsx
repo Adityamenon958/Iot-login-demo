@@ -1,10 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Dropdown, Form, OverlayTrigger, Popover } from 'react-bootstrap';
+import { FiFilter } from 'react-icons/fi';
 
 export default function FiltersButton({ cranes = [], initial, onApply, onReset }) {
   const [selectedCranes, setSelectedCranes] = useState(initial?.cranes || []);
   const [start, setStart] = useState(initial?.start || '');
   const [end, setEnd] = useState(initial?.end || '');
+
+  // ✅ Local date formatter to avoid UTC shift
+  const toLocalYMD = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
   useEffect(() => {
     setSelectedCranes(initial?.cranes || []);
@@ -17,9 +26,10 @@ export default function FiltersButton({ cranes = [], initial, onApply, onReset }
   };
 
   const presets = useMemo(() => ([
-    { label: 'Today', get: () => { const d = new Date(); const iso = d.toISOString().slice(0,10); return { start: iso, end: iso } } },
-    { label: 'Last 7 days', get: () => { const e = new Date(); const s = new Date(Date.now() - 6*24*3600*1000); return { start: s.toISOString().slice(0,10), end: e.toISOString().slice(0,10) } } },
-    { label: 'This month', get: () => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth(), 1); const e = new Date(d.getFullYear(), d.getMonth()+1, 0); return { start: s.toISOString().slice(0,10), end: e.toISOString().slice(0,10) } } },
+    { label: 'Today', get: () => { const d = new Date(); const iso = toLocalYMD(d); return { start: iso, end: iso }; } },
+    { label: 'Last 7 days', get: () => { const e = new Date(); const s = new Date(Date.now() - 6*24*3600*1000); return { start: toLocalYMD(s), end: toLocalYMD(e) }; } },
+    // ✅ This month as Month-To-Date (MTD): first day to today (using local dates)
+    { label: 'This month', get: () => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth(), 1); const e = d; return { start: toLocalYMD(s), end: toLocalYMD(e) }; } },
   ]), []);
 
   const popover = (
@@ -39,7 +49,10 @@ export default function FiltersButton({ cranes = [], initial, onApply, onReset }
         <div className="mb-2">
           <div className="mb-1" style={{ fontSize: '0.8rem' }}>Cranes</div>
           <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-            <Button size="sm" variant="outline-secondary" className="mb-2" onClick={() => setSelectedCranes([])}>Select All</Button>
+            <div className="d-flex gap-2 mb-2">
+              <Button size="sm" variant="outline-secondary" onClick={() => setSelectedCranes(cranes)}>Select All</Button>
+              <Button size="sm" variant="outline-secondary" onClick={() => setSelectedCranes([])}>Clear All</Button>
+            </div>
             {cranes.map(id => (
               <Form.Check key={id} type="checkbox" id={`flt-${id}`} label={id} checked={selectedCranes.includes(id)} onChange={() => toggleCrane(id)} className="mb-1" />
             ))}
@@ -67,7 +80,10 @@ export default function FiltersButton({ cranes = [], initial, onApply, onReset }
 
   return (
     <OverlayTrigger trigger="click" placement="bottom" rootClose overlay={popover}>
-      <Button size="sm" variant="outline-primary">⚙️ Filters</Button>
+      <Button size="sm" variant="outline-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 8 }}>
+        <FiFilter size={16} />
+        <span>Filters</span>
+      </Button>
     </OverlayTrigger>
   );
 } 
