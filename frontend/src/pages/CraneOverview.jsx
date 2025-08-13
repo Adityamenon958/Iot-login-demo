@@ -102,6 +102,7 @@ export default function CraneOverview() {
 
   // ✅ Handler for crane selection (restored)
   const handleCraneSelect = (craneData) => {
+    console.log('🔍 Crane selected in CraneOverview:', craneData);
     setSelectedCrane(craneData);
   };
 

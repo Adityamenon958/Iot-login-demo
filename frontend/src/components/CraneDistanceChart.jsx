@@ -62,6 +62,7 @@ export default function CraneDistanceChart({ onCraneSelect }) {
   };
   
   const handleCraneClick = (craneData) => {
+    console.log('🔍 Crane clicked:', craneData);
     onCraneSelect(craneData);
   };
   
@@ -118,6 +119,8 @@ export default function CraneDistanceChart({ onCraneSelect }) {
                   <div 
                     key={crane.deviceId}
                     className={styles.craneBar}
+                    onClick={() => handleCraneClick(crane)}
+                    style={{ cursor: 'pointer' }}
                   >
                     <div className={styles.craneLabel}>
                       <span className={styles.craneName}>{crane.deviceId}</span>
@@ -129,7 +132,6 @@ export default function CraneDistanceChart({ onCraneSelect }) {
                         style={{ 
                           width: `${crane.distance > 0 ? Math.min((crane.distance / Math.max(...sortedCranes.map(c => c.distance))) * 100, 100) : 0}%` 
                         }}
-                        onClick={() => handleCraneClick(crane)}
                       />
                     </div>
                     {/* ✅ Quick Location Button */}

@@ -5,6 +5,8 @@ import { getGoogleMapsUrl, getGoogleMapsRouteUrl, openGoogleMaps, isValidCoordin
 import styles from './CraneDetails.module.css';
 
 export default function CraneDetails({ selectedCrane }) {
+  console.log('🔍 CraneDetails received selectedCrane:', selectedCrane);
+  
   // ✅ Helper function to format distance
   const formatDistance = (distance) => {
     if (distance >= 1000) {
