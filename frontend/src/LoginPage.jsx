@@ -36,7 +36,15 @@ const LoginPage = () => {
         navigate('/dashboard');
       } catch (error) {
         console.error("Google Login Backend Error ❌", error.response?.data?.message || error.message);
-        alert("Google login failed");
+        
+        // ✅ Show specific error message from backend
+        if (error.response?.status === 403 && error.response?.data?.message) {
+          alert(error.response.data.message); // Shows "Account is deactivated. Please contact your administrator."
+        } else if (error.response?.status === 401 && error.response?.data?.message) {
+          alert(error.response.data.message); // Shows "Invalid credentials ❌"
+        } else {
+          alert("Google login failed");
+        }
       }
     },
     onError: () => {
@@ -66,7 +74,15 @@ const LoginPage = () => {
       navigate('/dashboard');
     } catch (error) {
       console.error("Login Failed ❌", error.response?.data?.message || error.message);
-      alert("Invalid login");
+      
+      // ✅ Show specific error message from backend
+      if (error.response?.status === 403 && error.response?.data?.message) {
+        alert(error.response.data.message); // Shows "Account is deactivated. Please contact your administrator."
+      } else if (error.response?.status === 401 && error.response?.data?.message) {
+        alert(error.response.data.message); // Shows "Invalid credentials ❌"
+      } else {
+        alert("Invalid login");
+      }
     }
   };
 

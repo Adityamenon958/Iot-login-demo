@@ -21,6 +21,12 @@ const userSchema = new mongoose.Schema({
   subscriptionId: {
     type: String,
     default: null,
+  },
+
+  // ✅ User Status Field
+  isActive: {
+    type: Boolean,
+    default: true
   }
 
 }, { timestamps: true });

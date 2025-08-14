@@ -508,6 +508,71 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// ✅ Update user (superadmin: any; admin: only 'user' within own company)
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const actor = await User.findById(req.user.id);
+    if (!actor) return res.status(401).json({ message: 'Unauthorized' });
+
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    if (actor.role !== 'superadmin') {
+      if (actor.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+      if (target.role !== 'user') return res.status(403).json({ message: 'Admins can edit only users' });
+      if (actor.companyName !== target.companyName) return res.status(403).json({ message: 'Cross-company edit not allowed' });
+    }
+
+    const { email, password, role, name, companyName, contactInfo, isActive } = req.body;
+    const update = {};
+    if (name !== undefined) update.name = name;
+    if (contactInfo !== undefined) update.contactInfo = contactInfo;
+    if (email !== undefined && actor.role === 'superadmin') update.email = email;
+    if (companyName !== undefined && actor.role === 'superadmin') update.companyName = companyName;
+    if (role !== undefined && actor.role === 'superadmin') update.role = role;
+    if (password) update.password = password;
+    if (isActive !== undefined) update.isActive = isActive;
+
+    const updated = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+    res.json({ success: true, message: 'User updated successfully', user: updated });
+  } catch (err) {
+    console.error('Update user error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ✅ Delete user with password confirmation (superadmin: any; admin: only 'user' within own company; block self-delete for non-superadmin)
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const actor = await User.findById(req.user.id);
+    if (!actor) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { password } = req.body || {};
+    if (!password || actor.password !== password) {
+      return res.status(401).json({ message: 'Invalid password' });
+    }
+
+    if (req.user.id === req.params.id && actor.role !== 'superadmin') {
+      return res.status(403).json({ message: 'You cannot delete your own account' });
+    }
+
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    if (actor.role !== 'superadmin') {
+      if (actor.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+      if (target.role !== 'user') return res.status(403).json({ message: 'Admins can delete only users' });
+      if (actor.companyName !== target.companyName) return res.status(403).json({ message: 'Cross-company delete not allowed' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Delete user error:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 app.delete('/api/devices/:id', async (req, res) => {
   try {
     const deleted = await Device.findByIdAndDelete(req.params.id);
@@ -750,44 +815,44 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       });
 
       // ✅ Check for ongoing session (latest log) - ADD THIS DEBUG
-      const latestLog = deviceLogs[deviceLogs.length - 1];
-      if (latestLog.DigitalInput1 === "1") {
-        console.log(`🔍 DEBUG: Crane ${deviceId} is currently operating`);
-        console.log(`🔍 DEBUG: Latest timestamp: ${latestLog.Timestamp}`);
-        
-        try {
-          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-          // ✅ Create IST time - keep in IST for ongoing calculation
-          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-          
-          const now = getCurrentTimeInIST();
-          const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
-          
+const latestLog = deviceLogs[deviceLogs.length - 1];
+if (latestLog.DigitalInput1 === "1") {
+  console.log(`🔍 DEBUG: Crane ${deviceId} is currently operating`);
+  console.log(`🔍 DEBUG: Latest timestamp: ${latestLog.Timestamp}`);
+  
+  try {
+    const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+    const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
+    const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
+    // ✅ Create IST time - keep in IST for ongoing calculation
+    const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+    
+    const now = getCurrentTimeInIST();
+    const ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+    
           console.log(` DEBUG: Latest time parsed: ${latestTimeIST}`);
-          console.log(`🔍 DEBUG: Current time: ${now}`);
-          console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
-          
-          // ✅ Handle ongoing sessions with environment-based timezone logic
-          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
-            deviceOngoingHours = ongoingHoursDiff;
-            hasOngoingSession = true;
-            console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
-          } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
-            // ✅ Timezone issue - treat as ongoing session from latest timestamp
-            deviceOngoingHours = Math.abs(ongoingHoursDiff);
-            hasOngoingSession = true;
-            console.log(`✅ Crane ${deviceId} ongoing session (timezone adjusted): ${latestLog.Timestamp} to now = ${deviceOngoingHours.toFixed(2)} hours`);
-          } else {
-            console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
-          }
-        } catch (err) {
-          console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
-        }
-      } else {
-        console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
-      }
+    console.log(`🔍 DEBUG: Current time: ${now}`);
+    console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
+    
+    // ✅ Handle ongoing sessions with environment-based timezone logic
+    if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
+      deviceOngoingHours = ongoingHoursDiff;
+      hasOngoingSession = true;
+      console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
+    } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
+      // ✅ Timezone issue - treat as ongoing session from latest timestamp
+      deviceOngoingHours = Math.abs(ongoingHoursDiff);
+      hasOngoingSession = true;
+      console.log(`✅ Crane ${deviceId} ongoing session (timezone adjusted): ${latestLog.Timestamp} to now = ${deviceOngoingHours.toFixed(2)} hours`);
+    } else {
+      console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
+    }
+  } catch (err) {
+    console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
+  }
+} else {
+  console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
+}
 
       // ✅ Check current status for crane counts (MAINTENANCE PRIORITY)
       if (latestLog.DigitalInput2 === "1") {
@@ -870,7 +935,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         maintenancePeriods.forEach(period => {
           if (!period.isOngoing) {
             dMaintenanceCompleted += overlapHours(period, startDate, endDate);
-          } else {
+            } else {
             const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dMaintenanceOngoing += duration;
@@ -1481,8 +1546,8 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
         cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
       }
     } else {
-      for (let i = 5; i >= 0; i--) {
-        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const ms = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
         const me = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
         const label = `${monthDate.toLocaleString('default', { month: 'short' })} ${monthDate.getFullYear()}`;
@@ -1504,7 +1569,7 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
       for (const deviceId of selectedDevices) {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
         const deviceLogs = await CraneLog.find(deviceFilter).lean();
-
+        
         // Filter logs within this month
         const monthLogs = deviceLogs.filter(log => {
           try {
@@ -1617,8 +1682,8 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
         return res.json({ craneData: [] });
       }
     } else {
-      const now = getCurrentTimeInIST();
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const now = getCurrentTimeInIST();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
       periodStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1);
       periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     }
@@ -1660,18 +1725,18 @@ const totalPeriodHours = (effectivePeriodEnd - periodStart) / (1000 * 60 * 60);
         continue;
       }
 
-      // Sort by timestamp
-      periodLogs.sort((a, b) => {
-        const [aDate, aTime] = a.Timestamp.split(' ');
-        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-        const [bDate, bTime] = b.Timestamp.split(' ');
-        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
-        return aTimestamp - bTimestamp;
-      });
+        // Sort by timestamp
+        periodLogs.sort((a, b) => {
+          const [aDate, aTime] = a.Timestamp.split(' ');
+          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
+          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
+          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+          const [bDate, bTime] = b.Timestamp.split(' ');
+          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
+          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
+          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+          return aTimestamp - bTimestamp;
+        });
 
       let workingHours = 0;
       let maintenanceHours = 0;
@@ -1801,7 +1866,7 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
           const [hour, minute, second] = timePart.split(':').map(Number);
           const logTime = new Date(year, month - 1, day, hour, minute, second);
           return logTime >= monthStart && logTime <= effectiveMonthEnd;
-  } catch (err) {
+        } catch (err) {
           console.error(`❌ Error parsing timestamp for previous month filtering:`, err);
           return false;
         }
@@ -3014,10 +3079,16 @@ app.post('/api/auth/google-login', async (req, res) => {
         contactInfo: phone_number || '', // Google may not provide this
         subscriptionStatus: 'inactive',
         subscriptionId: null,
+        isActive: true, // New Google users are active by default
       });
 
       await user.save();
       console.log("✅ New Google user created:", user.email);
+    }
+
+    // ✅ Check if existing user is active
+    if (user.isActive === false) {
+      return res.status(403).json({ message: "Account is deactivated. Please contact your administrator." });
     }
 
     // Re-check Razorpay subscription (like email login)
@@ -3075,6 +3146,11 @@ app.post('/api/login', async (req, res) => {
     let user = await User.findOne({ email });
     if (!user || user.password !== password) {
       return res.status(401).json({ message: "Invalid credentials ❌" });
+    }
+
+    // ✅ Check if user is active
+    if (user.isActive === false) {
+      return res.status(403).json({ message: "Account is deactivated. Please contact your administrator." });
     }
 
     

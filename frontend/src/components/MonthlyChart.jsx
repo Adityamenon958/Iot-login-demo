@@ -118,27 +118,27 @@ export default function MonthlyChart({ selectedCranes = [], start, end }) {
       <div style={{ position: 'absolute', top: 6, right: 8, zIndex: 1, fontSize: '10px', color: '#6b7280' }}>
         Cranes: {cranesCaption}
       </div>
-      <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 18, right: 5, left: 5, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-          <XAxis 
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+        <XAxis 
             dataKey="label" 
-            stroke="#666"
-            fontSize={10}
-            tick={{ fontSize: 10 }}
-          />
-          <YAxis 
-            stroke="#666"
-            fontSize={10}
-            tick={{ fontSize: 10 }}
-            tickFormatter={(value) => formatHoursToHoursMinutes(value)}
-          />
-          <Tooltip content={<CustomTooltip />} />
+          stroke="#666"
+          fontSize={10}
+          tick={{ fontSize: 10 }}
+        />
+        <YAxis 
+          stroke="#666"
+          fontSize={10}
+          tick={{ fontSize: 10 }}
+          tickFormatter={(value) => formatHoursToHoursMinutes(value)}
+        />
+        <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '10px' }} iconType="line" />
           <Line type="monotone" dataKey="usageHours" stroke="#2563eb" strokeWidth={2} dot={{ fill: '#2563eb', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, stroke: '#2563eb', strokeWidth: 2 }} name="Usage Hours" />
           <Line type="monotone" dataKey="maintenanceHours" stroke="#f97316" strokeWidth={2} dot={{ fill: '#f97316', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, stroke: '#f97316', strokeWidth: 2 }} name="Maintenance Hours" />
-        </LineChart>
-      </ResponsiveContainer>
+      </LineChart>
+    </ResponsiveContainer>
     </div>
   );
 } 

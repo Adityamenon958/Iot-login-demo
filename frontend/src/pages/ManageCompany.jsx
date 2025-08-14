@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Row, Col, Form, Button, Spinner, Modal, Tabs, Tab } from 'react-bootstrap';
-import { Users, Building2, Shield } from 'lucide-react';
+import { Users, Building2, Shield, Edit, Trash2 } from 'lucide-react';
 import styles from "./MainContent.module.css";
 import "./MainContent.css";
 import CompanyDashboardAccessManager from '../components/CompanyDashboardAccessManager';
@@ -30,23 +30,37 @@ const AddUser = () => {
     password: { isValid: false, strength: 'weak', requirements: {}, message: '', status: 'neutral' }
   });
 
+  // ✅ Edit/Delete state management
+  const [editingUser, setEditingUser] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const [users, setUsers] = useState([]);
   const [companyName, setCompanyName] = useState('');
   const [role, setRole] = useState('');
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortByDateAsc, setSortByDateAsc] = useState(false); // newest first by default
   const [activeTab, setActiveTab] = useState('users');
+  
+  // ✅ Multi-select state management
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectAllUsers, setSelectAllUsers] = useState(false);
 
   useEffect(() => {
     const fetchAuthAndUsers = async () => {
       try {
         const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
-        const { companyName, role } = res.data;
+        const { companyName, role, email } = res.data;
         setCompanyName(companyName);
         setRole(role);
+        setCurrentUserEmail(email || '');
   
         if (!companyName || companyName.trim() === "") {
           setUsers([]);
@@ -67,6 +81,81 @@ const AddUser = () => {
   
     fetchAuthAndUsers();
   }, []);
+  
+  // ✅ Standalone fetchUsers function for refresh
+  const fetchUsers = async () => {
+    try {
+      const params = companyName === "Gsn Soln" ? {} : { companyName };
+      const userRes = await axios.get('/api/users', { params });
+      setUsers(userRes.data);
+    } catch (err) {
+      console.error("Failed to fetch users:", err.message);
+    }
+  };
+
+  // ✅ Multi-select handlers
+  const handleSelectUser = (userId) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  // ✅ Status toggle handler
+  const handleToggleStatus = async (userId, newStatus) => {
+    try {
+      const user = users.find(u => u._id === userId);
+      if (!user) return;
+
+      // Role restrictions: Only superadmin can toggle any user, admin can only toggle regular users
+      if (role !== 'superadmin' && (user.role === 'admin' || user.role === 'superadmin')) {
+        alert('You can only toggle status for regular users. Admins and superadmins cannot be toggled by regular admins.');
+        return;
+      }
+
+      // Update user status
+      const res = await axios.put(`/api/users/${userId}`, {
+        isActive: newStatus
+      }, { withCredentials: true });
+
+      if (res.data.success) {
+        // Update local state
+        setUsers(prev => prev.map(u => 
+          u._id === userId ? { ...u, isActive: newStatus } : u
+        ));
+        
+        const statusText = newStatus ? 'activated' : 'deactivated';
+        alert(`User ${statusText} successfully!`);
+      }
+    } catch (err) {
+      console.error('Toggle status error:', err);
+      alert('Failed to toggle user status. Please try again.');
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectAllUsers) {
+      setSelectedUserIds([]);
+      setSelectAllUsers(false);
+    } else {
+      setSelectedUserIds(filteredUsers.map(user => user._id));
+      setSelectAllUsers(true);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedUserIds.length === 0) return;
+    
+    const selectedUsers = filteredUsers.filter(user => selectedUserIds.includes(user._id));
+    setUserToDelete({ 
+      _id: 'bulk', 
+      name: `${selectedUserIds.length} selected users`,
+      isBulk: true,
+      userIds: selectedUserIds
+    });
+    setShowDeleteModal(true);
+  };
   
 
   // ✅ Enhanced form change handler with validation
@@ -98,7 +187,7 @@ const AddUser = () => {
           ...passwordValidation,
           status: value ? (passwordValidation.isValid ? 'valid' : 'invalid') : 'neutral'
         }
-      }));
+    }));
     }
   };
 
@@ -108,35 +197,39 @@ const AddUser = () => {
 
     // ✅ Final validation check before submission
     const emailValidation = validateEmail(formData.email);
-    const passwordValidation = validatePassword(formData.password);
+    
+    // ✅ Password validation only required for new users, optional for edits
+    if (!isEditMode) {
+      const passwordValidation = validatePassword(formData.password);
+      if (!passwordValidation.isValid) {
+        alert('Please fix password validation errors before submitting');
+        return;
+      }
+    }
 
-    if (!emailValidation.isValid || !passwordValidation.isValid) {
-      alert('Please fix validation errors before submitting');
+    if (!emailValidation.isValid) {
+      alert('Please fix email validation errors before submitting');
       return;
     }
 
     try {
+      if (isEditMode) {
+        // ✅ Update existing user
+        const updateData = { ...formData };
+        if (!updateData.password) delete updateData.password; // Remove empty password
+        
+        const res = await axios.put(`/api/users/${editingUser._id}`, updateData, { withCredentials: true });
+        alert('User updated successfully!');
+      } else {
+        // ✅ Create new user
       const res = await axios.post('/api/users', formData);
       alert(res.data.message);
+      }
       
-      // ✅ Reset form with validation state
-      setFormData({
-        companyName: '',
-        contactInfo: '',
-        email: '',
-        password: '',
-        role: 'admin',
-        name: '',
-      });
-      
-      // ✅ Reset validation state
-      setValidation({
-        email: { isValid: false, message: '', status: 'neutral' },
-        password: { isValid: false, strength: 'weak', requirements: {}, message: '', status: 'neutral' }
-      });
-      
+      // ✅ Reset form and close modal
+      handleModalClose();
       fetchUsers();
-      setShowModal(false);
+      
     } catch (err) {
       console.error(err.response?.data || err.message);
       alert(err.response?.data?.message || "Something went wrong ❌");
@@ -151,6 +244,116 @@ const AddUser = () => {
       case 'medium': return '60%';
       case 'weak': return '30%';
       default: return '0%';
+    }
+  };
+
+  // ✅ Edit handler
+  const handleEdit = (user) => {
+    // ✅ Role restrictions: Only superadmin can edit any user, admin can only edit users
+    if (role !== 'superadmin' && (user.role === 'admin' || user.role === 'superadmin')) {
+      alert('You can only edit regular users. Admins and superadmins cannot be edited by regular admins.');
+      return;
+    }
+    
+    setEditingUser(user);
+    setIsEditMode(true);
+    setFormData({
+      companyName: user.companyName || '',
+      contactInfo: user.contactInfo || '',
+      email: user.email || '',
+      password: '', // Don't pre-fill password for security
+      role: user.role || 'user',
+      name: user.name || '',
+    });
+    setShowModal(true);
+  };
+
+  // ✅ Delete handler
+  const handleDelete = (user) => {
+    // ✅ Delete restrictions: Users cannot delete themselves
+    // Fetch current user email from userinfo endpoint if not already
+    // For reliability, compare against currently authenticated user email from backend
+    if (currentUserEmail && user.email === currentUserEmail) {
+      alert('You cannot delete yourself!');
+      return;
+    }
+
+    // ✅ Role restrictions: Only superadmin can delete any user, admin can only delete users
+    if (role !== 'superadmin' && (user.role === 'admin' || user.role === 'superadmin')) {
+      alert('You can only delete regular users. Admins and superadmins cannot be deleted by regular admins.');
+      return;
+    }
+
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  // ✅ Modal close handler
+  const handleModalClose = () => {
+    setShowModal(false);
+    setIsEditMode(false);
+    setEditingUser(null);
+      setFormData({
+        companyName: '',
+        contactInfo: '',
+        email: '',
+        password: '',
+        role: 'admin',
+        name: '',
+      });
+    setValidation({
+      email: { isValid: false, message: '', status: 'neutral' },
+      password: { isValid: false, strength: 'weak', requirements: {}, message: '', status: 'neutral' }
+    });
+  };
+
+  // ✅ Delete confirmation handler
+  const confirmDelete = async () => {
+    if (!deletePassword.trim()) {
+      alert('Please enter your password to confirm deletion');
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+      
+      if (userToDelete.isBulk) {
+        // ✅ Bulk delete with password authentication
+        const deletePromises = userToDelete.userIds.map(userId => 
+          axios.delete(`/api/users/${userId}`, {
+            data: { password: deletePassword },
+            withCredentials: true
+          })
+        );
+        
+        await Promise.all(deletePromises);
+        alert(`${userToDelete.userIds.length} users deleted successfully!`);
+        
+        // Reset selection state
+        setSelectedUserIds([]);
+        setSelectAllUsers(false);
+      } else {
+        // ✅ Single user delete
+        const res = await axios.delete(`/api/users/${userToDelete._id}`, {
+          data: { password: deletePassword },
+          withCredentials: true
+        });
+        alert('User deleted successfully!');
+      }
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+      setDeletePassword('');
+      fetchUsers();
+      
+    } catch (err) {
+      console.error(err.response?.data || err.message);
+      if (err.response?.status === 401) {
+        alert('Incorrect password!!!');
+      } else {
+        alert(err.response?.data?.message || "Failed to delete user ❌");
+      }
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -183,9 +386,9 @@ const AddUser = () => {
       </Row>
 
       {/* Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
+      <Modal show={showModal} onHide={handleModalClose} centered className="custom_modal1">
         <Modal.Header closeButton className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center">
-          <Modal.Title>Add Company</Modal.Title>
+          <Modal.Title>{isEditMode ? 'Edit User' : 'Add Company'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
@@ -228,15 +431,15 @@ const AddUser = () => {
             <Form.Group className="mb-3">
               <Form.Label className='custom_label1'>Email ID</Form.Label>
               <div style={{ position: 'relative' }}>
-                <Form.Control
-                  type="email"
-                  placeholder="Enter email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="custom_input1"
+              <Form.Control
+                type="email"
+                placeholder="Enter email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                className="custom_input1"
                   required
-                />
+              />
                 {formData.email && (
                   <span style={{
                     position: 'absolute',
@@ -263,17 +466,19 @@ const AddUser = () => {
             </Form.Group>
             {/* ✅ Enhanced Password Field with Strength Meter */}
             <Form.Group className="mb-3">
-              <Form.Label className='custom_label1'>Password</Form.Label>
+              <Form.Label className='custom_label1'>
+                Password {isEditMode && <span className="text-muted">(Leave blank to keep current)</span>}
+              </Form.Label>
               <div style={{ position: 'relative' }}>
-                <Form.Control
-                  type="password"
-                  placeholder="Enter password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="custom_input1"
-                  required
-                />
+              <Form.Control
+                type="password"
+                  placeholder={isEditMode ? "Enter new password (optional)" : "Enter password"}
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="custom_input1"
+                  required={!isEditMode}
+              />
                 {formData.password && (
                   <span style={{
                     position: 'absolute',
@@ -340,10 +545,51 @@ const AddUser = () => {
               )}
             </Form.Group>
             <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">
-              Submit
+              {isEditMode ? 'Update User' : 'Submit'}
             </Button>
           </Form>
         </Modal.Body>
+      </Modal>
+
+      {/* ✅ Delete Confirmation Modal */}
+      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirm Delete</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Are you sure you want to delete <strong>{userToDelete?.name}</strong>?</p>
+          <p className="text-muted">This action cannot be undone.</p>
+          
+          <Form.Group className="mt-3">
+            <Form.Label>Enter your password to confirm deletion:</Form.Label>
+            <Form.Control
+              type="password"
+              placeholder="Enter your password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              required
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={confirmDelete}
+            disabled={deleteLoading || !deletePassword.trim()}
+          >
+            {deleteLoading ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Deleting...
+              </>
+            ) : (
+              'Delete User'
+            )}
+          </Button>
+        </Modal.Footer>
       </Modal>
 
       {/* Modern Tabs */}
@@ -371,102 +617,177 @@ const AddUser = () => {
             }
             className="modern-tab-content"
           >
-            {/* Table */}
-            <Row>
-              <div className="p-4 table2Scroll" style={{ position: 'relative', minHeight: '250px' }}>
-                <h3 className="mb-3">Users List</h3>
+      {/* Table */}
+      <Row>
+        <div className="p-4 table2Scroll" style={{ position: 'relative', minHeight: '250px' }}>
+          <h3 className="mb-3">Users List</h3>
 
-                {/* Search Filter */}
-                <Row className="mb-3">
-                  <Col md={4} className=''>
-                    <Form.Select
-                      value={searchColumn}
-                      onChange={(e) => setSearchColumn(e.target.value)}
-                      className="custom_input1"
+                {/* ✅ Header Actions Bar */}
+                <div className="d-flex justify-content-end mb-3">
+                  {selectedUserIds.length > 0 && (
+                    <Button 
+                      variant="outline-danger" 
+                      size="sm"
+                      onClick={handleBulkDelete}
+                      disabled={selectedUserIds.length === 0}
                     >
-                      <option value="">All Columns</option>
-                      <option value="companyName">Company</option>
-                      <option value="name">Name</option>
-                      <option value="contactInfo">Contact</option>
-                      <option value="email">Email</option>
-                      <option value="role">Role</option>
-                    </Form.Select>
-                  </Col>
-                  <Col md={8} className=''>
-                    <Form.Control
-                      type="text"
-                      placeholder="Search..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="custom_input1"
-                    />
-                  </Col>
-                </Row>
+                      <Trash2 size={16} className="me-1" />
+                      Delete Selected ({selectedUserIds.length})
+                    </Button>
+                  )}
+                </div>
 
-                {loading && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 10,
-                    backgroundColor: 'rgba(255,255,255,0.85)',
-                    padding: '2rem',
-                    borderRadius: '0.5rem'
-                  }}>
-                    <Spinner animation="border" variant="primary" />
-                  </div>
-                )}
+          {/* Search Filter */}
+      <Row className="mb-3">
+        <Col md={4} className=''>
+          <Form.Select
+            value={searchColumn}
+            onChange={(e) => setSearchColumn(e.target.value)}
+            className="custom_input1"
+          >
+            <option value="">All Columns</option>
+            <option value="companyName">Company</option>
+            <option value="name">Name</option>
+            <option value="contactInfo">Contact</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+          </Form.Select>
+        </Col>
+        <Col md={8} className=''>
+          <Form.Control
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="custom_input1"
+          />
+        </Col>
+      </Row>
 
-                {!loading && (
-                  <table className="table table-striped align-middle text-nowrap">
-                    <thead>
-                      <tr>
-                        <th><input type="checkbox" /></th>
-                        <th>Company Name</th>
-                        <th>Name</th>
-                        <th>Contact</th>
-                        <th>Email ID</th>
-                        <th>Role</th>
-                        <th
-                          onClick={() => setSortByDateAsc(!sortByDateAsc)}
-                          style={{ cursor: "pointer" }}
-                        >
-                          Date {sortByDateAsc ? "↑" : "↓"}
+          {loading && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 10,
+              backgroundColor: 'rgba(255,255,255,0.85)',
+              padding: '2rem',
+              borderRadius: '0.5rem'
+            }}>
+              <Spinner animation="border" variant="primary" />
+            </div>
+          )}
+
+          {!loading && (
+            <table className="table table-striped align-middle text-nowrap">
+              <thead>
+                <tr>
+                        <th>
+                          <Form.Check
+                            type="checkbox"
+                            checked={selectAllUsers}
+                            onChange={handleSelectAll}
+                          />
                         </th>
-                        <th>Toggle</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredUsers.length === 0 ? (
-                        <tr>
-                          <td colSpan="8" className="text-center">No matching users found</td>
-                        </tr>
-                      ) : (
-                        filteredUsers.map(user => (
-                          <tr key={user._id}>
-                            <td><input type="checkbox" /></td>
-                            <td>{user.companyName || '-'}</td>
-                            <td>{user.name || '-'}</td>
-                            <td>{user.contactInfo || '-'}</td>
-                            <td>{user.email}</td>
-                            <td>{user.role}</td>
-                            <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                  <th>Company Name</th>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Email ID</th>
+                  <th>Role</th>
+                  <th
+                    onClick={() => setSortByDateAsc(!sortByDateAsc)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    Date {sortByDateAsc ? "↑" : "↓"}
+                  </th>
+                  <th>Toggle</th>
+                        <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                          <td colSpan="9" className="text-center">No matching users found</td>
+                  </tr>
+                ) : (
+                  filteredUsers.map(user => (
+                    <tr key={user._id}>
                             <td>
                               <Form.Check
-                                type="switch"
-                                id={`toggle-${user._id}`}
-                                label=""
+                                type="checkbox"
+                                checked={selectedUserIds.includes(user._id)}
+                                onChange={() => handleSelectUser(user._id)}
                               />
                             </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                      <td>{user.companyName || '-'}</td>
+                      <td>{user.name || '-'}</td>
+                      <td>{user.contactInfo || '-'}</td>
+                      <td>{user.email}</td>
+                      <td>{user.role}</td>
+                      <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                      <td>
+                        <Form.Check
+                          type="switch"
+                          id={`toggle-${user._id}`}
+                          label=""
+                                checked={user.isActive !== false} // Default to true if not set
+                                onChange={() => handleToggleStatus(user._id, !user.isActive)}
+                                disabled={role !== 'superadmin' && (user.role === 'admin' || user.role === 'superadmin')}
+                        />
+                      </td>
+                            <td>
+                              <div className="d-flex gap-2 align-items-center">
+                                <Button 
+                                  size="sm" 
+                                  variant="link" 
+                                  onClick={() => handleEdit(user)}
+                                  title="Edit User"
+                                  disabled={
+                                    role !== 'superadmin' && (user.role === 'admin' || user.role === 'superadmin') ||
+                                    selectedUserIds.length > 0 // Disable when multiple selected
+                                  }
+                                  style={{ 
+                                    color: '#3b82f6', 
+                                    border: 'none',
+                                    padding: '4px 8px',
+                                    textDecoration: 'none'
+                                  }}
+                                  className="edit-btn"
+                                  aria-label="Edit User"
+                                >
+                                  <Edit size={16} />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="link" 
+                                  onClick={() => handleDelete(user)}
+                                  title="Delete User"
+                                  disabled={
+                                    role !== 'superadmin' && (user.role === 'admin' || user.role === 'superadmin') ||
+                                    selectedUserIds.length > 0 // Disable when multiple selected
+                                  }
+                                  style={{ 
+                                    color: '#dc3545', 
+                                    border: 'none',
+                                    padding: '4px 8px',
+                                    textDecoration: 'none'
+                                  }}
+                                  className="delete-btn"
+                                  aria-label="Delete User"
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                              </div>
+                            </td>
+                    </tr>
+                  ))
                 )}
-              </div>
-            </Row>
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Row>
           </Tab>
           
           <Tab 
@@ -491,6 +812,19 @@ const AddUser = () => {
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
           padding: 2rem;
           margin: 1rem 0;
+        }
+
+        /* ✅ Hover effects for action buttons */
+        .edit-btn:hover {
+          color: #1e40af !important;
+          transform: scale(1.1);
+          transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+          color: #b91c1c !important;
+          transform: scale(1.1);
+          transition: all 0.2s ease;
         }
 
         .modern-tabs .nav-tabs {
