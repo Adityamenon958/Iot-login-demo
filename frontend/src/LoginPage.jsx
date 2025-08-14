@@ -90,14 +90,15 @@ const LoginPage = () => {
               <Card.Body className="d-flex align-items-center justify-content-center flex-column">
                 <div className={`${styles.loginPlaceholder} d-flex justify-content-center align-items-center flex-column`}>
                   <h3 className={styles.loginTitle}>To Login</h3>
-                  <Button className={styles.googleButton} onClick={() => login()}>
+                  {/* 🚫 Google Login temporarily disabled */}
+                  {/* <Button className={styles.googleButton} onClick={() => login()}>
                     <img
                       src="https://developers.google.com/identity/images/g-logo.png"
                       alt="Google"
                       className={styles.googleIcon}
                     />
                     Sign in with Google
-                  </Button>
+                  </Button> */}
 
                   <h3 className={`${styles.loginTitle} mt-2`}>Or</h3>
 

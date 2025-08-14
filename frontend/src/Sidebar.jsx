@@ -199,7 +199,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           {((role === "admin" && companyAccess.addUsers) || role === "superadmin") && (
             <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adduser' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adduser')} disabled={subscriptionStatus !== 'active'}>
               <UserPlus size={20} className={`${styles.navText} me-2`} />
-              Add Users
+              Manage Users
             </Button>
           )}
 
@@ -207,7 +207,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           {((role === "admin" && companyAccess.addDevices) || role === "superadmin") && (
             <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adddevice')} disabled={subscriptionStatus !== 'active'}>
               <PlusSquare size={20} className="me-2" />
-              Add Device
+              Manage Device
             </Button>
           )}
 

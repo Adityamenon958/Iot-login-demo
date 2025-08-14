@@ -36,8 +36,8 @@ export default function CompanyDashboardAccessManager() {
     { key: 'elevatorOverview', name: 'Elevator Overview', icon: ArrowUpDown, default: false },
     { key: 'craneDashboard', name: 'Crane Dashboard', icon: Truck, default: false },
     { key: 'reports', name: 'Reports', icon: FileText, default: true },
-    { key: 'addUsers', name: 'Add Users', icon: Users, default: true },
-    { key: 'addDevices', name: 'Add Devices', icon: Shield, default: true },
+    { key: 'addUsers', name: 'Manage Users', icon: Users, default: true },
+    { key: 'addDevices', name: 'Manage Devices', icon: Shield, default: true },
     { key: 'subscription', name: 'Subscription', icon: CreditCard, default: true },
     { key: 'settings', name: 'Settings', icon: Settings, default: true }
   ];

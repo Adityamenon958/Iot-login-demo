@@ -231,7 +231,7 @@ const DashboardHome = () => {
             <option value="Inactive">Inactive</option>
           </select>
         </div>
-        <button type="submit" className="btn btn-primary">Add Device</button>
+        <button type="submit" className="btn btn-primary">Manage Device</button>
       </form>
     </Col>
   );

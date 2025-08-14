@@ -133,14 +133,14 @@ export default function AddDevice() {
         <Col><h3>Device Management</h3></Col>
         <Col className='mt-3' xs="auto">
           <Button variant="success" onClick={() => setShowModal(true)} className='std_button'>
-            Add Device
+            Manage Device
           </Button>
         </Col>
       </Row>
 
       <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
         <Modal.Header className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center" closeButton>
-          <Modal.Title>Add New Device</Modal.Title>
+          <Modal.Title>Manage Device</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>

@@ -146,7 +146,7 @@ export default function ExportModal({ show, onHide, companyName }) {
     try {
       setLoading(true);
       setError('');
-      setExportProgress('Fetching crane data...');
+      setExportProgress('Exporting crane data...');
 
       // Fetch comprehensive crane data for selected cranes and months
       const comprehensiveData = await fetchComprehensiveData();

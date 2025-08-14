@@ -71,7 +71,7 @@ export default function CraneOverview() {
     activeCranes: 0,
     inactiveCranes: 0,
     underMaintenance: 0,
-    quickStats: {
+          quickStats: {
       today: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
       thisWeek: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
       thisMonth: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
@@ -161,16 +161,16 @@ export default function CraneOverview() {
   const firstCardOngoing = workingOngoing;
 
   const firstCard = {
-    id: 1,
+      id: 1,
     title: formatPeriodTitle(),
     subtitle: filteredTotals
       ? `${cranesCount} Total Cranes${cranesList.length === 1 ? ` (${cranesList[0]})` : cranesList.length > 1 ? ` (${cranesList.slice(0,2).join(', ')}${cranesList.length>2 ? `, +${cranesList.length-2}`:''})` : ''}`
       : `${totalCranes} Total Cranes`,
     value: firstCardValue,
     ongoingHours: firstCardOngoing,
-    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    icon: PiTimerDuotone,
-    iconSize: 60
+      gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      icon: PiTimerDuotone,
+      iconSize: 60
   };
 
   // Replace first item in summaryCards
@@ -296,10 +296,10 @@ export default function CraneOverview() {
       {/* ✅ Section 1: Header */}
       <div className="mb-2 d-flex justify-content-between align-items-center">
         <div>
-          <h6 className="mb-0">Crane Overview Dashboard</h6>
-          <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
-            Overview of all crane operations and status
-          </p>
+        <h6 className="mb-0">Crane Overview Dashboard</h6>
+        <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
+          Overview of all crane operations and status
+        </p>
           {/* ✅ Last updated timestamp */}
           <LastUpdatedTimestamp lastUpdated={lastUpdated} />
         </div>
@@ -359,7 +359,7 @@ export default function CraneOverview() {
               e.target.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
             }}
           >
-            <span className="bi bi-file-earmark-arrow-down" /> Export Report
+            <span className="bi bi-file-earmark-arrow-down" /> Generate Report
           </button>
         </div>
       </div>
@@ -423,9 +423,9 @@ export default function CraneOverview() {
               <Card className="border-0 shadow-sm">
                 <Card.Header className="py-2 bg-white border-bottom">
                   <div className="d-flex justify-content-between align-items-center">
-                    <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
-                      Quick Statistics
-                    </h6>
+                  <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
+                    Quick Statistics
+                  </h6>
                     <div className="d-flex gap-1">
                       <Button
                         size="sm"

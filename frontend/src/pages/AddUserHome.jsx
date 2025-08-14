@@ -193,7 +193,7 @@ export default function AddUserHome() {
         <Col><h2 className="mb-4">User Management</h2></Col>
         <Col xs="auto">
           <Button variant="success" onClick={() => setShowModal(true)} className='std_button'>
-            Add User
+            Manage User
           </Button>
         </Col>
       </Row>
@@ -201,7 +201,7 @@ export default function AddUserHome() {
       {/* ✅ Enhanced Modal for Add User Form */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
         <Modal.Header closeButton className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center">
-          <Modal.Title>Add New User</Modal.Title>
+          <Modal.Title>Manage User</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
