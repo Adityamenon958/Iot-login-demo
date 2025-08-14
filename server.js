@@ -379,9 +379,17 @@ app.get('/api/auth/userinfo', authenticateToken, async (req, res) => {
 
 
     res.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
       role: user.role,
       companyName: user.companyName,
+      contactInfo: user.contactInfo,
       subscriptionStatus: user.subscriptionStatus,
+      subscriptionStart: user.subscriptionStart,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
     });
   } catch (err) {
     console.error("Auth error:", err.message);
@@ -505,6 +513,32 @@ app.post('/api/users', async (req, res) => {
   } catch (err) {
     console.error("Add user error:", err.message);
     res.status(500).json({ message: "Server error ❌" });
+  }
+});
+
+// ✅ Update current user's profile (name, contactInfo only)
+app.put('/api/users/profile', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { name, contactInfo } = req.body;
+    const update = {};
+    
+    if (name !== undefined) update.name = name;
+    if (contactInfo !== undefined) update.contactInfo = contactInfo;
+
+    // ✅ Only allow updating name and contactInfo for security
+    const updated = await User.findByIdAndUpdate(req.user.id, update, { new: true });
+    
+    res.json({ 
+      success: true, 
+      message: 'Profile updated successfully', 
+      user: updated 
+    });
+  } catch (err) {
+    console.error('Profile update error:', err.message);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

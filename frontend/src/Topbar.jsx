@@ -1,12 +1,71 @@
-import React from 'react';
-import { Row, Col, Button } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Row, Col, Button, Modal, Image } from 'react-bootstrap';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import styles from './Toopbar.module.css';
 import Dlogo from '../src/assets/DashboardLogo.png';
-import { Menu } from 'lucide-react';
+import { Menu, User, LogOut } from 'lucide-react';
+import { generateCompanyInitials } from './lib/userUtils';
 
 export default function Topbar({ toggleSidebar }) {
+  const navigate = useNavigate();
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+
+  // ✅ Fetch user info when component mounts
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
+        setUserInfo(res.data);
+      } catch (err) {
+        console.error("Failed to fetch user info:", err);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  // ✅ Handle logout
+  const handleLogout = async () => {
+    try {
+      await axios.post('/api/logout', {}, { withCredentials: true });
+      setShowProfileModal(false);
+      navigate('/');
+    } catch (err) {
+      console.error("Logout failed:", err.message);
+      navigate('/');
+    }
+  };
+
+  // ✅ Handle profile navigation
+  const handleProfileClick = () => {
+    setShowProfileModal(false);
+    navigate('/dashboard/settings');
+  };
+
+  // ✅ Handle outside click to close modal
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showProfileModal) {
+        const modal = document.querySelector(`.${styles.profileModal}`);
+        const profilePicture = document.querySelector(`.${styles.profilePicture}`);
+        
+        if (modal && !modal.contains(event.target) && profilePicture && !profilePicture.contains(event.target)) {
+          setShowProfileModal(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileModal]);
+
   return (
-    <Row className={`${styles.topbar} align-items-center`}>
+    <>
+      <Row className={`${styles.topbar} align-items-center`}>
       <Col xs="auto" className="d-flex align-items-center">
         <Button
           className={` me-2 ${styles.burgerButton}`}
@@ -21,6 +80,63 @@ export default function Topbar({ toggleSidebar }) {
           Internet Of Things
         </h4>
       </Col>
+      
+      {/* ✅ Profile Picture Section */}
+      <Col xs="auto" className="d-flex align-items-center pe-3">
+        <div 
+          className={styles.profilePicture}
+          onClick={() => setShowProfileModal(true)}
+          title="Click to open profile menu"
+        >
+          <div className={styles.textAvatar}>
+            {generateCompanyInitials(userInfo?.companyName)}
+          </div>
+        </div>
+      </Col>
     </Row>
+
+    {/* ✅ Profile Dropdown Modal */}
+    <Modal
+      show={showProfileModal}
+      onHide={() => setShowProfileModal(false)}
+      className={styles.profileModal}
+      backdrop={false}
+      keyboard={true}
+    >
+      <Modal.Body className={styles.profileModalBody}>
+        <div className={styles.profileHeader}>
+          <div className={styles.profileImageContainer}>
+            <div className={styles.textAvatarLarge}>
+              {generateCompanyInitials(userInfo?.companyName)}
+            </div>
+          </div>
+          <div className={styles.profileInfo}>
+            <h6 className={styles.userName}>{userInfo?.name || 'User'}</h6>
+            <p className={styles.userEmail}>{userInfo?.email || 'user@example.com'}</p>
+          </div>
+        </div>
+        
+        <div className={styles.profileActions}>
+          <Button 
+            variant="link" 
+            className={styles.profileAction}
+            onClick={handleProfileClick}
+          >
+            <User size={16} className="me-2" />
+            Your Profile
+          </Button>
+          
+          <Button 
+            variant="link" 
+            className={styles.profileAction}
+            onClick={handleLogout}
+          >
+            <LogOut size={16} className="me-2" />
+            Log out
+          </Button>
+        </div>
+      </Modal.Body>
+    </Modal>
+  </>
   );
 }
