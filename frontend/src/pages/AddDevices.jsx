@@ -39,14 +39,11 @@ export default function AddDevice() {
           console.warn("Unauthorized or inactive subscription ❌");
           navigate('/dashboard');
         } else {
-          // 👉 Decide what to fetch based on companyName
-          if (companyName === "Gsn Soln") {
-            fetchDevices(null); // all devices
-          } else if (!companyName || companyName.trim() === "") {
-            setDevices([]); // show nothing
-            setLoading(false);
+          // ✅ Superadmin gets all devices, others get company-filtered
+          if (role === 'superadmin') {
+            fetchDevices(null); // Pass null to indicate superadmin (all devices)
           } else {
-            fetchDevices(companyName); // filtered
+            fetchDevices(companyName); // Company-filtered for non-superadmin
           }
         }
       } catch (err) {
@@ -62,9 +59,10 @@ export default function AddDevice() {
   const fetchDevices = async (company) => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/devices', {
-        params: company ? { companyName: company } : {}
-      });
+      // ✅ Superadmin gets all devices (company = null), others get company-filtered
+      const params = company ? { companyName: company } : {};
+      const response = await axios.get('/api/devices', { params });
+      
       setDevices(response.data);
     } catch (error) {
       console.error('Error fetching devices:', error);
@@ -79,6 +77,17 @@ export default function AddDevice() {
       setUid(`${prefix}-${deviceId}`);
     }
   }, [companyName, deviceId]);
+
+  // ✅ Fetch devices when component loads and when role/companyName changes
+  useEffect(() => {
+    if (role) {
+      if (role === 'superadmin') {
+        fetchDevices(null); // Superadmin gets all devices
+      } else if (companyName) {
+        fetchDevices(companyName); // Others get company-filtered
+      }
+    }
+  }, [role, companyName]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -99,6 +108,7 @@ export default function AddDevice() {
 
     try {
       const response = await axios.post('/api/devices', formData);
+      // ✅ Refresh devices list with company filtering
       fetchDevices(companyName);
       alert(response.data.message);
       setDeviceId('');

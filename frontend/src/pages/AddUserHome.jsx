@@ -160,8 +160,8 @@ export default function AddUserHome() {
         alert('User updated successfully!');
       } else {
         // ✅ Create new user
-        const res = await axios.post('/api/users', formData, { withCredentials: true });
-        alert(res.data.message);
+      const res = await axios.post('/api/users', formData, { withCredentials: true });
+      alert(res.data.message);
       }
       
       // ✅ Reset form and close modal
@@ -223,14 +223,14 @@ export default function AddUserHome() {
     setShowModal(false);
     setIsEditMode(false);
     setEditingUser(null);
-    setFormData({
-      companyName: formData.companyName,
-      contactInfo: '',
-      email: '',
-      password: '',
-      role: 'user',
-      name: '',
-    });
+      setFormData({
+        companyName: formData.companyName,
+        contactInfo: '',
+        email: '',
+        password: '',
+        role: 'user',
+        name: '',
+      });
     setValidation({
       email: { isValid: false, message: '', status: 'neutral' },
       password: { isValid: false, strength: 'weak', requirements: {}, message: '', status: 'neutral' }
@@ -296,7 +296,7 @@ export default function AddUserHome() {
         });
         
         alert('User deleted successfully!');
-        fetchUsers(formData.companyName);
+      fetchUsers(formData.companyName);
       }
       
       setShowDeleteModal(false);

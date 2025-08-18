@@ -43,7 +43,7 @@ const LoginPage = () => {
         } else if (error.response?.status === 401 && error.response?.data?.message) {
           alert(error.response.data.message); // Shows "Invalid credentials ❌"
         } else {
-          alert("Google login failed");
+        alert("Google login failed");
         }
       }
     },
@@ -81,7 +81,7 @@ const LoginPage = () => {
       } else if (error.response?.status === 401 && error.response?.data?.message) {
         alert(error.response.data.message); // Shows "Invalid credentials ❌"
       } else {
-        alert("Invalid login");
+      alert("Invalid login");
       }
     }
   };

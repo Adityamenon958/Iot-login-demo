@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Col, Row, Card, Button } from 'react-bootstrap';
+import { Col, Row, Card, Button, Form } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
 // ✅ Import icons from react-icons
 import { PiCraneDuotone, PiTimerDuotone, PiBandaidsFill } from "react-icons/pi";
@@ -11,6 +11,7 @@ import MonthlyChart from '../components/MonthlyChart';
 import CraneBarChart from '../components/CraneBarChart';
 // ✅ Import PreviousMonthStats component
 import PreviousMonthStats from '../components/PreviousMonthStats';
+import PreviousMonthStatsContent from '../components/PreviousMonthStatsContent';
 // ✅ Import MaintenanceUpdates component
 import MaintenanceUpdates from '../components/MaintenanceUpdates';
 import CraneDistanceChart from '../components/CraneDistanceChart';
@@ -45,6 +46,9 @@ export default function CraneOverview() {
   const [filters, setFilters] = useState({ cranes: [], start: '', end: '' });
   const [appliedFilters, setAppliedFilters] = useState({ cranes: [], start: '', end: '' });
   const [filteredTotals, setFilteredTotals] = useState(null);
+  const [isPerformanceCollapsed, setIsPerformanceCollapsed] = useState(true); // Start collapsed
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
 
   // ✅ Background refresh hook for dashboard data (restored)
   const {
@@ -85,6 +89,18 @@ export default function CraneOverview() {
   // ✅ Available cranes from overview (once loaded) (restored)
   const availableCranes = (dashboardData?.craneDevices || []).sort();
 
+  // ✅ Toggle performance component collapse
+  const togglePerformanceCollapse = () => {
+    setIsPerformanceCollapsed(!isPerformanceCollapsed);
+  };
+
+  // ✅ Handle month selection change
+  const handleMonthChange = (event) => {
+    const [month, year] = event.target.value.split('-').map(Number);
+    setSelectedMonth(month);
+    setSelectedYear(year);
+  };
+
   // ✅ Helper function to get formatted date labels for Quick Statistics (restored)
   const getDateLabels = () => {
     const now = new Date();
@@ -99,6 +115,30 @@ export default function CraneOverview() {
 
   // ✅ Get date labels (restored)
   const dateLabels = getDateLabels();
+
+  // ✅ Generate month options (last 12 months)
+  const generateMonthOptions = () => {
+    const months = [];
+    const now = new Date();
+    
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthValue = date.getMonth();
+      const yearValue = date.getFullYear();
+      const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+      
+      months.push({
+        value: `${monthValue}-${yearValue}`,
+        label: monthName,
+        month: monthValue,
+        year: yearValue
+      });
+    }
+    
+    return months;
+  };
+
+  const monthOptions = generateMonthOptions();
 
   // ✅ Handler for crane selection (restored)
   const handleCraneSelect = (craneData) => {
@@ -372,18 +412,18 @@ export default function CraneOverview() {
       {/* ✅ Section 3: Middle Section - Two Columns */}
       <Row>
         {/* Left Column - Chart */}
-        <Col xs={12} lg={7} className="mb-2">
-          <Card className="h-100 border-0 shadow-sm">
+        <Col xs={12} lg={7} className="mb-2 bg-danger">
+          <Card className="border-0 shadow-sm" style={{ height: '400px' }}>
             <Card.Header className="py-2 bg-white border-bottom">
               <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
                 Crane Activity Trend
               </h6>
             </Card.Header>
-            <Card.Body className="p-2" style={{ padding: '8px !important', minHeight: '400px' }}>
+            <Card.Body className="p-2" style={{ padding: '8px !important' }}>
               {/* Upper Half - Line Chart Section */}
               <div 
                 style={{ 
-                  height: '50%', 
+                  height: '55%', 
                   backgroundColor: '#f8f9fa',
                   borderBottom: '1px solid #dee2e6',
                   marginBottom: '4px',
@@ -400,9 +440,9 @@ export default function CraneOverview() {
               {/* Lower Half - Bar Chart Section */}
               <div 
                 style={{ 
-                  height: '50%', 
+                  height: '45%', 
                   backgroundColor: '#f8f9fa',
-                  minHeight: '180px'
+                  minHeight: '140px'
                 }}
               >
                 <CraneBarChart 
@@ -412,6 +452,58 @@ export default function CraneOverview() {
                 />
               </div>
             </Card.Body>
+          </Card>
+
+          {/* Previous Month Performance - Now inside left column */}
+          <Card className="border-0 shadow-sm mt-2">
+            <Card.Header 
+              className={`py-2 bg-white border-bottom ${styles.collapsibleHeader}`}
+              onClick={togglePerformanceCollapse}
+            >
+              <div className="d-flex justify-content-between align-items-center">
+                <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
+                  Previous Month Performance
+                </h6>
+                <div className="d-flex align-items-center gap-2">
+                  {/* Month Selection Dropdown - Only visible when expanded */}
+                  {!isPerformanceCollapsed && (
+                    <Form.Select 
+                      size="sm"
+                      style={{ fontSize: '0.6rem', width: 'auto' }}
+                      value={selectedMonth !== '' ? `${selectedMonth}-${selectedYear}` : ''}
+                      onChange={handleMonthChange}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">Auto (Previous)</option>
+                      {monthOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  )}
+
+                  <span style={{ fontSize: '0.8rem', color: '#6c757d' }}>
+                    {isPerformanceCollapsed ? '▼' : '▲'}
+                  </span>
+                </div>
+              </div>
+            </Card.Header>
+            <div 
+              style={{
+                height: isPerformanceCollapsed ? '0px' : 'auto',
+                overflow: isPerformanceCollapsed ? 'hidden' : 'visible',
+                opacity: isPerformanceCollapsed ? 0 : 1,
+                transition: 'height 0.3s ease-in-out, opacity 0.3s ease-in-out'
+              }}
+            >
+              <Card.Body className="p-2">
+                <PreviousMonthStatsContent 
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
+                />
+              </Card.Body>
+            </div>
           </Card>
         </Col>
 
@@ -527,18 +619,41 @@ export default function CraneOverview() {
               </Card>
             </Col>
 
-            {/* Previous Month Performance */}
-            <Col xs={12} className="mb-2">
-              <PreviousMonthStats />
-            </Col>
+
 
             {/* Maintenance Updates */}
-            <Col xs={12}>
+            <Col xs={12} className="mb-2">
               <MaintenanceUpdates />
+            </Col>
+
+            {/* Live Crane Locations */}
+            <Col xs={12}>
+              <Card className="border-0 shadow-sm">
+                <Card.Header className="py-2 bg-white border-bottom">
+                  <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
+                    Live Crane Locations
+                  </h6>
+                </Card.Header>
+                <Card.Body className="p-3" style={{ height: '200px', backgroundColor: '#f8f9fa' }}>
+                  <div className="d-flex align-items-center justify-content-center h-100">
+                    <div className="text-center text-muted">
+                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗺️</div>
+                      <p className="mb-0" style={{ fontSize: '0.8rem' }}>
+                        Interactive map component will be added here
+                      </p>
+                      <small className="text-muted" style={{ fontSize: '0.6rem' }}>
+                        Showing real-time crane locations with hover details
+                      </small>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
             </Col>
           </Row>
         </Col>
       </Row>
+
+
 
       {/* ✅ Section 4: Movement Tracking - Full Row with Two Columns */}
       <Row className="mt-4">

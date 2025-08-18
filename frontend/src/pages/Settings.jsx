@@ -188,12 +188,12 @@ export default function Settings() {
                   >
                     {generateCompanyInitials(userInfo?.companyName)}
                   </div>
-                </div>
+            </div>
 
                 {/* ✅ User Info */}
                 <h4 className="fw-bold text-dark mb-2">
                   {getUserDisplayName(userInfo)}
-                </h4>
+            </h4>
                 <p className="text-muted mb-3">
                   {getUserRoleDisplay(userInfo?.role)}
                 </p>
@@ -327,9 +327,9 @@ export default function Settings() {
                   </div>
                 </div>
               </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+          </Card>
+        </Col>
+      </Row>
       </div>
 
       {/* ✅ Edit Modal */}
@@ -341,17 +341,17 @@ export default function Settings() {
           {error && <Alert variant="danger" className="mb-3">{error}</Alert>}
           {success && <Alert variant="success" className="mb-3">{success}</Alert>}
           
-          <Form.Group>
+            <Form.Group>
             <Form.Label className="fw-medium">New {editField.charAt(0).toUpperCase() + editField.slice(1)}</Form.Label>
-            <Form.Control
+              <Form.Control
               type={editField === 'email' ? 'email' : 'text'}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               placeholder={`Enter your ${editField}`}
               className="form-control-lg"
-              autoFocus
-            />
-          </Form.Group>
+                autoFocus
+              />
+            </Form.Group>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={handleModalClose}>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 import axios from 'axios';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
@@ -136,22 +137,22 @@ export default function CraneBarChart({ selectedCranes = [], start, end }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={chartData} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={100}>
+      <BarChart data={chartData} margin={{ top: 1, right: 15, left: 1, bottom: 1 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
         <XAxis 
           dataKey="craneId" 
           stroke="#666"
-          fontSize={10}
-          tick={{ fontSize: 10 }}
+          fontSize={8}
+          tick={{ fontSize: 8 }}
         />
         {/* Left Y-axis for Working & Maintenance Hours (0-50h range) */}
         <YAxis 
           yAxisId="left"
           orientation="left"
           stroke="#666"
-          fontSize={10}
-          tick={{ fontSize: 10 }}
+          fontSize={8}
+          tick={{ fontSize: 8 }}
           tickFormatter={(value) => formatHoursToHoursMinutes(value)}
           domain={[0, 50]}
         />
@@ -160,14 +161,14 @@ export default function CraneBarChart({ selectedCranes = [], start, end }) {
           yAxisId="right"
           orientation="right"
           stroke="#666"
-          fontSize={10}
-          tick={{ fontSize: 10 }}
+          fontSize={8}
+          tick={{ fontSize: 8 }}
           tickFormatter={(value) => formatHoursToHoursMinutes(value)}
           domain={[0, 5000]}
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend 
-          wrapperStyle={{ fontSize: '10px' }}
+          wrapperStyle={{ fontSize: '8px' }}
           iconType="rect"
         />
         {/* Working Hours Bar - Uses Left Y-axis */}

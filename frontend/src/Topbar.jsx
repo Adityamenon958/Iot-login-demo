@@ -65,7 +65,7 @@ export default function Topbar({ toggleSidebar }) {
 
   return (
     <>
-      <Row className={`${styles.topbar} align-items-center`}>
+    <Row className={`${styles.topbar} align-items-center`}>
       <Col xs="auto" className="d-flex align-items-center">
         <Button
           className={` me-2 ${styles.burgerButton}`}

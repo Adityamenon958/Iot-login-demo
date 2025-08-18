@@ -28,7 +28,6 @@ export default function LineChartPanel({ uid }) {
   const [soloKey,  setSoloKey]  = useState(null);
   const chartRef = useRef(null);
   
-
   /* ------------ data fetch helper ------------ */
   const fetchRows = async () => {
     if (!uid) return;
@@ -100,7 +99,10 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
   };
 
   const [alarmLines, setAlarmLines] = useState({
-  highHigh:false, high:false, low:false, lowLow:false
+    highHigh: false, 
+    high: false, 
+    low: false, 
+    lowLow: false
 });
 
   /* ------------ initial + range/uid change + auto-refresh ------------ */

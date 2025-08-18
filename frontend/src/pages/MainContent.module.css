@@ -724,3 +724,13 @@
   }
 }
 
+/* ✅ Collapsible header styles */
+.collapsibleHeader {
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.collapsibleHeader:hover {
+  background-color: #f8f9fa !important;
+}
+
