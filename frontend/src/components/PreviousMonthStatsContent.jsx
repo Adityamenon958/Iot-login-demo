@@ -75,6 +75,9 @@ export default function PreviousMonthStatsContent({ selectedMonth, selectedYear 
         withCredentials: true 
       });
       
+      console.log('🔍 Previous Month Stats API Response:', response.data);
+      console.log('🔍 Month Name from API:', response.data.monthName);
+      
       setStats(response.data);
     } catch (err) {
       console.error('❌ Failed to fetch previous month stats:', err);
@@ -88,7 +91,12 @@ export default function PreviousMonthStatsContent({ selectedMonth, selectedYear 
 
   // ✅ Load default data (previous month) and watch for prop changes
   useEffect(() => {
-    fetchPreviousMonthStats(selectedMonth, selectedYear);
+    // If no month selected, fetch previous month data (default behavior)
+    if (selectedMonth === '' && selectedYear === '') {
+      fetchPreviousMonthStats(); // This will fetch previous month data
+    } else {
+      fetchPreviousMonthStats(selectedMonth, selectedYear);
+    }
   }, [selectedMonth, selectedYear]);
 
   if (error) {
@@ -110,7 +118,7 @@ export default function PreviousMonthStatsContent({ selectedMonth, selectedYear 
           {/* Month Name */}
           <div className="text-center mb-2">
             <span className="fw-bold" style={{ fontSize: '0.7rem', color: '#6c757d' }}>
-              {stats.monthName}
+              {stats.monthName || 'Loading...'}
             </span>
           </div>
           

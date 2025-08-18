@@ -137,7 +137,7 @@ export default function CraneBarChart({ selectedCranes = [], start, end }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={100}>
+    <ResponsiveContainer width="100%" height={160}>
       <BarChart data={chartData} margin={{ top: 1, right: 15, left: 1, bottom: 1 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
         <XAxis 
