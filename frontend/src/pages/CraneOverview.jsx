@@ -25,6 +25,7 @@ import { LastUpdatedTimestamp } from '../components/LastUpdatedTimestamp';
 import FilterChips from '../components/FilterChips';
 import FiltersButton from '../components/FiltersButton';
 import FloatingActionButton from '../components/FloatingActionButton';
+import LiveCraneLocations from '../components/LiveCraneLocations';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -731,24 +732,9 @@ export default function CraneOverview() {
 
             {/* Live Crane Locations */}
             <Col xs={12}>
-              <Card className="border-0 shadow-sm">
-                <Card.Header className="py-2 bg-white border-bottom">
-                  <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>
-                    Live Crane Locations
-                  </h6>
-                </Card.Header>
-                <Card.Body className="p-3" style={{ height: '322px', backgroundColor: '#f8f9fa' }}>
-                  <div className="d-flex align-items-center justify-content-center h-100">
-                    <div className="text-center text-muted">
-                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗺️</div>
-                      <p className="mb-0" style={{ fontSize: '0.8rem' }}>
-                        Interactive map component will be added here
-                      </p>
-                      <small className="text-muted" style={{ fontSize: '0.6rem' }}>
-                        Showing real-time crane locations with hover details
-                      </small>
-                    </div>
-                  </div>
+              <Card className="border-0 shadow-sm" style={{ height: '322px' }}>
+                <Card.Body className="p-0" style={{ height: '100%' }}>
+                  <LiveCraneLocations />
                 </Card.Body>
               </Card>
             </Col>

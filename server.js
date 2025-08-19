@@ -2260,6 +2260,73 @@ app.get("/api/crane/devices", authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ GET: Fetch live crane locations for map display
+app.get("/api/crane/live-locations", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 User requesting live crane locations:', { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get unique crane devices for this company
+    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    // ✅ Get latest log for each device with full details
+    const liveCranes = await Promise.all(
+      craneDevices.map(async (deviceId) => {
+        const latestLog = await CraneLog.findOne(
+          { ...companyFilter, DeviceID: deviceId },
+          { 
+            Longitude: 1, 
+            Latitude: 1, 
+            Timestamp: 1, 
+            DigitalInput1: 1, 
+            DigitalInput2: 1,
+            craneCompany: 1
+          },
+          { sort: { createdAt: -1 } }
+        ).lean();
+        
+        if (!latestLog) return null;
+        
+        // ✅ Determine status based on DigitalInput values
+        let status = "idle";
+        if (latestLog.DigitalInput2 === "1") {
+          status = "maintenance";
+        } else if (latestLog.DigitalInput1 === "1") {
+          status = "working";
+        }
+        
+        return {
+          id: deviceId,
+          craneId: deviceId,
+          status: status,
+          latitude: parseFloat(latestLog.Latitude) || 0,
+          longitude: parseFloat(latestLog.Longitude) || 0,
+          location: `${latestLog.Latitude}, ${latestLog.Longitude}`,
+          lastUpdated: latestLog.Timestamp,
+          company: latestLog.craneCompany,
+          digitalInput1: latestLog.DigitalInput1,
+          digitalInput2: latestLog.DigitalInput2
+        };
+      })
+    );
+    
+    // ✅ Filter out null values and return valid cranes
+    const validCranes = liveCranes.filter(crane => crane !== null);
+    
+    console.log(`✅ Found ${validCranes.length} live cranes for ${companyName}`);
+    
+    res.json(validCranes);
+    
+  } catch (err) {
+    console.error("❌ Live crane locations fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ✅ GET: Fetch individual crane status
 app.get("/api/crane/status", authenticateToken, async (req, res) => {
   try {
@@ -2322,6 +2389,150 @@ app.get("/api/crane/status", authenticateToken, async (req, res) => {
     
   } catch (err) {
     console.error("❌ Crane status fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ GET: Fetch daily crane statistics for tooltips
+app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { role, companyName } = req.user;
+    
+    console.log('🔍 User requesting daily stats for crane:', deviceId, { role, companyName });
+    
+    // ✅ Filter by company (except for superadmin)
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Get today's date (from 12 midnight to current time)
+    const today = new Date();
+    // ✅ Fix timezone issue - use local date without time
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    console.log('🔍 Date range:', { startOfDay, today });
+    
+    // ✅ Fetch all logs for this device today (use string comparison for DD/MM/YYYY format)
+    const allLogs = await CraneLog.find({
+      ...companyFilter,
+      DeviceID: deviceId
+    }, {
+      Timestamp: 1,
+      DigitalInput1: 1,
+      DigitalInput2: 1
+    }).sort({ Timestamp: 1 }).lean();
+    
+    console.log('🔍 Found total logs:', allLogs.length);
+    
+    // ✅ Filter logs for today only (DD/MM/YYYY format)
+    const todayLogs = allLogs.filter(log => {
+      const logDate = log.Timestamp.split(' ')[0]; // Get date part only
+      const todayDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+      return logDate === todayDate;
+    });
+    
+    console.log('🔍 Found today logs:', todayLogs.length);
+    if (todayLogs.length > 0) {
+      console.log('🔍 Sample today log:', todayLogs[0]);
+    }
+    
+    if (todayLogs.length === 0) {
+      return res.json({
+        deviceId,
+        workingHours: 0,
+        idleHours: 0,
+        maintenanceHours: 0,
+        totalHours: 0,
+        lastSeen: null
+      });
+    }
+    
+    // ✅ Calculate working hours based on DigitalInput changes
+    let workingTime = 0;
+    let idleTime = 0;
+    let maintenanceTime = 0;
+    let lastStatus = null;
+    let statusStartTime = null;
+    
+    // ✅ Parse timestamp correctly (DD/MM/YYYY HH:MM:SS format)
+    const parseTimestamp = (timestampStr) => {
+      try {
+        const [datePart, timePart] = timestampStr.split(' ');
+        const [day, month, year] = datePart.split('/').map(Number);
+        const [hour, minute, second] = timePart.split(':').map(Number);
+        // Create date in MM/DD/YYYY format for JavaScript
+        const parsedDate = new Date(year, month - 1, day, hour, minute, second);
+        console.log(`🔍 Parsed timestamp: ${timestampStr} → ${parsedDate}`);
+        return parsedDate;
+      } catch (err) {
+        console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
+        return null;
+      }
+    };
+    
+    for (let i = 0; i < todayLogs.length; i++) {
+      const log = todayLogs[i];
+      const currentStatus = log.DigitalInput2 === "1" ? "maintenance" : 
+                           log.DigitalInput1 === "1" ? "working" : "idle";
+      
+      if (i === 0) {
+        // First log - set initial status
+        lastStatus = currentStatus;
+        statusStartTime = parseTimestamp(log.Timestamp);
+      } else if (currentStatus !== lastStatus) {
+        // Status changed - calculate time for previous status
+        const statusEndTime = parseTimestamp(log.Timestamp);
+        if (statusStartTime && statusEndTime) {
+          const duration = (statusEndTime - statusStartTime) / (1000 * 60 * 60); // Convert to hours
+          
+          if (lastStatus === "working") {
+            workingTime += duration;
+          } else if (lastStatus === "idle") {
+            idleTime += duration;
+          } else if (lastStatus === "maintenance") {
+            maintenanceTime += duration;
+          }
+          
+          // Update for new status
+          lastStatus = currentStatus;
+          statusStartTime = parseTimestamp(log.Timestamp);
+        }
+      }
+    }
+    
+    // ✅ Calculate time for the last status (from last change to current time)
+    if (statusStartTime) {
+      const currentTime = new Date();
+      const finalDuration = (currentTime - statusStartTime) / (1000 * 60 * 60);
+      
+      if (lastStatus === "working") {
+        workingTime += finalDuration;
+      } else if (lastStatus === "idle") {
+        idleTime += finalDuration;
+      } else if (lastStatus === "maintenance") {
+        maintenanceTime += finalDuration;
+      }
+    }
+    
+    // ✅ Get last seen timestamp
+    const lastSeen = todayLogs[todayLogs.length - 1]?.Timestamp;
+    
+    // ✅ Calculate total hours
+    const totalHours = workingTime + idleTime + maintenanceTime;
+    
+    const stats = {
+      deviceId,
+      workingHours: Math.round(workingTime * 100) / 100, // Round to 2 decimal places
+      idleHours: Math.round(idleTime * 100) / 100,
+      maintenanceHours: Math.round(maintenanceTime * 100) / 100,
+      totalHours: Math.round(totalHours * 100) / 100,
+      lastSeen: lastSeen
+    };
+    
+    console.log(`✅ Daily stats for crane ${deviceId}:`, stats);
+    res.json(stats);
+    
+  } catch (err) {
+    console.error("❌ Daily crane stats fetch error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
