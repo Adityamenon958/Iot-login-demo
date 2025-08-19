@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col, Button, Modal, Image } from 'react-bootstrap';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +11,12 @@ export default function Topbar({ toggleSidebar }) {
   const navigate = useNavigate();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  
+  // ✅ Tooltip states
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipText, setTooltipText] = useState('');
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const profileRef = useRef(null);
 
   // ✅ Fetch user info when component mounts
   useEffect(() => {
@@ -42,6 +48,23 @@ export default function Topbar({ toggleSidebar }) {
   const handleProfileClick = () => {
     setShowProfileModal(false);
     navigate('/dashboard/settings');
+  };
+
+  // ✅ Tooltip handlers
+  const handleMouseEnter = (text, ref) => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setTooltipPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.bottom + 10
+      });
+      setTooltipText(text);
+      setShowTooltip(true);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
   };
 
   // ✅ Handle outside click to close modal
@@ -84,9 +107,11 @@ export default function Topbar({ toggleSidebar }) {
       {/* ✅ Profile Picture Section */}
       <Col xs="auto" className="d-flex align-items-center pe-3">
         <div 
+          ref={profileRef}
           className={styles.profilePicture}
           onClick={() => setShowProfileModal(true)}
-          title="Click to open profile menu"
+          onMouseEnter={() => handleMouseEnter("Click to open profile menu", profileRef)}
+          onMouseLeave={handleMouseLeave}
         >
           <div className={styles.textAvatar}>
             {generateCompanyInitials(userInfo?.companyName)}
@@ -94,6 +119,21 @@ export default function Topbar({ toggleSidebar }) {
         </div>
       </Col>
     </Row>
+
+    {/* ✅ Custom Tooltip */}
+    {showTooltip && (
+      <div
+        className={styles.customTooltip}
+        style={{
+          left: tooltipPosition.x,
+          top: tooltipPosition.y,
+          transform: 'translateX(-50%)'
+        }}
+      >
+        {tooltipText}
+        <div className={styles.tooltipArrow}></div>
+      </div>
+    )}
 
     {/* ✅ Profile Dropdown Modal */}
     <Modal

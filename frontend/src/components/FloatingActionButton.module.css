@@ -1,0 +1,197 @@
+.fabContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.fabButton {
+  width: 36.8px !important;
+  height: 36.8px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  font-size: 0.8rem !important;
+  color: white !important;
+  font-weight: 500 !important;
+}
+
+.fabButton:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4) !important;
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+}
+
+.fabButton:focus {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3) !important;
+}
+
+.fabExpanded {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 10px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e9ecef;
+  animation: slideIn 0.3s ease;
+}
+
+.fabItem {
+  width: 32.8px !important;
+  height: 32.8px !important;
+  border-radius: 50% !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.filterBtn {
+  background: #28a745 !important;
+  color: white !important;
+}
+
+.filterBtn:hover {
+  background: #218838 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3) !important;
+}
+
+.reportBtn {
+  background: #6f42c1 !important;
+  color: white !important;
+}
+
+.reportBtn:hover {
+  background: #5a32a3 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(111, 66, 193, 0.3) !important;
+}
+
+.closeBtn {
+  background: #6c757d !important;
+  color: white !important;
+}
+
+.closeBtn:hover {
+  background: #5a6268 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3) !important;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+/* ✅ Custom Tooltip Styling */
+.customTooltip {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 99999 !important;
+  animation: tooltipFadeIn 0.2s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  user-select: none;
+}
+
+.tooltipArrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid rgba(0, 0, 0, 0.9);
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ✅ Tooltips for expanded state buttons */
+.fabItem[data-tooltip]:hover::after,
+.fabItem[data-tooltip]:focus::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 9999 !important;
+  animation: tooltipFadeIn 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.fabItem[data-tooltip]:hover::before,
+.fabItem[data-tooltip]:focus::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 3px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.8);
+  z-index: 9999 !important;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .fabButton {
+    width: 36.8px !important;
+    height: 36.8px !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .fabItem {
+    width: 32.8px !important;
+    height: 32.8px !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .fabExpanded {
+    padding: 5px 10px;
+    gap: 6px;
+  }
+}

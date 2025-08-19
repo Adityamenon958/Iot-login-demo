@@ -1,11 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import { Button, Dropdown, Form, OverlayTrigger, Popover } from 'react-bootstrap';
 import { FiFilter } from 'react-icons/fi';
 
-export default function FiltersButton({ cranes = [], initial, onApply, onReset }) {
+const FiltersButton = forwardRef(({ cranes = [], initial, onApply, onReset }, ref) => {
   const [selectedCranes, setSelectedCranes] = useState(initial?.cranes || []);
   const [start, setStart] = useState(initial?.start || '');
   const [end, setEnd] = useState(initial?.end || '');
+  const [show, setShow] = useState(false);
+
+  // ✅ Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    show: () => setShow(true),
+    hide: () => setShow(false)
+  }));
 
   // ✅ Local date formatter to avoid UTC shift
   const toLocalYMD = (d) => {
@@ -72,18 +79,39 @@ export default function FiltersButton({ cranes = [], initial, onApply, onReset }
         {/* Actions */}
         <div className="d-flex justify-content-end gap-2 mt-3">
           <Button size="sm" variant="light" onClick={() => { setSelectedCranes([]); setStart(''); setEnd(''); onReset?.(); }}>Reset</Button>
-          <Button size="sm" onClick={() => onApply?.({ cranes: selectedCranes, start, end })}>Apply</Button>
+          <Button size="sm" onClick={() => { onApply?.({ cranes: selectedCranes, start, end }); setShow(false); }}>Apply</Button>
         </div>
       </Popover.Body>
     </Popover>
   );
 
   return (
-    <OverlayTrigger trigger="click" placement="bottom" rootClose overlay={popover}>
+    <OverlayTrigger 
+      trigger="click" 
+      placement="bottom-end" 
+      rootClose 
+      overlay={popover}
+      show={show}
+      onToggle={(nextShow) => setShow(nextShow)}
+      popperConfig={{
+        modifiers: [
+          {
+            name: 'offset',
+            options: {
+              offset: [0, 8],
+            },
+          },
+        ],
+      }}
+    >
       <Button size="sm" variant="outline-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 8 }}>
         <FiFilter size={16} />
         <span>Filters</span>
       </Button>
     </OverlayTrigger>
   );
-} 
+});
+
+FiltersButton.displayName = 'FiltersButton';
+
+export default FiltersButton; 

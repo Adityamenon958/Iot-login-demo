@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Col, Row, Card, Button, Form } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
 // ✅ Import icons from react-icons
@@ -24,6 +24,7 @@ import { SmoothValueTransition, SmoothNumberTransition, SmoothTimeTransition } f
 import { LastUpdatedTimestamp } from '../components/LastUpdatedTimestamp';
 import FilterChips from '../components/FilterChips';
 import FiltersButton from '../components/FiltersButton';
+import FloatingActionButton from '../components/FloatingActionButton';
 
 // ✅ Helper function to convert decimal hours to hours and minutes format
 function formatHoursToHoursMinutes(decimalHours) {
@@ -53,6 +54,14 @@ export default function CraneOverview() {
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedMaintenanceMonth, setSelectedMaintenanceMonth] = useState('');
   const [selectedMaintenanceYear, setSelectedMaintenanceYear] = useState('');
+  
+  // ✅ Ref for FiltersButton
+  const filtersButtonRef = useRef();
+  
+  // ✅ Tooltip states for refresh button
+  const [showRefreshTooltip, setShowRefreshTooltip] = useState(false);
+  const [refreshTooltipPosition, setRefreshTooltipPosition] = useState({ x: 0, y: 0 });
+  const refreshRef = useRef(null);
 
   // ✅ Background refresh hook for dashboard data (restored)
   const {
@@ -152,6 +161,22 @@ export default function CraneOverview() {
     }
     
     return months;
+  };
+
+  // ✅ Tooltip handlers for refresh button
+  const handleRefreshMouseEnter = () => {
+    if (refreshRef.current) {
+      const rect = refreshRef.current.getBoundingClientRect();
+      setRefreshTooltipPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.bottom + 10
+      });
+      setShowRefreshTooltip(true);
+    }
+  };
+
+  const handleRefreshMouseLeave = () => {
+    setShowRefreshTooltip(false);
   };
 
   const monthOptions = generateMonthOptions();
@@ -354,69 +379,84 @@ export default function CraneOverview() {
         <div>
         <h6 className="mb-0">Crane Overview Dashboard</h6>
         
-          {/* ✅ Last updated timestamp */}
-          <LastUpdatedTimestamp lastUpdated={lastUpdated} />
+          {/* ✅ Last updated timestamp with refresh button */}
+          <div className="d-flex align-items-center gap-2">
+            <LastUpdatedTimestamp lastUpdated={lastUpdated} />
+            <button
+              ref={refreshRef}
+              className="btn btn-link p-0"
+              onClick={manualRefresh}
+              style={{
+                border: 'none',
+                background: 'none',
+                color: '#6c757d',
+                fontSize: '0.8rem',
+                padding: '4px',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '24px',
+                height: '24px'
+              }}
+              onMouseEnter={handleRefreshMouseEnter}
+              onMouseLeave={handleRefreshMouseLeave}
+              onMouseOver={(e) => {
+                e.target.style.color = '#495057';
+                e.target.style.backgroundColor = '#f8f9fa';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.color = '#6c757d';
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              <span className="bi bi-arrow-repeat" style={{ fontSize: '0.9rem' }} />
+            </button>
+          </div>
         </div>
         <div className="d-flex gap-2 align-items-center">
-          {/* ✅ Compact filters: chips + button */}
+          {/* ✅ Compact filters: chips + FAB */}
           <FilterChips filters={filters} onClick={() => { /* open via button click */ }} />
-          <FiltersButton
-            cranes={availableCranes}
-            initial={filters}
-            onApply={onApplyFilters}
-            onReset={() => setFilters({ cranes: [], start: '', end: '' })}
+          <FloatingActionButton
+            onFiltersClick={() => {
+              // Open FiltersButton using ref
+              if (filtersButtonRef.current) {
+                filtersButtonRef.current.show();
+              }
+            }}
+            onGenerateReportClick={handleExportModal}
           />
-
-          {/* ✅ Manual refresh button */}
-          <button
-            className="btn btn-outline-secondary btn-sm"
-            onClick={manualRefresh}
-            style={{
-              borderRadius: '8px',
-              padding: '0 12px',
-              fontSize: '0.8rem',
-              fontWeight: '500',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              height: '36px'
-            }}
-            title="Refresh data now"
-          >
-            <span className="bi bi-arrow-repeat" /> Refresh
-          </button>
           
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleExportModal}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '0 12px',
-              fontSize: '0.8rem',
-              fontWeight: '500',
-              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              height: '36px'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
-            }}
-          >
-            <span className="bi bi-file-earmark-arrow-down" /> Generate Report
-          </button>
+          {/* ✅ Hidden FiltersButton controlled by FAB - positioned on right */}
+          <div style={{ position: 'absolute', right: 0, top: 0, visibility: 'hidden' }}>
+            <FiltersButton
+              ref={filtersButtonRef}
+              cranes={availableCranes}
+              initial={filters}
+              onApply={onApplyFilters}
+              onReset={() => setFilters({ cranes: [], start: '', end: '' })}
+            />
+          </div>
         </div>
       </div>
+
+      {/* ✅ Custom Tooltip for Refresh Button */}
+      {showRefreshTooltip && (
+        <div
+          className={styles.customTooltip}
+          style={{
+            position: 'fixed',
+            left: refreshTooltipPosition.x,
+            top: refreshTooltipPosition.y,
+            transform: 'translateX(-50%)',
+            zIndex: 99999
+          }}
+        >
+          Refresh data now
+          <div className={styles.tooltipArrow}></div>
+        </div>
+      )}
 
       {/* ✅ Section 2: Top Row - 4 Summary Cards */}
       <Row className="mb-3">
