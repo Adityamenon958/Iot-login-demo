@@ -2474,8 +2474,7 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
     // ✅ Get today's date range in IST consistently (use same basis as parseTimestamp/getDateBoundary)
-    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-    const now = isProd ? new Date(Date.now() - IST_OFFSET_MS) : new Date();
+    const now = new Date();
     const startOfDay = getDateBoundary(now, true); // 00:00:00 IST
     
     console.log('🔍 Date range:', { startOfDay, today: now });
