@@ -55,6 +55,11 @@ function parseTimestamp(timestampStr) {
     const [datePart, timePart] = timestampStr.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, minute, second] = timePart.split(':').map(Number);
+    if (isProd) {
+      // Server runs in UTC → build an IST-equivalent by subtracting 5.5h
+      return new Date(Date.UTC(year, month - 1, day, hour, minute, second) - (5.5 * 60 * 60 * 1000));
+    }
+    // Local dev assumed IST → construct directly
     return new Date(year, month - 1, day, hour, minute, second);
   } catch (err) {
     console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
@@ -2474,6 +2479,26 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     
     console.log('🔍 Date range:', { startOfDay, today: now });
     
+    // ✅ Parse timestamp correctly (DD/MM/YYYY HH:MM:SS) as IST consistently in all environments
+    const parseTimestamp = (timestampStr) => {
+      try {
+        const [datePart, timePart] = timestampStr.split(' ');
+        const [day, month, year] = datePart.split('/').map(Number);
+        const [hour, minute, second] = (timePart || '00:00:00').split(':').map(Number);
+        if (isProd) {
+          // Server runs in UTC → build an IST-equivalent instant by subtracting 5.5h from UTC wall-clock
+          const utcMillis = Date.UTC(year, month - 1, day, hour, minute, second) - (5.5 * 60 * 60 * 1000);
+          return new Date(utcMillis);
+        } else {
+          // Local dev assumed IST → construct directly without adding any offset
+          return new Date(year, month - 1, day, hour, minute, second);
+        }
+      } catch (err) {
+        console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
+        return null;
+      }
+    };
+    
     // ✅ Fetch all logs for this device today (use string comparison for DD/MM/YYYY format)
     const allLogs = await CraneLog.find({
       ...companyFilter,
@@ -2508,6 +2533,7 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
       if (lastBeforeStart && lastBeforeStart.DigitalInput1 === "1" && lastBeforeStart.DigitalInput2 === "0") {
         const workingHours = (now - startOfDay) / (1000 * 60 * 60);
         console.log(`🔍 ${deviceId} has ongoing working session from yesterday, calculating from 00:00:00 to now`);
+        console.log(`🔍 [DEBUG] Carry-over calculation: now=${now.toISOString()}, startOfDay=${startOfDay.toISOString()}, workingHours=${workingHours}`);
         return res.json({
           deviceId,
           workingHours: Math.round(workingHours * 100) / 100,
@@ -2535,22 +2561,6 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     let maintenanceTime = 0;
     let lastStatus = null;
     let statusStartTime = null;
-    
-    // ✅ Parse timestamp correctly (DD/MM/YYYY HH:MM:SS format)
-    const parseTimestamp = (timestampStr) => {
-      try {
-        const [datePart, timePart] = timestampStr.split(' ');
-        const [day, month, year] = datePart.split('/').map(Number);
-        const [hour, minute, second] = timePart.split(':').map(Number);
-        // Create date in MM/DD/YYYY format for JavaScript
-        const parsedDate = new Date(year, month - 1, day, hour, minute, second);
-        console.log(`🔍 Parsed timestamp: ${timestampStr} → ${parsedDate}`);
-        return parsedDate;
-      } catch (err) {
-        console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
-        return null;
-      }
-    };
     
     // ✅ Seed synthetic first log at 00:00 if last pre-start status was working/maintenance
     (function seedCarryOverIfNeeded() {
@@ -2583,8 +2593,8 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
       if (i === 0) {
         // ✅ First log - check if this is an ongoing session from previous day
         const firstLogTime = parseTimestamp(log.Timestamp);
-        if (currentStatus === "working" && firstLogTime < startOfDay) {
-          // ✅ Crane was working before today - start counting from midnight
+        if (currentStatus === "working" && firstLogTime <= startOfDay) {
+          // ✅ Crane was working before or at midnight today - start counting from midnight IST
           lastStatus = currentStatus;
           statusStartTime = startOfDay;
           console.log(`🔍 ${deviceId} ongoing working session detected, starting from 00:00:00`);
@@ -2622,13 +2632,15 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
       if (lastStatus === "working") {
         // ✅ If crane was working before today, count from 12 AM to current time
         const firstLogTime = parseTimestamp(todayLogs[0].Timestamp);
-        if (firstLogTime < startOfDay) {
-          // ✅ Cross-day ongoing session - count from midnight to current time
-          finalDuration = (now - startOfDay) / (1000 * 60 * 60);
-          console.log(`🔍 ${deviceId} has ongoing working session from yesterday, counting from 00:00:00 to now`);
+        if (firstLogTime <= startOfDay) {
+                  // ✅ Cross-day ongoing session - count from midnight to current time
+        finalDuration = (now - startOfDay) / (1000 * 60 * 60);
+        console.log(`🔍 ${deviceId} has ongoing working session from yesterday, counting from 00:00:00 to now`);
+        console.log(`🔍 [DEBUG] Duration calculation: now=${now.toISOString()}, startOfDay=${startOfDay.toISOString()}, finalDuration=${finalDuration}`);
         } else {
           // ✅ Normal ongoing session within today
           finalDuration = (now - statusStartTime) / (1000 * 60 * 60);
+          console.log(`🔍 [DEBUG] Normal ongoing session: now=${now.toISOString()}, statusStartTime=${statusStartTime.toISOString()}, finalDuration=${finalDuration}`);
         }
         workingTime += finalDuration;
       } else if (lastStatus === "idle") {
