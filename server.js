@@ -2468,12 +2468,11 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get today's date (from 12 midnight to current time)
-    const today = new Date();
-    // ✅ Fix timezone issue - use IST timezone for proper date comparison
-    const startOfDay = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0) + (5.5 * 60 * 60 * 1000));
+    // ✅ Get today's date range in IST consistently
+    const now = getCurrentTimeInIST();
+    const startOfDay = getDateBoundary(now, true); // 00:00:00 IST
     
-    console.log('🔍 Date range:', { startOfDay, today });
+    console.log('🔍 Date range:', { startOfDay, today: now });
     
     // ✅ Fetch all logs for this device today (use string comparison for DD/MM/YYYY format)
     const allLogs = await CraneLog.find({
@@ -2490,7 +2489,7 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     // ✅ Filter logs for today only (DD/MM/YYYY format) - use IST date
     const todayLogs = allLogs.filter(log => {
       const logDate = log.Timestamp.split(' ')[0]; // Get date part only
-      const todayDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+      const todayDate = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
       return logDate === todayDate;
     });
     
@@ -2501,34 +2500,22 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     
     // ✅ Check if crane is working from previous day (ongoing session)
     if (todayLogs.length === 0) {
-      // ✅ Check if crane was working yesterday and might still be working
-      const yesterdayLogs = allLogs.filter(log => {
-        const logDate = log.Timestamp.split(' ')[0];
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayDate = `${yesterday.getDate().toString().padStart(2, '0')}/${(yesterday.getMonth() + 1).toString().padStart(2, '0')}/${yesterday.getFullYear()}`;
-        return logDate === yesterdayDate;
+      // ✅ Check last log before startOfDay for carry-over
+      const lastBeforeStart = [...allLogs].reverse().find((entry) => {
+        const ts = parseTimestamp(entry.Timestamp);
+        return ts && ts < startOfDay;
       });
-      
-      // ✅ If crane was working yesterday and no logs today, it might be ongoing
-      if (yesterdayLogs.length > 0) {
-        const lastYesterdayLog = yesterdayLogs[yesterdayLogs.length - 1];
-        if (lastYesterdayLog.DigitalInput1 === "1" && lastYesterdayLog.DigitalInput2 === "0") {
-          // ✅ Crane was working yesterday - calculate from midnight to current time
-          const currentTime = new Date();
-          const workingHours = (currentTime - startOfDay) / (1000 * 60 * 60);
-          
-          console.log(`🔍 ${deviceId} has ongoing working session from yesterday, calculating from 00:00:00 to now`);
-          
-          return res.json({
-            deviceId,
-            workingHours: Math.round(workingHours * 100) / 100,
-            idleHours: 0,
-            maintenanceHours: 0,
-            totalHours: Math.round(workingHours * 100) / 100,
-            lastSeen: lastYesterdayLog.Timestamp
-          });
-        }
+      if (lastBeforeStart && lastBeforeStart.DigitalInput1 === "1" && lastBeforeStart.DigitalInput2 === "0") {
+        const workingHours = (now - startOfDay) / (1000 * 60 * 60);
+        console.log(`🔍 ${deviceId} has ongoing working session from yesterday, calculating from 00:00:00 to now`);
+        return res.json({
+          deviceId,
+          workingHours: Math.round(workingHours * 100) / 100,
+          idleHours: 0,
+          maintenanceHours: 0,
+          totalHours: Math.round(workingHours * 100) / 100,
+          lastSeen: lastBeforeStart.Timestamp
+        });
       }
       
       // ✅ No ongoing session - return zero hours
@@ -2565,6 +2552,29 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
       }
     };
     
+    // ✅ Seed synthetic first log at 00:00 if last pre-start status was working/maintenance
+    (function seedCarryOverIfNeeded() {
+      const lastBeforeStart = [...allLogs].reverse().find((entry) => {
+        const ts = parseTimestamp(entry.Timestamp);
+        return ts && ts < startOfDay;
+      });
+      if (!lastBeforeStart) return;
+      const wasWorking = lastBeforeStart.DigitalInput1 === "1" && lastBeforeStart.DigitalInput2 === "0";
+      const wasMaint = lastBeforeStart.DigitalInput2 === "1";
+      if (wasWorking || wasMaint) {
+        const dd = String(startOfDay.getDate()).padStart(2, '0');
+        const mm = String(startOfDay.getMonth() + 1).padStart(2, '0');
+        const yyyy = startOfDay.getFullYear();
+        const ts = `${dd}/${mm}/${yyyy} 00:00:00`;
+        todayLogs.unshift({
+          Timestamp: ts,
+          DigitalInput1: wasWorking ? "1" : lastBeforeStart.DigitalInput1,
+          DigitalInput2: wasMaint ? "1" : (wasWorking ? "0" : lastBeforeStart.DigitalInput2)
+        });
+        console.log(`🔧 [daily-stats] ${deviceId} seeded synthetic start log at 00:00 due to carry-over`);
+      }
+    })();
+
     for (let i = 0; i < todayLogs.length; i++) {
       const log = todayLogs[i];
       const currentStatus = log.DigitalInput2 === "1" ? "maintenance" : 
@@ -2614,22 +2624,18 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
         const firstLogTime = parseTimestamp(todayLogs[0].Timestamp);
         if (firstLogTime < startOfDay) {
           // ✅ Cross-day ongoing session - count from midnight to current time
-          const currentTime = new Date();
-          finalDuration = (currentTime - startOfDay) / (1000 * 60 * 60);
+          finalDuration = (now - startOfDay) / (1000 * 60 * 60);
           console.log(`🔍 ${deviceId} has ongoing working session from yesterday, counting from 00:00:00 to now`);
         } else {
           // ✅ Normal ongoing session within today
-          const currentTime = new Date();
-          finalDuration = (currentTime - statusStartTime) / (1000 * 60 * 60);
+          finalDuration = (now - statusStartTime) / (1000 * 60 * 60);
         }
         workingTime += finalDuration;
       } else if (lastStatus === "idle") {
-        const currentTime = new Date();
-        finalDuration = (currentTime - statusStartTime) / (1000 * 60 * 60);
+        finalDuration = (now - statusStartTime) / (1000 * 60 * 60);
         idleTime += finalDuration;
       } else if (lastStatus === "maintenance") {
-        const currentTime = new Date();
-        finalDuration = (currentTime - statusStartTime) / (1000 * 60 * 60);
+        finalDuration = (now - statusStartTime) / (1000 * 60 * 60);
         maintenanceTime += finalDuration;
       }
     }

@@ -75,10 +75,18 @@ const LiveCraneLocations = ({ cranes = [] }) => {
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
       const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
       
-      if (diffHours > 0) {
-        return `${diffHours}h ${diffMinutes}m ago`;
+      // ✅ Show relative time if within 24 hours, otherwise show actual date/time
+      if (diffHours < 24) {
+        if (diffHours > 0) {
+          return `${diffHours}h ${diffMinutes}m ago`;
+        } else {
+          return `${diffMinutes}m ago`;
+        }
       } else {
-        return `${diffMinutes}m ago`;
+        // ✅ More than 24 hours ago - show actual date and time
+        const formattedDate = `${day}/${month}/${year.toString().slice(-2)}`; // dd/mm/yy
+        const formattedTime = `${hour}:${minute}`; // hh:mm
+        return `${formattedDate} ${formattedTime}`;
       }
     } catch (err) {
       return "Invalid date";
