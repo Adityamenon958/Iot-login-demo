@@ -206,13 +206,28 @@ export default function CraneOverview() {
   useEffect(() => {
     const hasCrane = appliedFilters.cranes && appliedFilters.cranes.length > 0;
     const hasRange = appliedFilters.start && appliedFilters.end;
-    if (!hasCrane && !hasRange) { setFilteredTotals(null); return; }
+    
+    // ✅ DEBUG: Log the filter state
+    console.log('🔍 [Frontend] Applied Filters:', appliedFilters);
+    console.log('🔍 [Frontend] hasCrane:', hasCrane, 'hasRange:', hasRange);
+    
+    // ✅ FIX: Allow API call with either cranes OR date range (not requiring both)
+    if (!hasCrane && !hasRange) { 
+      console.log('🔍 [Frontend] No filters, skipping API call');
+      setFilteredTotals(null); 
+      return; 
+    }
+    
     const load = async () => {
       try {
         const params = {};
         if (hasCrane) params.cranes = appliedFilters.cranes.join(',');
         if (hasRange) { params.start = appliedFilters.start; params.end = appliedFilters.end; }
+        
+        console.log('🔍 [Frontend] Calling API with params:', params);
         const resp = await axios.get('/api/crane/working-totals', { params, withCredentials: true });
+        console.log('🔍 [Frontend] API response:', resp.data);
+        
         if (resp.data?.success) setFilteredTotals(resp.data);
         else setFilteredTotals(null);
       } catch (e) { console.error('working totals error', e); setFilteredTotals(null); }
