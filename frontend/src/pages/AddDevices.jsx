@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Col, Row, Form, Button, Table, Spinner, Modal } from 'react-bootstrap';
+import { Edit, Trash2 } from 'lucide-react';
 import styles from './MainContent.module.css';
 import './MainContent.css';
 
@@ -13,12 +14,13 @@ export default function AddDevice() {
 
   const [role, setRole] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [authCompanyName, setAuthCompanyName] = useState('');
   const [deviceId, setDeviceId] = useState('');
   const [deviceType, setDeviceType] = useState('');
-  const [location, setLocation] = useState('');
-  const [frequency, setFrequency] = useState('');
   const [uid, setUid] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(null);
   const [searchColumn, setSearchColumn] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortByDateAsc, setSortByDateAsc] = useState(false);
@@ -31,6 +33,7 @@ export default function AddDevice() {
 
         setRole(role);
         setCompanyName(companyName);
+        setAuthCompanyName(companyName);
 
         const isAuthorized = (role === "admin" || (role === "superadmin"));
         const hasSubscription = subscriptionStatus === "active";
@@ -61,7 +64,7 @@ export default function AddDevice() {
     try {
       // ✅ Superadmin gets all devices (company = null), others get company-filtered
       const params = company ? { companyName: company } : {};
-      const response = await axios.get('/api/devices', { params });
+      const response = await axios.get('/api/devices', { params, withCredentials: true });
       
       setDevices(response.data);
     } catch (error) {
@@ -72,11 +75,12 @@ export default function AddDevice() {
   };
 
   useEffect(() => {
-    if (companyName && deviceId) {
+    // ✅ Auto-generate UID only in add mode
+    if (!isEditMode && companyName && deviceId) {
       const prefix = companyName.split(" ").map(word => word[0]).join('').toUpperCase();
       setUid(`${prefix}-${deviceId}`);
     }
-  }, [companyName, deviceId]);
+  }, [companyName, deviceId, isEditMode]);
 
   // ✅ Fetch devices when component loads and when role/companyName changes
   useEffect(() => {
@@ -91,35 +95,108 @@ export default function AddDevice() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const isDuplicate = devices.some(device => device.uid === uid);
-    if (isDuplicate) {
-      alert('Device with same UID already exists!');
+    if (!isEditMode) {
+      const isDuplicate = devices.some(device => device.uid === uid);
+      if (isDuplicate) {
+        alert('Device with same UID already exists!');
+        return;
+      }
+
+      const formData = { companyName, uid, deviceId, deviceType };
+
+      try {
+        const response = await axios.post('/api/devices', formData, { withCredentials: true });
+        // ✅ Refresh devices list with company filtering
+        fetchDevices(role === 'superadmin' ? null : authCompanyName);
+        alert(response.data.message);
+        setDeviceId('');
+        setDeviceType('');
+        setShowModal(false);
+      } catch (error) {
+        console.error('Error submitting form:', error);
+        alert('Failed to add device');
+      }
+    } else {
+      // ✅ Edit device flow
+      if (!editingDevice?._id) {
+        alert('No device selected for edit');
+        return;
+      }
+      try {
+        // Backend supports superadmin changing companyName; admin cannot
+        const payload = { deviceId, deviceType };
+        if (role === 'superadmin' && companyName) payload.companyName = companyName;
+        await axios.put(`/api/devices/${editingDevice._id}`, payload, { withCredentials: true });
+        alert('Device updated successfully!');
+        setShowModal(false);
+        setIsEditMode(false);
+        setEditingDevice(null);
+        // Restore auth company name in form for new-add flow
+        setCompanyName(authCompanyName);
+        setUid('');
+        setDeviceId('');
+        setDeviceType('');
+        fetchDevices(role === 'superadmin' ? null : authCompanyName);
+      } catch (error) {
+        console.error('Error updating device:', error);
+        alert('Failed to update device');
+      }
+    }
+  };
+
+  const handleEdit = (dev) => {
+    // ✅ Role-based guard: only admin/superadmin
+    if (role !== 'admin' && role !== 'superadmin') {
+      alert('You do not have permission to edit devices.');
       return;
     }
-
-    const formData = {
-      companyName,
-      uid,
-      deviceId,
-      deviceType,
-      location,
-      frequency,
-    };
-
-    try {
-      const response = await axios.post('/api/devices', formData);
-      // ✅ Refresh devices list with company filtering
-      fetchDevices(companyName);
-      alert(response.data.message);
-      setDeviceId('');
-      setDeviceType('');
-      setLocation('');
-      setFrequency('');
-      setShowModal(false);
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      alert('Failed to add device');
+    // ✅ Admin can only edit within their company
+    if (role === 'admin' && dev.companyName !== authCompanyName) {
+      alert('Admins can edit only devices in their own company.');
+      return;
     }
+    setIsEditMode(true);
+    setEditingDevice(dev);
+    // Prefill form
+    setCompanyName(dev.companyName);
+    setUid(dev.uid);
+    setDeviceId(dev.deviceId || '');
+    setDeviceType(dev.deviceType || '');
+    setShowModal(true);
+  };
+
+  const handleDelete = async (dev) => {
+    // ✅ Role-based guard: only admin/superadmin
+    if (role !== 'admin' && role !== 'superadmin') {
+      alert('You do not have permission to delete devices.');
+      return;
+    }
+    // ✅ Admin can only delete within their company
+    if (role === 'admin' && dev.companyName !== authCompanyName) {
+      alert('Admins can delete only devices in their own company.');
+      return;
+    }
+    const confirm = window.confirm(`Are you sure you want to delete device ${dev.deviceId}?`);
+    if (!confirm) return;
+    try {
+      await axios.delete(`/api/devices/${dev._id}`, { withCredentials: true });
+      alert('Device deleted successfully!');
+      fetchDevices(role === 'superadmin' ? null : authCompanyName);
+    } catch (err) {
+      console.error('Delete device failed:', err);
+      alert('Failed to delete device');
+    }
+  };
+
+  const handleModalClose = () => {
+    setShowModal(false);
+    setIsEditMode(false);
+    setEditingDevice(null);
+    // Restore auth company name for add flow
+    setCompanyName(authCompanyName);
+    setUid('');
+    setDeviceId('');
+    setDeviceType('');
   };
 
   const filteredDevices = devices
@@ -148,15 +225,22 @@ export default function AddDevice() {
         </Col>
       </Row>
 
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered className="custom_modal1">
+      <Modal show={showModal} onHide={handleModalClose} centered className="custom_modal1">
         <Modal.Header className="border-0 px-4 pt-4 pb-0 d-flex justify-content-between align-items-center" closeButton>
-          <Modal.Title>Manage Device</Modal.Title>
+          <Modal.Title>{isEditMode ? 'Edit Device' : 'Manage Device'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">Company Name</Form.Label>
-              <Form.Control className="custom_input1" type="text" value={companyName} disabled />
+              {/* ✅ Superadmin can edit company name; Admin sees their company but cannot edit */}
+              <Form.Control
+                className="custom_input1"
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                disabled={role !== 'superadmin'}
+              />
             </Form.Group>
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">UID</Form.Label>
@@ -168,29 +252,10 @@ export default function AddDevice() {
             </Form.Group>
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">Device Type</Form.Label>
-              <Form.Select value={deviceType} onChange={(e) => setDeviceType(e.target.value)} required className="custom_input1">
-                <option value="">Select type</option>
-                <option value="Temperature Sensor">Temperature Sensor</option>
-                <option value="Pressure Sensor">Pressure Sensor</option>
-                <option value="Humidity Sensor">Humidity Sensor</option>
-                <option value="Motion Detector">Motion Detector</option>
-              </Form.Select>
+              {/* ✅ Free text input instead of dropdown */}
+              <Form.Control type="text" value={deviceType} onChange={(e) => setDeviceType(e.target.value)} required className="custom_input1" />
             </Form.Group>
-            <Form.Group className="my-1">
-              <Form.Label className="custom_label1">Device Location</Form.Label>
-              <Form.Control type="text" value={location} onChange={(e) => setLocation(e.target.value)} required className="custom_input1" />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label className="custom_label1">Frequency</Form.Label>
-              <Form.Select value={frequency} onChange={(e) => setFrequency(e.target.value)} required className="custom_input1">
-                <option value="">Select frequency</option>
-                <option value="1s">1 sec</option>
-                <option value="10s">10 sec</option>
-                <option value="30s">30 sec</option>
-                <option value="1m">1 min</option>
-              </Form.Select>
-            </Form.Group>
-            <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">Submit</Button>
+            <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">{isEditMode ? 'Save Changes' : 'Submit'}</Button>
           </Form>
         </Modal.Body>
       </Modal>
@@ -204,8 +269,6 @@ export default function AddDevice() {
               <option value="uid">UID</option>
               <option value="deviceId">Device ID</option>
               <option value="deviceType">Type</option>
-              <option value="location">Location</option>
-              <option value="frequency">Frequency</option>
               <option value="companyName">Company</option>
               <option value="createdAt">Date</option>
             </Form.Select>
@@ -232,15 +295,16 @@ export default function AddDevice() {
                   <th>UID</th>
                   <th>Device ID</th>
                   <th>Type</th>
-                  <th>Location</th>
-                  <th>Frequency</th>
                   <th>Company</th>
+                  {(role === 'admin' || role === 'superadmin') && (
+                    <th>Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center">No matching devices</td>
+                    <td colSpan={role === 'admin' || role === 'superadmin' ? 6 : 5} className="text-center">No matching devices</td>
                   </tr>
                 ) : (
                   filteredDevices.map((dev, index) => (
@@ -249,9 +313,37 @@ export default function AddDevice() {
                       <td>{dev.uid}</td>
                       <td>{dev.deviceId}</td>
                       <td>{dev.deviceType}</td>
-                      <td>{dev.location}</td>
-                      <td>{dev.frequency}</td>
                       <td>{dev.companyName}</td>
+                      {(role === 'admin' || role === 'superadmin') && (
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <div className="d-flex align-items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="link"
+                              onClick={() => handleEdit(dev)}
+                              title="Edit Device"
+                              disabled={role === 'admin' && dev.companyName !== authCompanyName}
+                              style={{ color: '#0d6efd', border: 'none', padding: '4px 8px', textDecoration: 'none' }}
+                              className="edit-btn"
+                              aria-label="Edit Device"
+                            >
+                              <Edit size={16} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="link"
+                              onClick={() => handleDelete(dev)}
+                              title="Delete Device"
+                              disabled={role === 'admin' && dev.companyName !== authCompanyName}
+                              style={{ color: '#dc3545', border: 'none', padding: '4px 8px', textDecoration: 'none' }}
+                              className="delete-btn"
+                              aria-label="Delete Device"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}

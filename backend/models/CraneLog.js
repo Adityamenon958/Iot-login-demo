@@ -11,6 +11,10 @@ const CraneLogSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  Uid: {
+    type: String,
+    required: false // Optional unique device identifier from payload
+  },
   Timestamp: {
     type: String,
     required: true
@@ -38,6 +42,7 @@ const CraneLogSchema = new mongoose.Schema({
 
 // ✅ Add indexes
 CraneLogSchema.index({ craneCompany: 1, DeviceID: 1 });
+CraneLogSchema.index({ craneCompany: 1, DeviceID: 1, Uid: 1 });
 CraneLogSchema.index({ craneCompany: 1, Timestamp: -1 });
 
 // ✅ Add a pre-save hook to log craneCompany

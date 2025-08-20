@@ -469,20 +469,13 @@ app.get('/api/devices/count/by-company', async (req, res) => {
 // ✅ Device Routes
 app.post('/api/devices', async (req, res) => {
   try {
-    const { companyName, uid, deviceId, deviceType, location, frequency } = req.body;
+    const { companyName, uid, deviceId, deviceType } = req.body;
 
-    if (!companyName || !uid || !deviceId || !deviceType || !location || !frequency) {
+    if (!companyName || !uid || !deviceId || !deviceType) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const newDevice = new Device({
-      companyName,
-      uid,
-      deviceId,
-      deviceType,
-      location,
-      frequency,
-    });
+    const newDevice = new Device({ companyName, uid, deviceId, deviceType });
 
     await newDevice.save();
     res.status(201).json({ message: 'Device added successfully' });
@@ -501,6 +494,37 @@ app.get('/api/devices', async (req, res) => {
   } catch (error) {
     console.error('Error fetching devices:', error);
     res.status(500).json({ message: 'Failed to fetch devices' });
+  }
+});
+
+// ✅ Update device (superadmin: any; admin: only within own company)
+app.put('/api/devices/:id', authenticateToken, async (req, res) => {
+  try {
+    const { role: actorRole, companyName: actorCompany } = req.user || {};
+    if (!actorRole) return res.status(401).json({ message: 'Unauthorized' });
+
+    const targetDevice = await Device.findById(req.params.id);
+    if (!targetDevice) return res.status(404).json({ message: 'Device not found' });
+
+    if (actorRole !== 'superadmin') {
+      if (actorRole !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+      if (targetDevice.companyName !== actorCompany) {
+        return res.status(403).json({ message: 'Cross-company edit not allowed' });
+      }
+    }
+
+    const { companyName, deviceId, deviceType } = req.body || {};
+    const update = {};
+    // superadmin can change companyName
+    if (companyName !== undefined && actorRole === 'superadmin') update.companyName = companyName;
+    if (deviceId !== undefined) update.deviceId = deviceId;
+    if (deviceType !== undefined) update.deviceType = deviceType;
+
+    const updated = await Device.findByIdAndUpdate(req.params.id, update, { new: true });
+    return res.json({ success: true, message: 'Device updated successfully', device: updated });
+  } catch (err) {
+    console.error('Update device error:', err.message);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -625,8 +649,22 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/devices/:id', async (req, res) => {
+// ✅ Delete device (superadmin: any; admin: only within own company)
+app.delete('/api/devices/:id', authenticateToken, async (req, res) => {
   try {
+    const { role: actorRole, companyName: actorCompany } = req.user || {};
+    if (!actorRole) return res.status(401).json({ message: 'Unauthorized' });
+
+    const targetDevice = await Device.findById(req.params.id);
+    if (!targetDevice) return res.status(404).json({ message: 'Device not found' });
+
+    if (actorRole !== 'superadmin') {
+      if (actorRole !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+      if (targetDevice.companyName !== actorCompany) {
+        return res.status(403).json({ message: 'Cross-company delete not allowed' });
+      }
+    }
+
     const deleted = await Device.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Device not found' });
     res.json({ message: 'Device deleted successfully' });
@@ -659,11 +697,12 @@ app.post("/api/crane/log", async (req, res) => {
       console.log('🔄 Processing OLD format data...');
     
       // ✅ Use existing format directly
-      const { craneCompany, DeviceID, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
+      const { craneCompany, DeviceID, Uid, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
       
       transformedData = {
       craneCompany,
       DeviceID,
+      Uid,
       Timestamp,
       Longitude,
       Latitude,
@@ -675,6 +714,7 @@ app.post("/api/crane/log", async (req, res) => {
     console.log('🔍 DEBUG - Final extracted values:');
     console.log('  craneCompany:', transformedData.craneCompany);
     console.log('  DeviceID:', transformedData.DeviceID);
+    console.log('  Uid:', transformedData.Uid);
     console.log('  Timestamp:', transformedData.Timestamp);
     console.log('  Longitude:', transformedData.Longitude);
     console.log('  Latitude:', transformedData.Latitude);
@@ -728,6 +768,7 @@ function transformNewFormatToOld(dataArray) {
     let transformedData = {
       craneCompany: null,
       DeviceID: null,
+      Uid: null,
       Timestamp: null,
       Longitude: "0.000000",
       Latitude: "0.000000",
@@ -743,6 +784,7 @@ function transformNewFormatToOld(dataArray) {
       if (!transformedData.craneCompany) transformedData.craneCompany = item.craneCompany;
       if (!transformedData.DeviceID) transformedData.DeviceID = item.DeviceID;
       if (!transformedData.Timestamp) transformedData.Timestamp = item.Timestamp;
+      if (!transformedData.Uid && (item.Uid || item.uid)) transformedData.Uid = item.Uid || item.uid;
       
       // ✅ Parse data based on dataType
       try {
@@ -798,8 +840,15 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane devices for this company only
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    const deviceIdToUid = new Map(allowedDevices.map(d => [d.deviceId, d.uid]));
+
+    // ✅ Get all crane devices for this company only, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     if (craneDevices.length === 0) {
       return res.json({
@@ -819,6 +868,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       });
     }
 
+    // ✅ Establish a consistent time basis for all calculations
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const nowAligned = isProd ? new Date(Date.now() - IST_OFFSET_MS) : new Date();
+
     // ✅ Calculate total working hours for all cranes
     let totalWorkingHours = 0;
     let completedHours = 0;
@@ -832,7 +885,13 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       const deviceFilter = { ...companyFilter, DeviceID: deviceId };
       
       // Get all logs for this device
-      const deviceLogs = await CraneLog.find(deviceFilter).lean();
+      let deviceLogs = await CraneLog.find(deviceFilter).lean();
+
+      // ✅ If logs contain Uid, enforce UID match when provided in logs
+      const requiredUid = deviceIdToUid.get(deviceId);
+      if (requiredUid) {
+        deviceLogs = deviceLogs.filter(l => !l.Uid || l.Uid === requiredUid);
+      }
       
       // ✅ Sort by actual timestamp (not database creation time)
       deviceLogs.sort((a, b) => {
@@ -879,11 +938,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           // ✅ Create IST time - keep in IST for ongoing calculation
           const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
           
-          const now = getCurrentTimeInIST();
+          const now = nowAligned;
           
           // ✅ Check if this is a cross-day ongoing session
-          const today = new Date();
-          const startOfToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0) + (5.5 * 60 * 60 * 1000));
+          const startOfToday = getDateBoundary(nowAligned, true);
           
           let ongoingHoursDiff;
           if (latestTimeIST < startOfToday) {
@@ -937,11 +995,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     }
 
     // ✅ Calculate period-based metrics (working, maintenance, idle)
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1); // ✅ First day of current month
-    const yearStart = new Date(now.getFullYear(), 0, 1); // January 1st of current year
+    const todayBoundary = getDateBoundary(nowAligned, true);
+    const weekAgo = new Date(todayBoundary.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const currentMonthStart = getDateBoundary(new Date(nowAligned.getFullYear(), nowAligned.getMonth(), 1), true); // ✅ First day of current month at IST midnight
+    const yearStart = getDateBoundary(new Date(nowAligned.getFullYear(), 0, 1), true); // ✅ Jan 1st at IST midnight
 
     function overlapHours(period, startDate, endDate) {
       const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
@@ -956,7 +1013,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       return 0;
     }
 
-    async function calculateMetricsForPeriod(startDate, endDate = getCurrentTimeInIST()) {
+    async function calculateMetricsForPeriod(startDate, endDate) {
       let workingCompleted = 0, workingOngoing = 0;
       let maintenanceCompleted = 0, maintenanceOngoing = 0;
       let idleTotal = 0;
@@ -1037,10 +1094,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
 
     // ✅ Calculate metrics for all periods in parallel
     const [todayMetrics, weekMetrics, monthMetrics, yearMetrics] = await Promise.all([
-      calculateMetricsForPeriod(today),
-      calculateMetricsForPeriod(weekAgo),
-      calculateMetricsForPeriod(currentMonthStart),
-      calculateMetricsForPeriod(yearStart)
+      calculateMetricsForPeriod(todayBoundary, nowAligned),
+      calculateMetricsForPeriod(weekAgo, nowAligned),
+      calculateMetricsForPeriod(currentMonthStart, nowAligned),
+      calculateMetricsForPeriod(yearStart, nowAligned)
     ]);
 
     console.log(`📊 Final totals: ${completedHours.toFixed(2)}h completed + ${ongoingHours.toFixed(2)}h ongoing = ${totalWorkingHours.toFixed(2)}h total`);
@@ -2299,8 +2356,15 @@ app.get("/api/crane/devices", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get unique crane devices for this company
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    const deviceIdToUid = new Map(allowedDevices.map(d => [d.deviceId, d.uid]));
+
+    // ✅ Get unique crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     // ✅ Get latest log for each device to get location info
     const devicesWithInfo = await Promise.all(
@@ -2339,13 +2403,20 @@ app.get("/api/crane/live-locations", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get unique crane devices for this company
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    const deviceIdToUid = new Map(allowedDevices.map(d => [d.deviceId, d.uid]));
+
+    // ✅ Get unique crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     // ✅ Get latest log for each device with full details
     const liveCranes = await Promise.all(
       craneDevices.map(async (deviceId) => {
-        const latestLog = await CraneLog.findOne(
+        let latestLog = await CraneLog.findOne(
           { ...companyFilter, DeviceID: deviceId },
           { 
             Longitude: 1, 
@@ -2353,12 +2424,19 @@ app.get("/api/crane/live-locations", authenticateToken, async (req, res) => {
             Timestamp: 1, 
             DigitalInput1: 1, 
             DigitalInput2: 1,
+            Uid: 1,
             craneCompany: 1
           },
           { sort: { createdAt: -1 } }
         ).lean();
         
         if (!latestLog) return null;
+
+        // ✅ Enforce UID match if present in log
+        const requiredUid = deviceIdToUid.get(deviceId);
+        if (requiredUid && latestLog.Uid && latestLog.Uid !== requiredUid) {
+          return null;
+        }
         
         // ✅ Determine status based on DigitalInput values
         let status = "idle";
@@ -2378,7 +2456,8 @@ app.get("/api/crane/live-locations", authenticateToken, async (req, res) => {
           lastUpdated: latestLog.Timestamp,
           company: latestLog.craneCompany,
           digitalInput1: latestLog.DigitalInput1,
-          digitalInput2: latestLog.DigitalInput2
+          digitalInput2: latestLog.DigitalInput2,
+          uid: latestLog.Uid || null
         };
       })
     );

@@ -18,14 +18,6 @@ const deviceSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  location: {
-    type: String,
-    required: true,
-  },
-  frequency: {
-    type: String,
-    required: true,
-  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Device', deviceSchema);
