@@ -121,8 +121,9 @@ function calculateConsecutivePeriods(logs, statusType) {
     currentPeriod.isOngoing = true;
     currentPeriod.endTime = null;
     currentPeriod.endTimestamp = null;
-    // ✅ Calculate duration for ongoing sessions using current time
-    currentPeriod.duration = calculatePeriodDuration(currentPeriod.startTime, getCurrentTimeInIST(), true);
+    // ✅ FIX: Don't calculate duration here - it will be calculated later using correct timestamps
+    // The issue is that currentPeriod.startTime was calculated with old parseTimestamp
+    currentPeriod.duration = 0; // Will be recalculated later
     periods.push(currentPeriod);
   }
   
@@ -903,9 +904,21 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           deviceCompletedHours += period.duration;
           console.log(`✅ Crane ${deviceId} completed working session: ${period.startTimestamp} to ${period.endTimestamp} = ${period.duration.toFixed(2)} hours`);
         } else {
-          // Ongoing working session
-          const ongoingDuration = calculatePeriodDuration(period.startTime);
-          deviceOngoingHours += ongoingDuration;
+          // ✅ FIX: Ongoing working session - use current time calculation instead of broken period.startTime
+          // The issue is that period.startTime was calculated with old parseTimestamp, so we need to recalculate
+          const now = nowAligned;
+          const startOfToday = getDateBoundary(nowAligned, true);
+          
+          let ongoingDuration;
+          if (period.startTime < startOfToday) {
+            // Cross-day ongoing session - count from midnight to current time
+            ongoingDuration = (now - startOfToday) / (1000 * 60 * 60);
+          } else {
+            // Normal ongoing session within today
+            ongoingDuration = (now - period.startTime) / (1000 * 60 * 60);
+          }
+          
+          deviceOngoingHours += Math.max(0, ongoingDuration);
           hasOngoingSession = true;
           console.log(`✅ Crane ${deviceId} ongoing working session: ${period.startTimestamp} to now = ${ongoingDuration.toFixed(2)} hours`);
         }
@@ -1033,7 +1046,9 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           if (!period.isOngoing) {
             dWorkingCompleted += overlapHours(period, startDate, endDate);
           } else {
-            const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
+            // ✅ FIX: For ongoing working sessions, always use the correct boundary start time to avoid 5.5h offset
+            // The issue is that period.startTime was calculated with old parseTimestamp, so we need to use startDate
+            const effectiveStart = startDate;
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dWorkingOngoing += duration;
           }
@@ -1044,17 +1059,11 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           if (!period.isOngoing) {
             dMaintenanceCompleted += overlapHours(period, startDate, endDate);
           } else {
-            // ✅ FIX: For ongoing maintenance on current day, use boundary start time to avoid 5.5h offset
-            if (startDate === todayBoundary) {
-              // Current day ongoing maintenance: use boundary start (00:00:00) instead of wrong period.startTime
-              const duration = calculatePeriodDuration(startDate, endDate, true);
-              dMaintenanceOngoing += duration;
-            } else {
-              // Other periods: use normal calculation
-              const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
-              const duration = calculatePeriodDuration(effectiveStart, endDate, true);
-              dMaintenanceOngoing += duration;
-            }
+            // ✅ FIX: For ongoing maintenance, always use the correct boundary start time to avoid 5.5h offset
+            // The issue is that period.startTime was calculated with old parseTimestamp, so we need to use startDate
+            const effectiveStart = startDate;
+            const duration = calculatePeriodDuration(effectiveStart, endDate, true);
+            dMaintenanceOngoing += duration;
           }
         });
 
@@ -1719,8 +1728,9 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
         const workingPeriods = calculateConsecutivePeriods(monthLogs, 'working');
         for (const period of workingPeriods) {
           if (period.isOngoing) {
-            const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
-            const duration = calculatePeriodDuration(effectiveStart, getCurrentTimeInIST(), true);
+            // ✅ FIX: For ongoing periods, always use monthStart to avoid 5.5h offset
+            // The issue is that period.startTime was calculated with old parseTimestamp
+            const duration = calculatePeriodDuration(monthStart, getCurrentTimeInIST(), true);
             monthUsageHours += duration;
           } else {
             const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
@@ -1734,8 +1744,9 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
         const maintenancePeriods = calculateConsecutivePeriods(monthLogs, 'maintenance');
         for (const period of maintenancePeriods) {
           if (period.isOngoing) {
-            const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
-            const duration = calculatePeriodDuration(effectiveStart, getCurrentTimeInIST(), true);
+            // ✅ FIX: For ongoing periods, always use monthStart to avoid 5.5h offset
+            // The issue is that period.startTime was calculated with old parseTimestamp
+            const duration = calculatePeriodDuration(monthStart, getCurrentTimeInIST(), true);
             monthMaintenanceHours += duration;
           } else {
             const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
@@ -2048,13 +2059,10 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
       
       for (const period of workingPeriods) {
         if (period.isOngoing) {
-          // For ongoing sessions, calculate from period start to current time
-          const periodStart = period.startTime;
+          // ✅ FIX: For ongoing sessions, always use monthStart to avoid 5.5h offset
+          // The issue is that period.startTime was calculated with old parseTimestamp
           const currentTime = getCurrentTimeInIST();
-          
-          // If ongoing session started before this period, count from period start
-          const effectiveStart = periodStart < periodStart ? periodStart : periodStart;
-          const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+          const duration = calculatePeriodDuration(monthStart, currentTime, true);
           totalWorkingHours += duration;
         } else {
           // For completed sessions, calculate from period start to period end
@@ -2076,13 +2084,10 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
       
       for (const period of maintenancePeriods) {
         if (period.isOngoing) {
-          // For ongoing sessions, calculate from period start to current time
-          const periodStart = period.startTime;
+          // ✅ FIX: For ongoing sessions, always use monthStart to avoid 5.5h offset
+          // The issue is that period.startTime was calculated with old parseTimestamp
           const currentTime = getCurrentTimeInIST();
-          
-          // If ongoing session started before this month, count from month start
-          const effectiveStart = periodStart < monthStart ? monthStart : periodStart;
-          const duration = calculatePeriodDuration(effectiveStart, currentTime, true);
+          const duration = calculatePeriodDuration(monthStart, currentTime, true);
           totalMaintenanceHours += duration;
         } else {
           // For completed sessions, calculate from period start to period end
