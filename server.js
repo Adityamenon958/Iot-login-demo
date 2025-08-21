@@ -26,40 +26,29 @@ const CraneLog = require("./backend/models/CraneLog");
 const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 
-// ✅ Environment-based timezone helper function
+// ✅ FIXED: Environment-based timezone helper function - now consistent across environments
 function getCurrentTimeInIST() {
-  if (isProd) {
-    // Production (Azure): Convert UTC to IST
-    const nowUTC = new Date();
-    return new Date(nowUTC.getTime() + (5.5 * 60 * 60 * 1000)); // Convert UTC to IST
-  } else {
-    // Local Development: Already in IST, no conversion needed
-    return new Date();
-  }
+  // ✅ FIXED: Use consistent time handling across all environments
+  // No more environment-specific timezone conversions
+  return new Date();
 }
 
-// ✅ Environment-based timestamp conversion helper
+// ✅ FIXED: Environment-based timestamp conversion helper - now consistent across environments
 function convertISTToUTC(istTime) {
-  if (isProd) {
-    // Production: Convert IST to UTC for calculation
-    return new Date(istTime.getTime() - (5.5 * 60 * 60 * 1000));
-  } else {
-    // Local Development: Keep in IST, no conversion needed
-    return istTime;
-  }
+  // ✅ FIXED: Use consistent time handling across all environments
+  // No more environment-specific timezone conversions
+  return istTime;
 }
 
-// ✅ NEW: Helper function to parse timestamp string to Date object
+// ✅ FIXED: Helper function to parse timestamp string to Date object consistently across environments
 function parseTimestamp(timestampStr) {
   try {
     const [datePart, timePart] = timestampStr.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, minute, second] = timePart.split(':').map(Number);
-    if (isProd) {
-      // Server runs in UTC → build an IST-equivalent by subtracting 5.5h
-      return new Date(Date.UTC(year, month - 1, day, hour, minute, second) - (5.5 * 60 * 60 * 1000));
-    }
-    // Local dev assumed IST → construct directly
+    
+    // ✅ FIXED: Use consistent timestamp creation across all environments
+    // No more environment-specific timezone conversions
     return new Date(year, month - 1, day, hour, minute, second);
   } catch (err) {
     console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
