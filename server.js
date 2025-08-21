@@ -1,5 +1,4 @@
 require('dotenv').config();
-console.log('SMTP vars:', process.env.GMAIL_USER, process.env.GMAIL_PASS?.length);
 
 const express = require('express');
 const cors = require('cors');
@@ -31,7 +30,6 @@ function getCurrentTimeInIST() {
   // ✅ FIXED: Use consistent time handling across all environments
   // No more environment-specific timezone conversions
   const now = new Date();
-  console.log(`🔍 [getCurrentTimeInIST] Returning: ${now.toISOString()} (${now.toString()})`);
   return now;
 }
 
@@ -39,7 +37,6 @@ function getCurrentTimeInIST() {
 function convertISTToUTC(istTime) {
   // ✅ FIXED: Use consistent time handling across all environments
   // No more environment-specific timezone conversions
-  console.log(`🔍 [convertISTToUTC] Input: ${istTime.toISOString()} (${istTime.toString()}), Output: ${istTime.toISOString()} (${istTime.toString()})`);
   return istTime;
 }
 
@@ -49,11 +46,9 @@ function getDateBoundary(date, isStart = true) {
   if (isStart) {
     // ✅ Start of day: 00:00:00 IST - Direct IST date creation
     result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-    console.log(`🔍 [getDateBoundary] START - Input: ${date.toISOString()} (${date.toString()}), Output: ${result.toISOString()} (${result.toString()})`);
   } else {
     // ✅ End of day: 23:59:59 IST - Direct IST date creation
     result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-    console.log(`🔍 [getDateBoundary] END - Input: ${date.toISOString()} (${date.toString()}), Output: ${result.toISOString()} (${result.toString()})`);
   }
   return result;
 }
@@ -61,17 +56,13 @@ function getDateBoundary(date, isStart = true) {
 // ✅ FIXED: Helper function to parse timestamp string to Date object consistently across environments
 function parseTimestamp(timestampStr) {
   try {
-    console.log(`🔍 [parseTimestamp] Input string: "${timestampStr}"`);
     const [datePart, timePart] = timestampStr.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, minute, second] = timePart.split(':').map(Number);
     
-    console.log(`🔍 [parseTimestamp] Parsed: day=${day}, month=${month}, year=${year}, hour=${hour}, minute=${minute}, second=${second}`);
-    
     // ✅ FIXED: Use consistent timestamp creation across all environments
     // No more environment-specific timezone conversions
     const result = new Date(year, month - 1, day, hour, minute, second);
-    console.log(`🔍 [parseTimestamp] Output: ${result.toISOString()} (${result.toString()})`);
     return result;
   } catch (err) {
     console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
@@ -149,10 +140,7 @@ function calculatePeriodDuration(startTime, endTime = null, isOngoing = false) {
   const end = endTime || getCurrentTimeInIST();
   const duration = (end - startTime) / (1000 * 60 * 60);
   
-  // 🔍 DEBUG: Only log for ongoing sessions (these are the problematic ones)
-  if (isOngoing) {
-    console.log(`🔍 [calculatePeriodDuration] ONGOING SESSION - startTime: ${startTime.toISOString()}, endTime: ${end?.toISOString()}, duration: ${duration.toFixed(2)}h`);
-  }
+  // ✅ Calculate duration for ongoing sessions
   
   return Math.max(0, duration); // Ensure non-negative
 }
@@ -184,7 +172,7 @@ function authenticateToken(req, res, next) {
 
 // ✅ Connect MongoDB
 connectDB().then(() => {
-  console.log('✅ MongoDB connected successfully');
+  // MongoDB connected successfully
 }).catch((err) => {
   console.error('❌ MongoDB connection failed:', err);
 });
@@ -682,24 +670,21 @@ app.delete('/api/devices/:id', authenticateToken, async (req, res) => {
 // ✅ POST: Receive crane data from edge device/router (UPDATED FOR NEW FORMAT)
 app.post("/api/crane/log", async (req, res) => {
   try {
-    console.log('🔍 DEBUG - Request headers:', req.headers);
-    console.log('🔍 DEBUG - Request body type:', typeof req.body);
-    console.log('🔍 DEBUG - Request body:', JSON.stringify(req.body, null, 2));
-    console.log('🔍 DEBUG - Request body keys:', Object.keys(req.body || {}));
+      // Request debugging info removed for production
     
     let transformedData = null;
     
     // ✅ Check if this is the new format (array of objects with dataType)
     if (Array.isArray(req.body) && req.body.length > 0 && req.body[0].dataType) {
-      console.log('🔄 Processing NEW format data...');
+      // Processing NEW format data
       
       // ✅ Transform new format to old format
       transformedData = transformNewFormatToOld(req.body);
       
-      console.log('✅ Transformed data:', transformedData);
+              // Data transformed successfully
       
     } else {
-      console.log('🔄 Processing OLD format data...');
+      // Processing OLD format data
     
       // ✅ Use existing format directly
       const { craneCompany, DeviceID, Uid, Timestamp, Longitude, Latitude, DigitalInput1, DigitalInput2 } = req.body;
@@ -716,15 +701,7 @@ app.post("/api/crane/log", async (req, res) => {
       };
     }
     
-    console.log('🔍 DEBUG - Final extracted values:');
-    console.log('  craneCompany:', transformedData.craneCompany);
-    console.log('  DeviceID:', transformedData.DeviceID);
-    console.log('  Uid:', transformedData.Uid);
-    console.log('  Timestamp:', transformedData.Timestamp);
-    console.log('  Longitude:', transformedData.Longitude);
-    console.log('  Latitude:', transformedData.Latitude);
-    console.log('  DigitalInput1:', transformedData.DigitalInput1);
-    console.log('  DigitalInput2:', transformedData.DigitalInput2);
+      // Final extracted values debugging removed for production
     
     // ✅ Validate required fields
     if (!transformedData.craneCompany || !transformedData.DeviceID || !transformedData.Timestamp || 
@@ -748,7 +725,7 @@ app.post("/api/crane/log", async (req, res) => {
     // ✅ Save to database
     const savedLog = await craneLog.save();
     
-    console.log('✅ Crane log saved successfully:', savedLog._id);
+          // Crane log saved successfully
 
     // ✅ Return success response
     res.status(201).json({ 
@@ -767,7 +744,7 @@ app.post("/api/crane/log", async (req, res) => {
 // ✅ Helper function to transform new format to old format
 function transformNewFormatToOld(dataArray) {
   try {
-    console.log('🔄 Starting transformation of new format data...');
+    // Starting transformation of new format data
     
     // ✅ Initialize with default values
     let transformedData = {
@@ -783,7 +760,7 @@ function transformNewFormatToOld(dataArray) {
     
     // ✅ Process each object in the array
     dataArray.forEach((item, index) => {
-      console.log(`🔍 Processing item ${index + 1}:`, item);
+      // Processing item
       
       // ✅ Extract common fields (should be same for all items)
       if (!transformedData.craneCompany) transformedData.craneCompany = item.craneCompany;
@@ -800,33 +777,33 @@ function transformNewFormatToOld(dataArray) {
             if (Array.isArray(parsedData) && parsedData.length >= 2) {
               transformedData.Latitude = parsedData[0].toString();
               transformedData.Longitude = parsedData[1].toString();
-              console.log(`✅ GPS data parsed: lat=${transformedData.Latitude}, lon=${transformedData.Longitude}`);
+              // GPS data parsed successfully
             }
             break;
             
           case "maintenance":
             if (Array.isArray(parsedData) && parsedData.length >= 1) {
               transformedData.DigitalInput2 = parsedData[0].toString();
-              console.log(`✅ Maintenance data parsed: DigitalInput2=${transformedData.DigitalInput2}`);
+              // Maintenance data parsed successfully
             }
             break;
             
           case "Ignition":
             if (Array.isArray(parsedData) && parsedData.length >= 1) {
               transformedData.DigitalInput1 = parsedData[0].toString();
-              console.log(`✅ Ignition data parsed: DigitalInput1=${transformedData.DigitalInput1}`);
+              // Ignition data parsed successfully
             }
             break;
             
           default:
-            console.log(`⚠️ Unknown dataType: ${item.dataType}`);
+            // Unknown dataType encountered
         }
       } catch (parseError) {
         console.error(`❌ Error parsing data for ${item.dataType}:`, parseError);
       }
     });
     
-    console.log('✅ Transformation completed:', transformedData);
+    // Transformation completed successfully
     return transformedData;
     
   } catch (error) {
@@ -840,7 +817,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
   try {
     const { role, companyName } = req.user;
     
-    console.log('🔍 User requesting crane data:', { role, companyName });
+    // User requesting crane data
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
@@ -875,9 +852,8 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
 
     // ✅ FIXED: Establish a consistent time basis for all calculations across environments
     const nowAligned = new Date();
-    console.log(`🔍 [Overview Endpoint] nowAligned calculated: ${nowAligned.toISOString()} (${nowAligned.toString()})`);
-    console.log(`🔍 [Overview Endpoint] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔍 [Overview Endpoint] isProd: ${isProd}`);
+    // Overview endpoint nowAligned calculated
+          // Environment and production status checked
 
     // ✅ Calculate total working hours for all cranes
     let totalWorkingHours = 0;
@@ -922,7 +898,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       workingPeriods.forEach(period => {
         if (!period.isOngoing) {
           deviceCompletedHours += period.duration;
-          console.log(`✅ Crane ${deviceId} completed working session: ${period.startTimestamp} to ${period.endTimestamp} = ${period.duration.toFixed(2)} hours`);
+                      // Crane completed working session calculated
         } else {
                   // ✅ FIX: Ongoing working session - use current time calculation instead of broken period.startTime
         // The issue is that period.startTime was calculated with old parseTimestamp, so we need to recalculate
@@ -940,15 +916,14 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         
         deviceOngoingHours += Math.max(0, ongoingDuration);
           hasOngoingSession = true;
-          console.log(`✅ Crane ${deviceId} ongoing working session: ${period.startTimestamp} to now = ${ongoingDuration.toFixed(2)} hours`);
+                      // Crane ongoing working session calculated
         }
       });
 
       // ✅ Check for ongoing session (latest log) with proper cross-day handling
       const latestLog = deviceLogs[deviceLogs.length - 1];
       if (latestLog.DigitalInput1 === "1") {
-        console.log(`🔍 DEBUG: Crane ${deviceId} is currently operating`);
-        console.log(`🔍 DEBUG: Latest timestamp: ${latestLog.Timestamp}`);
+            // Crane is currently operating
         
         try {
           const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
@@ -972,28 +947,26 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
             ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
           }
           
-          console.log(`🔍 DEBUG: Latest time parsed: ${latestTimeIST}`);
-          console.log(`🔍 DEBUG: Current time: ${now}`);
-          console.log(`🔍 DEBUG: Ongoing hours calculated: ${ongoingHoursDiff}`);
+          // Latest time parsed and ongoing hours calculated
           
           // ✅ Handle ongoing sessions with environment-based timezone logic
           if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
             deviceOngoingHours = ongoingHoursDiff;
             hasOngoingSession = true;
-            console.log(`✅ Crane ${deviceId} ongoing session: ${latestLog.Timestamp} to now = ${ongoingHoursDiff.toFixed(2)} hours`);
+            // Crane ongoing session calculated
           } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
             // ✅ Timezone issue - treat as ongoing session from latest timestamp
             deviceOngoingHours = Math.abs(ongoingHoursDiff);
             hasOngoingSession = true;
-            console.log(`✅ Crane ${deviceId} ongoing session (timezone adjusted): ${latestLog.Timestamp} to now = ${deviceOngoingHours.toFixed(2)} hours`);
+            // Crane ongoing session (timezone adjusted) calculated
           } else {
-            console.log(`❌ Ongoing hours rejected: ${ongoingHoursDiff} (outside valid range)`);
+            // Ongoing hours rejected (outside valid range)
           }
         } catch (err) {
           console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
         }
       } else {
-        console.log(`🔍 DEBUG: Crane ${deviceId} is not currently operating (DigitalInput1: ${latestLog.DigitalInput1})`);
+        // Crane is not currently operating
       }
 
       // ✅ Check current status for crane counts (MAINTENANCE PRIORITY)
@@ -1010,7 +983,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       ongoingHours += deviceOngoingHours;
       totalWorkingHours = completedHours + ongoingHours;
 
-      console.log(`📊 Crane ${deviceId} summary: ${deviceCompletedHours.toFixed(2)}h completed + ${deviceOngoingHours.toFixed(2)}h ongoing`);
+      // Crane summary calculated
     }
 
     // ✅ Calculate period-based metrics (working, maintenance, idle)
@@ -1019,12 +992,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     const currentMonthStart = getDateBoundary(new Date(nowAligned.getFullYear(), nowAligned.getMonth(), 1), true); // ✅ First day of current month at IST midnight
     const yearStart = getDateBoundary(new Date(nowAligned.getFullYear(), 0, 1), true); // ✅ Jan 1st at IST midnight
     
-    console.log(`🔍 [Overview Endpoint] Time boundaries calculated:`);
-    console.log(`🔍 [Overview Endpoint]   - nowAligned: ${nowAligned.toISOString()} (${nowAligned.toString()})`);
-    console.log(`🔍 [Overview Endpoint]   - todayBoundary: ${todayBoundary.toISOString()} (${todayBoundary.toString()})`);
-    console.log(`🔍 [Overview Endpoint]   - weekAgo: ${weekAgo.toISOString()} (${weekAgo.toString()})`);
-    console.log(`🔍 [Overview Endpoint]   - currentMonthStart: ${currentMonthStart.toISOString()} (${currentMonthStart.toString()})`);
-    console.log(`🔍 [Overview Endpoint]   - yearStart: ${yearStart.toISOString()} (${yearStart.toString()})`);
+    // Time boundaries calculated for period calculations
 
     function overlapHours(period, startDate, endDate) {
       const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
@@ -1081,8 +1049,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dWorkingOngoing += duration;
             
-            // 🔍 DEBUG: Log ongoing working session details
-            console.log(`🔍 [Working Ongoing] Device: ${deviceId}, effectiveStart: ${effectiveStart.toISOString()}, duration: ${duration.toFixed(2)}h`);
+            // Ongoing working session details calculated
           }
         });
 
@@ -1098,8 +1065,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dMaintenanceOngoing += duration;
             
-            // 🔍 DEBUG: Log ongoing maintenance session details (THIS IS THE KEY ONE!)
-            console.log(`🔍 [Maintenance Ongoing] Device: ${deviceId}, effectiveStart: ${effectiveStart.toISOString()}, duration: ${duration.toFixed(2)}h`);
+            // Ongoing maintenance session details calculated
           }
         });
 
@@ -1131,7 +1097,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       };
       
       // 🔍 DEBUG: Log final results for this period
-      console.log(`🔍 [Period Results] Working: ${result.working.total.toFixed(2)}h, Maintenance: ${result.maintenance.total.toFixed(2)}h, Idle: ${result.idle.toFixed(2)}h`);
+      // Period results calculated
       
       return result;
     }
@@ -1144,7 +1110,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       calculateMetricsForPeriod(yearStart, nowAligned)
     ]);
 
-    console.log(`📊 Final totals: ${completedHours.toFixed(2)}h completed + ${ongoingHours.toFixed(2)}h ongoing = ${totalWorkingHours.toFixed(2)}h total`);
+    // Final totals calculated
 
     const finalResponse = {
       totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
@@ -1163,10 +1129,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     };
     
     // 🔍 DEBUG: Log the final Quick Stats being sent to frontend
-    console.log(`🔍 [Final Response] Quick Stats Today:`, finalResponse.quickStats.today);
-    console.log(`🔍 [Final Response] Quick Stats Week:`, finalResponse.quickStats.thisWeek);
-    console.log(`🔍 [Final Response] Quick Stats Month:`, finalResponse.quickStats.thisMonth);
-    console.log(`🔍 [Final Response] Quick Stats Year:`, finalResponse.quickStats.thisYear);
+    // Final response quick stats calculated
     
     res.json(finalResponse);
 
@@ -1182,7 +1145,7 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
     const { role, companyName } = req.user;
     const { date } = req.query;
     
-    console.log('🔍 User requesting crane movement data:', { role, companyName, date });
+    // User requesting crane movement data
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
@@ -1260,7 +1223,7 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
       }
     }
     
-    console.log(`✅ Crane movement data calculated for ${Object.keys(completeCraneDistances).length} cranes on ${targetDate}`);
+    // Crane movement data calculated successfully
     
     res.json({
       date: targetDate,
@@ -1281,7 +1244,7 @@ app.post("/api/export/crane-data", authenticateToken, async (req, res) => {
     const { role, companyName } = req.user;
     const { selectedCranes, selectedMonths } = req.body;
     
-    console.log('🔍 User requesting comprehensive export data:', { role, companyName, selectedCranes, selectedMonths });
+    // User requesting comprehensive export data
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
@@ -1315,7 +1278,7 @@ app.post("/api/export/crane-data", authenticateToken, async (req, res) => {
     // ✅ 4. Generate Monthly Movement Data
     const monthlyMovementData = generateMonthlyMovementData(allCraneLogs, selectedCranes, selectedMonths);
     
-    console.log(`✅ Comprehensive export data prepared: ${sessionsData.length} sessions, ${Object.keys(cumulativeStats).length} stats`);
+    // Comprehensive export data prepared successfully
     
     res.json({
       success: true,
@@ -1395,7 +1358,7 @@ function generateSessionsData(allCraneLogs, selectedCranes) {
     });
   }
   
-  console.log(`✅ Generated ${sessionsData.length} sessions for ${selectedCranes.length} cranes`);
+      // Sessions generated successfully
   return sessionsData;
 }
 
@@ -1435,14 +1398,14 @@ function generateCumulativeStats(allCraneLogs, selectedCranes, selectedMonths) {
     let craneMaintenanceOngoing = 0;
     
     // Sum up working hours (separate completed vs ongoing)
-    console.log(`🔍 Processing ${workingPeriods.length} working periods for ${craneId}:`, workingPeriods);
+    // Processing working periods for crane
     workingPeriods.forEach(period => {
       if (period.isOngoing) {
         craneWorkingOngoing += period.duration;
-        console.log(`  ✅ Ongoing period: ${period.duration}h`);
+                  // Ongoing period calculated
       } else {
         craneWorkingCompleted += period.duration;
-        console.log(`  ✅ Completed period: ${period.duration}h`);
+                  // Completed period calculated
       }
     });
     
@@ -1600,7 +1563,7 @@ app.get("/api/crane/logs", authenticateToken, async (req, res) => {
     // ✅ Get all crane logs for this company
     const craneLogs = await CraneLog.find(companyFilter).lean();
     
-    console.log(`✅ Crane logs fetched: ${craneLogs.length} records`);
+    // Crane logs fetched successfully
     
     res.json({
       success: true,
@@ -1658,7 +1621,7 @@ app.get("/api/crane/available-months", authenticateToken, async (req, res) => {
       return dateA - dateB;
     });
     
-    console.log(`✅ Available months found: ${availableMonths.length} months`);
+    // Available months found successfully
     
     res.json({
       success: true,
@@ -1813,7 +1776,7 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`✅ Monthly crane stats calculated for ${monthlyData.length} months`);
+    // Monthly crane stats calculated successfully
     res.json({ monthlyData });
   } catch (err) {
     console.error("❌ Monthly crane stats fetch error:", err);
@@ -1995,7 +1958,7 @@ const totalPeriodHours = (effectivePeriodEnd - periodStart) / (1000 * 60 * 60);
       });
     }
 
-    console.log(`✅ Individual crane stats calculated for ${craneData.length} cranes`);
+    
     res.json({ craneData });
   } catch (err) {
     console.error("❌ Individual crane stats fetch error:", err);
