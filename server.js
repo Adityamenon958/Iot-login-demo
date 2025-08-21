@@ -1059,11 +1059,33 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
             const overlap = overlapHours(period, startDate, endDate);
             dMaintenanceCompleted += overlap;
           } else {
-            // ✅ FIX: For ongoing maintenance, always use the correct boundary start time to avoid 5.5h offset
-            // The issue is that period.startTime was calculated with old parseTimestamp, so we need to use startDate
-            const effectiveStart = startDate;
+            // ✅ FIX: For ongoing maintenance sessions, use smart start time logic
+            let effectiveStart;
+            
+            if (period.startTime >= startDate) {
+              // ✅ Ongoing maintenance started TODAY - use actual maintenance start time
+              effectiveStart = period.startTime;
+              console.log(`🔍 [overview] Ongoing maintenance started today at ${period.startTimestamp}, using actual start time`);
+            } else {
+              // ✅ Ongoing maintenance started BEFORE today - use 00:00:00 of selected date
+              effectiveStart = startDate;
+              console.log(`🔍 [overview] Ongoing maintenance started before today (${period.startTimestamp}), using 00:00:00 as start`);
+            }
+            
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dMaintenanceOngoing += duration;
+            
+            // ✅ DEBUG: Log the ongoing maintenance calculation
+            console.log(`🔍 [overview] Ongoing maintenance calculation:`, {
+              deviceId,
+              periodStart: period.startTimestamp,
+              periodStartTime: period.startTime.toISOString(),
+              startDate: startDate.toISOString(),
+              effectiveStart: effectiveStart.toISOString(),
+              endDate: endDate.toISOString(),
+              durationHours: duration.toFixed(2),
+              isStartedToday: period.startTime >= startDate
+            });
             
             // Ongoing maintenance session details calculated
           }
