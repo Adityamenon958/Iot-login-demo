@@ -60,7 +60,7 @@ function parseTimestamp(timestampStr) {
     const [datePart, timePart] = timestampStr.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, minute, second] = timePart.split(':').map(Number);
-
+    
     // Build the UTC instant that corresponds to the provided IST clock time
     const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 5, minute - 30, second));
     return utcDate;
@@ -4341,8 +4341,10 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
 // ✅ Flexible time-series stats for line chart (daily/weekly/monthly) — IST-anchored and registered BEFORE static/catch-all
 app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
   try {
+    console.log('🔍 [timeseries] Incoming request', { path: req.path, query: req.query, user: req.user ? { role: req.user.role, companyName: req.user.companyName } : null });
     const { role, companyName } = req.user;
     const { cranes, start, end, granularity } = req.query;
+    const debug = req.query.debug === '1' || req.query.debug === 'true';
 
     // Company scope
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
@@ -4389,6 +4391,14 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
       else mode = 'monthly';
     }
 
+    if (debug) {
+      console.log('🔍 [timeseries][debug] range', {
+        mode,
+        rangeStart: rangeStart.toISOString(),
+        rangeEnd: rangeEnd.toISOString()
+      });
+    }
+
     // Buckets in IST
     const buckets = [];
     if (mode === 'daily') {
@@ -4419,14 +4429,25 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
       }
     }
 
+    if (debug) {
+      console.log('🔍 [timeseries][debug] lastBuckets', buckets.slice(-3).map(b => ({
+        label: b.label,
+        start: b.start.toISOString(),
+        end: b.end.toISOString()
+      })));
+    }
+
+    const lastLabels = new Set(buckets.slice(-3).map(b => b.label));
+
     const points = [];
 
     // Aggregate by bucket in IST using parseTimestamp
     for (const b of buckets) {
       let usage = 0;
       let maint = 0;
+      let totalBucketLogs = 0;
 
-      for (const deviceId of selectedDevices) {
+    for (const deviceId of selectedDevices) {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
         const deviceLogs = await CraneLog.find(deviceFilter).lean();
 
@@ -4434,14 +4455,15 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
           const t = parseTimestamp(log.Timestamp);
           return t && t >= b.start && t <= b.end;
         });
+        totalBucketLogs += bucketLogs.length;
         if (bucketLogs.length === 0) continue;
 
         bucketLogs.sort((a, b2) => {
           const aT = parseTimestamp(a.Timestamp);
           const bT = parseTimestamp(b2.Timestamp);
           if (!aT || !bT) return 0;
-          return aT - bT;
-        });
+        return aT - bT;
+      });
 
         const workingPeriods = calculateConsecutivePeriods(bucketLogs, 'working');
         for (const p of workingPeriods) {
@@ -4474,6 +4496,17 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
             maint += duration;
           }
         }
+      }
+
+      if (debug && lastLabels.has(b.label)) {
+        console.log('🔍 [timeseries][debug] bucketSummary', {
+          label: b.label,
+          start: b.start.toISOString(),
+          end: b.end.toISOString(),
+          totalBucketLogs,
+          usageHours: Math.round(usage * 100) / 100,
+          maintenanceHours: Math.round(maint * 100) / 100
+        });
       }
 
       points.push({ label: b.label, usageHours: Math.round(usage * 100) / 100, maintenanceHours: Math.round(maint * 100) / 100 });
@@ -4544,154 +4577,4 @@ app.get('/api/crane/sessions', authenticateToken, async (req, res) => {
 });
 
 // ✅ GET: Flexible time-series stats for line chart (daily/weekly/monthly)
-app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
-  try {
-    const { role, companyName } = req.user;
-    const { cranes, start, end, granularity } = req.query;
-
-    // Company scope
-    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
-
-    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
-    const deviceQuery = role !== "superadmin" ? { companyName } : {};
-    const allowedDevices = await Device.find(deviceQuery).lean();
-    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
-
-    // Devices scoped to allowlist
-    const allDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
-    const allDevices = allDevicesRaw.filter(id => allowedById.has(id));
-    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
-    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
-    if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
-
-    // Date helpers
-    const toStartOfDay = (d) => getDateBoundary(d, true);
-    const toEndOfDay = (d) => getDateBoundary(d, false);
-
-    // Range
-    const now = getCurrentTimeInIST();
-    let rangeStart, rangeEnd;
-    if (start && end) {
-      const [ys, ms, ds] = start.split('-').map(Number);
-      const [ye, me, de] = end.split('-').map(Number);
-      const startDateObj = new Date(ys, ms - 1, ds);
-      const endDateObj = new Date(ye, me - 1, de);
-      rangeStart = toStartOfDay(startDateObj);
-      rangeEnd = toEndOfDay(endDateObj);
-      if (rangeEnd > now) rangeEnd = now;
-    } else {
-      // Default: last 6 months monthly buckets
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      rangeStart = toStartOfDay(new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1));
-      rangeEnd = toEndOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-    }
-    if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
-
-    // Decide granularity
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const rangeDays = Math.max(1, Math.ceil((toStartOfDay(rangeEnd) - toStartOfDay(rangeStart)) / msPerDay) + 1);
-    let mode = (granularity || 'auto').toLowerCase();
-    if (mode === 'auto') {
-      if (rangeDays <= 31) mode = 'daily';
-      else if (rangeDays <= 180) mode = 'weekly';
-      else mode = 'monthly';
-    }
-
-    // Build buckets
-    const buckets = [];
-    if (mode === 'daily') {
-      let cursor = toStartOfDay(rangeStart);
-      while (cursor <= rangeEnd) {
-        const dayStart = toStartOfDay(cursor);
-        const dayEnd = toEndOfDay(cursor);
-        buckets.push({ start: dayStart, end: dayEnd, label: dayStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) });
-        cursor = new Date(cursor.getTime() + msPerDay);
-      }
-    } else if (mode === 'weekly') {
-      // Buckets of 7 days starting at rangeStart
-      let cursor = toStartOfDay(rangeStart);
-      while (cursor <= rangeEnd) {
-        const weekStart = toStartOfDay(cursor);
-        const weekEnd = toEndOfDay(new Date(cursor.getTime() + 6 * msPerDay));
-        buckets.push({ start: weekStart, end: weekEnd > rangeEnd ? rangeEnd : weekEnd, label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` });
-        cursor = new Date(cursor.getTime() + 7 * msPerDay);
-      }
-    } else {
-      // monthly
-      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
-      while (cursor <= lastMonth) {
-        const ms = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-        const me = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
-        const label = `${ms.toLocaleString('default', { month: 'short' })} ${ms.getFullYear()}`;
-        buckets.push({ start: ms, end: me > rangeEnd ? rangeEnd : me, label });
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      }
-    }
-
-    const points = [];
-
-    // Aggregate by bucket
-    for (const b of buckets) {
-      let usage = 0;
-      let maint = 0;
-
-      for (const deviceId of selectedDevices) {
-        const deviceFilter = { ...companyFilter, DeviceID: deviceId };
-        const deviceLogs = await CraneLog.find(deviceFilter).lean();
-
-        const bucketLogs = deviceLogs.filter(log => {
-          const t = parseTimestamp(log.Timestamp);
-          return t && t >= b.start && t <= b.end;
-        });
-        if (bucketLogs.length === 0) continue;
-
-        bucketLogs.sort((a, b2) => {
-          const aT = parseTimestamp(a.Timestamp);
-          const bT = parseTimestamp(b2.Timestamp);
-          if (!aT || !bT) return 0;
-          return aT - bT;
-        });
-
-        const workingPeriods = calculateConsecutivePeriods(bucketLogs, 'working');
-        for (const p of workingPeriods) {
-          if (p.isOngoing) {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            let endClamp = getCurrentTimeInIST();
-            if (endClamp > b.end) endClamp = b.end;
-            const duration = calculatePeriodDuration(effectiveStart, endClamp, true);
-            usage += duration;
-          } else {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            const effectiveEnd = p.endTime > b.end ? b.end : p.endTime;
-            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
-            usage += duration;
-          }
-        }
-
-        const maintenancePeriods = calculateConsecutivePeriods(bucketLogs, 'maintenance');
-        for (const p of maintenancePeriods) {
-          if (p.isOngoing) {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            let endClamp = getCurrentTimeInIST();
-            if (endClamp > b.end) endClamp = b.end;
-            const duration = calculatePeriodDuration(effectiveStart, endClamp, true);
-            maint += duration;
-          } else {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            const effectiveEnd = p.endTime > b.end ? b.end : p.endTime;
-            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
-            maint += duration;
-          }
-        }
-      }
-
-      points.push({ label: b.label, usageHours: Math.round(usage * 100) / 100, maintenanceHours: Math.round(maint * 100) / 100 });
-    }
-
-    return res.json({ granularity: mode, points });
-  } catch (err) {
-    console.error("❌ Timeseries stats fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+// (Removed unreachable duplicate /api/crane/timeseries-stats route that was below catch-all)
