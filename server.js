@@ -1150,11 +1150,17 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
     // ✅ Use provided date or current date
     const targetDate = date || getCurrentDateString();
     
-    // ✅ Get all crane devices for this company (from crane overview logic)
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Get all crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     if (craneDevices.length === 0) {
       return res.json({
@@ -1560,8 +1566,20 @@ app.get("/api/crane/logs", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane logs for this company
-    const craneLogs = await CraneLog.find(companyFilter).lean();
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Get all crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
+    
+    // ✅ Get crane logs only for allowed devices
+    const craneLogs = await CraneLog.find({
+      ...companyFilter,
+      DeviceID: { $in: craneDevices }
+    }).lean();
     
     // Crane logs fetched successfully
     
@@ -1588,9 +1606,21 @@ app.get("/api/crane/available-months", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Filter by selected cranes if specified
-    const craneFilter = cranes && cranes.length > 0 
-      ? { DeviceID: { $in: cranes.split(',') } } 
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Filter by selected cranes if specified (only from allowed devices)
+    let selectedCranes = [];
+    if (cranes && cranes.length > 0) {
+      const requestedCranes = cranes.split(',').map(s => s.trim()).filter(Boolean);
+      selectedCranes = requestedCranes.filter(id => allowedById.has(id));
+    }
+    
+    // ✅ Get crane logs with filters (only for allowed devices)
+    const craneFilter = selectedCranes.length > 0 
+      ? { DeviceID: { $in: selectedCranes } } 
       : {};
     
     // ✅ Get crane logs with filters
@@ -1646,12 +1676,18 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ All devices for the company
-    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
     
-    // ✅ Narrow down to requested cranes if provided
+    // ✅ Get all crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
+    
+    // ✅ Narrow down to requested cranes if provided (only from allowed devices)
     const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
-    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    const selectedDevices = requested.length > 0 ? craneDevices.filter(id => requested.includes(id)) : craneDevices;
     
     if (selectedDevices.length === 0) {
       return res.json({ monthlyData: [] });
@@ -1795,12 +1831,18 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ All devices for the company
-    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Get unique crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     // ✅ Narrow down devices by query if provided
     const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
-    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    const selectedDevices = requested.length > 0 ? craneDevices.filter(id => requested.includes(id)) : craneDevices;
     
     if (selectedDevices.length === 0) {
       return res.json({ craneData: [] });
@@ -1977,8 +2019,14 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane devices for this company
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Get all crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     if (craneDevices.length === 0) {
       return res.json({ 
@@ -2149,8 +2197,14 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
     
-    // ✅ Get all crane devices for this company
-    const craneDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Get all crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
     
     if (craneDevices.length === 0) {
       return res.json({ 
@@ -2562,6 +2616,17 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     
     // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+    
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Verify the requested device is allowed
+    if (!allowedById.has(deviceId)) {
+      console.log(`❌ Device ${deviceId} not found in allowed devices for ${companyName}`);
+      return res.status(403).json({ error: "Device not authorized" });
+    }
     
     // ✅ Get today's date range in IST consistently (use same basis as parseTimestamp/getDateBoundary)
     const now = new Date();
@@ -3920,9 +3985,18 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
     // Company filter matches overview logic
     const companyFilter = role !== 'superadmin' ? { craneCompany: companyName } : {};
 
-    // Determine crane list
-    const allCranes = await CraneLog.distinct('DeviceID', companyFilter);
-    const cranes = selectedCranes.length > 0 ? selectedCranes : allCranes;
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== 'superadmin' ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+
+    // ✅ Get all crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct('DeviceID', companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
+    
+    // Determine crane list (only from allowed devices)
+    const allCranes = craneDevices;
+    const cranes = selectedCranes.length > 0 ? selectedCranes.filter(id => allowedById.has(id)) : allCranes;
     if (cranes.length === 0) {
       return res.json({ success: true, workingCompleted: 0, workingOngoing: 0, cranesCount: 0, cranesList: [], period: null });
     }
@@ -4162,10 +4236,21 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
   try {
     const { role, companyName } = req.user;
     const { cranes, start, end, granularity } = req.query;
+    
+    // ✅ Filter by company (except for superadmin)
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
-    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ Get unique crane devices for this company, then filter by allowlist
+    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
+    
     const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
-    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
+    const selectedDevices = requested.length > 0 ? craneDevices.filter(id => requested.includes(id)) : craneDevices;
     if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
     const toStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
     const toEndOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
