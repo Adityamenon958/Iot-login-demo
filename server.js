@@ -30,40 +30,52 @@ const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calcu
 function getCurrentTimeInIST() {
   // ✅ FIXED: Use consistent time handling across all environments
   // No more environment-specific timezone conversions
-  return new Date();
+  const now = new Date();
+  console.log(`🔍 [getCurrentTimeInIST] Returning: ${now.toISOString()} (${now.toString()})`);
+  return now;
 }
 
 // ✅ FIXED: Environment-based timestamp conversion helper - now consistent across environments
 function convertISTToUTC(istTime) {
   // ✅ FIXED: Use consistent time handling across all environments
   // No more environment-specific timezone conversions
+  console.log(`🔍 [convertISTToUTC] Input: ${istTime.toISOString()} (${istTime.toString()}), Output: ${istTime.toISOString()} (${istTime.toString()})`);
   return istTime;
+}
+
+// ✅ FIXED: Helper function for consistent date boundary handling
+function getDateBoundary(date, isStart = true) {
+  let result;
+  if (isStart) {
+    // ✅ Start of day: 00:00:00 IST - Direct IST date creation
+    result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+    console.log(`🔍 [getDateBoundary] START - Input: ${date.toISOString()} (${date.toString()}), Output: ${result.toISOString()} (${result.toString()})`);
+  } else {
+    // ✅ End of day: 23:59:59 IST - Direct IST date creation
+    result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    console.log(`🔍 [getDateBoundary] END - Input: ${date.toISOString()} (${date.toString()}), Output: ${result.toISOString()} (${result.toString()})`);
+  }
+  return result;
 }
 
 // ✅ FIXED: Helper function to parse timestamp string to Date object consistently across environments
 function parseTimestamp(timestampStr) {
   try {
+    console.log(`🔍 [parseTimestamp] Input string: "${timestampStr}"`);
     const [datePart, timePart] = timestampStr.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, minute, second] = timePart.split(':').map(Number);
     
+    console.log(`🔍 [parseTimestamp] Parsed: day=${day}, month=${month}, year=${year}, hour=${hour}, minute=${minute}, second=${second}`);
+    
     // ✅ FIXED: Use consistent timestamp creation across all environments
     // No more environment-specific timezone conversions
-    return new Date(year, month - 1, day, hour, minute, second);
+    const result = new Date(year, month - 1, day, hour, minute, second);
+    console.log(`🔍 [parseTimestamp] Output: ${result.toISOString()} (${result.toString()})`);
+    return result;
   } catch (err) {
     console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
     return null;
-  }
-}
-
-// ✅ FIXED: Helper function for consistent date boundary handling
-function getDateBoundary(date, isStart = true) {
-  if (isStart) {
-    // ✅ Start of day: 00:00:00 IST - Direct IST date creation
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-  } else {
-    // ✅ End of day: 23:59:59 IST - Direct IST date creation
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
   }
 }
 
@@ -132,10 +144,20 @@ function calculateConsecutivePeriods(logs, statusType) {
 
 // ✅ NEW: Helper function to calculate period duration including ongoing sessions
 function calculatePeriodDuration(startTime, endTime = null, isOngoing = false) {
-  if (!startTime) return 0;
+  if (!startTime) {
+    console.log(`🔍 [calculatePeriodDuration] startTime is null/undefined, returning 0`);
+    return 0;
+  }
   
   const end = endTime || getCurrentTimeInIST();
   const duration = (end - startTime) / (1000 * 60 * 60);
+  
+  console.log(`🔍 [calculatePeriodDuration] Calculating duration:`);
+  console.log(`🔍 [calculatePeriodDuration]   - startTime: ${startTime.toISOString()} (${startTime.toString()})`);
+  console.log(`🔍 [calculatePeriodDuration]   - endTime: ${end.toISOString()} (${end.toString()})`);
+  console.log(`🔍 [calculatePeriodDuration]   - isOngoing: ${isOngoing}`);
+  console.log(`🔍 [calculatePeriodDuration]   - Raw duration: ${duration} hours`);
+  console.log(`🔍 [calculatePeriodDuration]   - Final duration: ${Math.max(0, duration).toFixed(2)} hours`);
   
   return Math.max(0, duration); // Ensure non-negative
 }
@@ -858,6 +880,9 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
 
     // ✅ FIXED: Establish a consistent time basis for all calculations across environments
     const nowAligned = new Date();
+    console.log(`🔍 [Overview Endpoint] nowAligned calculated: ${nowAligned.toISOString()} (${nowAligned.toString()})`);
+    console.log(`🔍 [Overview Endpoint] Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔍 [Overview Endpoint] isProd: ${isProd}`);
 
     // ✅ Calculate total working hours for all cranes
     let totalWorkingHours = 0;
@@ -904,21 +929,29 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           deviceCompletedHours += period.duration;
           console.log(`✅ Crane ${deviceId} completed working session: ${period.startTimestamp} to ${period.endTimestamp} = ${period.duration.toFixed(2)} hours`);
         } else {
-          // ✅ FIX: Ongoing working session - use current time calculation instead of broken period.startTime
-          // The issue is that period.startTime was calculated with old parseTimestamp, so we need to recalculate
-          const now = nowAligned;
-          const startOfToday = getDateBoundary(nowAligned, true);
-          
-          let ongoingDuration;
-          if (period.startTime < startOfToday) {
-            // Cross-day ongoing session - count from midnight to current time
-            ongoingDuration = (now - startOfToday) / (1000 * 60 * 60);
-          } else {
-            // Normal ongoing session within today
-            ongoingDuration = (now - period.startTime) / (1000 * 60 * 60);
-          }
-          
-          deviceOngoingHours += Math.max(0, ongoingDuration);
+                  // ✅ FIX: Ongoing working session - use current time calculation instead of broken period.startTime
+        // The issue is that period.startTime was calculated with old parseTimestamp, so we need to recalculate
+        const now = nowAligned;
+        const startOfToday = getDateBoundary(nowAligned, true);
+        
+        console.log(`🔍 [Main Working Loop] Ongoing session for ${deviceId}:`);
+        console.log(`🔍 [Main Working Loop]   - period.startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+        console.log(`🔍 [Main Working Loop]   - startOfToday: ${startOfToday.toISOString()} (${startOfToday.toString()})`);
+        console.log(`🔍 [Main Working Loop]   - now: ${now.toISOString()} (${now.toString()})`);
+        
+        let ongoingDuration;
+        if (period.startTime < startOfToday) {
+          // Cross-day ongoing session - count from midnight to current time
+          ongoingDuration = (now - startOfToday) / (1000 * 60 * 60);
+          console.log(`🔍 [Main Working Loop]   - Cross-day session: counting from midnight to now = ${ongoingDuration.toFixed(2)} hours`);
+        } else {
+          // Normal ongoing session within today
+          ongoingDuration = (now - period.startTime) / (1000 * 60 * 60);
+          console.log(`🔍 [Main Working Loop]   - Same-day session: counting from period start to now = ${ongoingDuration.toFixed(2)} hours`);
+        }
+        
+        deviceOngoingHours += Math.max(0, ongoingDuration);
+        console.log(`🔍 [Main Working Loop]   - Final ongoingDuration: ${ongoingDuration.toFixed(2)} hours, deviceOngoingHours now: ${deviceOngoingHours.toFixed(2)}`);
           hasOngoingSession = true;
           console.log(`✅ Crane ${deviceId} ongoing working session: ${period.startTimestamp} to now = ${ongoingDuration.toFixed(2)} hours`);
         }
@@ -998,17 +1031,36 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     const weekAgo = new Date(todayBoundary.getTime() - 7 * 24 * 60 * 60 * 1000);
     const currentMonthStart = getDateBoundary(new Date(nowAligned.getFullYear(), nowAligned.getMonth(), 1), true); // ✅ First day of current month at IST midnight
     const yearStart = getDateBoundary(new Date(nowAligned.getFullYear(), 0, 1), true); // ✅ Jan 1st at IST midnight
+    
+    console.log(`🔍 [Overview Endpoint] Time boundaries calculated:`);
+    console.log(`🔍 [Overview Endpoint]   - nowAligned: ${nowAligned.toISOString()} (${nowAligned.toString()})`);
+    console.log(`🔍 [Overview Endpoint]   - todayBoundary: ${todayBoundary.toISOString()} (${todayBoundary.toString()})`);
+    console.log(`🔍 [Overview Endpoint]   - weekAgo: ${weekAgo.toISOString()} (${weekAgo.toString()})`);
+    console.log(`🔍 [Overview Endpoint]   - currentMonthStart: ${currentMonthStart.toISOString()} (${currentMonthStart.toString()})`);
+    console.log(`🔍 [Overview Endpoint]   - yearStart: ${yearStart.toISOString()} (${yearStart.toString()})`);
 
     function overlapHours(period, startDate, endDate) {
       const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
       const periodStart = period.startTime.getTime();
       const queryStart = startDate.getTime();
       const queryEnd = endDate.getTime();
+      
+      console.log(`🔍 [overlapHours] Calculating overlap:`);
+      console.log(`🔍 [overlapHours]   - period.startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+      console.log(`🔍 [overlapHours]   - period.duration: ${period.duration} hours`);
+      console.log(`🔍 [overlapHours]   - periodStart: ${periodStart} (${new Date(periodStart).toISOString()})`);
+      console.log(`🔍 [overlapHours]   - periodEnd: ${periodEnd} (${new Date(periodEnd).toISOString()})`);
+      console.log(`🔍 [overlapHours]   - queryStart: ${queryStart} (${new Date(queryStart).toISOString()})`);
+      console.log(`🔍 [overlapHours]   - queryEnd: ${queryEnd} (${new Date(queryEnd).toISOString()})`);
+      
       if (periodStart < queryEnd && periodEnd > queryStart) {
         const overlapStart = Math.max(periodStart, queryStart);
         const overlapEnd = Math.min(periodEnd, queryEnd);
-        return (overlapEnd - overlapStart) / (1000 * 60 * 60);
+        const overlapHours = (overlapEnd - overlapStart) / (1000 * 60 * 60);
+        console.log(`🔍 [overlapHours]   - Overlap found: ${overlapStart} to ${overlapEnd} = ${overlapHours.toFixed(2)} hours`);
+        return overlapHours;
       }
+      console.log(`🔍 [overlapHours]   - No overlap found`);
       return 0;
     }
 
@@ -1043,27 +1095,47 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
 
         // Working periods (per device)
         workingPeriods.forEach(period => {
+          console.log(`🔍 [calculateMetricsForPeriod] Working period for ${deviceId}:`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - endTime: ${period.endTime?.toISOString()} (${period.endTime?.toString()})`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - isOngoing: ${period.isOngoing}`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - startTimestamp: ${period.startTimestamp}`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - endTimestamp: ${period.endTimestamp}`);
+          
           if (!period.isOngoing) {
-            dWorkingCompleted += overlapHours(period, startDate, endDate);
+            const overlap = overlapHours(period, startDate, endDate);
+            dWorkingCompleted += overlap;
+            console.log(`🔍 [calculateMetricsForPeriod]   - Completed period overlap: ${overlap.toFixed(2)} hours, total completed: ${dWorkingCompleted.toFixed(2)}`);
           } else {
             // ✅ FIX: For ongoing working sessions, always use the correct boundary start time to avoid 5.5h offset
             // The issue is that period.startTime was calculated with old parseTimestamp, so we need to use startDate
             const effectiveStart = startDate;
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dWorkingOngoing += duration;
+            console.log(`🔍 [calculateMetricsForPeriod]   - Ongoing period: using effectiveStart=${effectiveStart.toISOString()} (${effectiveStart.toString()}), duration: ${duration.toFixed(2)} hours, total ongoing: ${dWorkingOngoing.toFixed(2)}`);
           }
         });
 
         // Maintenance periods (per device)
         maintenancePeriods.forEach(period => {
+          console.log(`🔍 [calculateMetricsForPeriod] Maintenance period for ${deviceId}:`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - endTime: ${period.endTime?.toISOString()} (${period.endTime?.toString()})`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - isOngoing: ${period.isOngoing}`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - startTimestamp: ${period.startTimestamp}`);
+          console.log(`🔍 [calculateMetricsForPeriod]   - endTimestamp: ${period.endTimestamp}`);
+          
           if (!period.isOngoing) {
-            dMaintenanceCompleted += overlapHours(period, startDate, endDate);
+            const overlap = overlapHours(period, startDate, endDate);
+            dMaintenanceCompleted += overlap;
+            console.log(`🔍 [calculateMetricsForPeriod]   - Completed period overlap: ${overlap.toFixed(2)} hours, total completed: ${dMaintenanceCompleted.toFixed(2)}`);
           } else {
             // ✅ FIX: For ongoing maintenance, always use the correct boundary start time to avoid 5.5h offset
             // The issue is that period.startTime was calculated with old parseTimestamp, so we need to use startDate
             const effectiveStart = startDate;
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dMaintenanceOngoing += duration;
+            console.log(`🔍 [calculateMetricsForPeriod]   - Ongoing period: using effectiveStart=${effectiveStart.toISOString()} (${effectiveStart.toString()}), duration: ${duration.toFixed(2)} hours, total ongoing: ${dMaintenanceOngoing.toFixed(2)}`);
           }
         });
 
@@ -1080,7 +1152,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         maintenanceOngoing += dMaintenanceOngoing;
       }
 
-      return {
+      const result = {
         working: {
           completed: Math.round(workingCompleted * 100) / 100,
           ongoing: Math.round(workingOngoing * 100) / 100,
@@ -1093,19 +1165,33 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         },
         idle: Math.round(idleTotal * 100) / 100
       };
+      
+      console.log(`🔍 [calculateMetricsForPeriod] Final results for ${deviceId}:`);
+      console.log(`🔍 [calculateMetricsForPeriod]   - Working: ${result.working.total.toFixed(2)} (${result.working.completed.toFixed(2)} completed + ${result.working.ongoing.toFixed(2)} ongoing)`);
+      console.log(`🔍 [calculateMetricsForPeriod]   - Maintenance: ${result.maintenance.total.toFixed(2)} (${result.maintenance.completed.toFixed(2)} completed + ${result.maintenance.ongoing.toFixed(2)} ongoing)`);
+      console.log(`🔍 [calculateMetricsForPeriod]   - Idle: ${result.idle.toFixed(2)}`);
+      
+      return result;
     }
 
     // ✅ Calculate metrics for all periods in parallel
+    console.log(`🔍 [Overview Endpoint] Starting parallel calculation of metrics for all periods...`);
     const [todayMetrics, weekMetrics, monthMetrics, yearMetrics] = await Promise.all([
       calculateMetricsForPeriod(todayBoundary, nowAligned),
       calculateMetricsForPeriod(weekAgo, nowAligned),
       calculateMetricsForPeriod(currentMonthStart, nowAligned),
       calculateMetricsForPeriod(yearStart, nowAligned)
     ]);
+    
+    console.log(`🔍 [Overview Endpoint] All metrics calculated successfully:`);
+    console.log(`🔍 [Overview Endpoint] Today metrics:`, todayMetrics);
+    console.log(`🔍 [Overview Endpoint] Week metrics:`, weekMetrics);
+    console.log(`🔍 [Overview Endpoint] Month metrics:`, monthMetrics);
+    console.log(`🔍 [Overview Endpoint] Year metrics:`, yearMetrics);
 
     console.log(`📊 Final totals: ${completedHours.toFixed(2)}h completed + ${ongoingHours.toFixed(2)}h ongoing = ${totalWorkingHours.toFixed(2)}h total`);
 
-    res.json({
+    const finalResponse = {
       totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
       completedHours: Math.round(completedHours * 100) / 100,
       ongoingHours: Math.round(ongoingHours * 100) / 100,
@@ -1119,7 +1205,16 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         thisMonth: { completed: monthMetrics.working.completed, ongoing: monthMetrics.working.ongoing, maintenance: monthMetrics.maintenance.total, idle: monthMetrics.idle },
         thisYear: { completed: yearMetrics.working.completed, ongoing: yearMetrics.working.ongoing, maintenance: yearMetrics.maintenance.total, idle: yearMetrics.idle }
       }
-    });
+    };
+    
+    console.log(`🔍 [Overview Endpoint] Final response being sent:`);
+    console.log(`🔍 [Overview Endpoint]   - Working: ${finalResponse.totalWorkingHours.toFixed(2)} (${finalResponse.completedHours.toFixed(2)} completed + ${finalResponse.ongoingHours.toFixed(2)} ongoing)`);
+    console.log(`🔍 [Overview Endpoint]   - Today Quick Stats:`, finalResponse.quickStats.today);
+    console.log(`🔍 [Overview Endpoint]   - Week Quick Stats:`, finalResponse.quickStats.thisWeek);
+    console.log(`🔍 [Overview Endpoint]   - Month Quick Stats:`, finalResponse.quickStats.thisMonth);
+    console.log(`🔍 [Overview Endpoint]   - Year Quick Stats:`, finalResponse.quickStats.thisYear);
+    
+    res.json(finalResponse);
 
   } catch (err) {
     console.error("❌ Crane overview fetch error:", err);
@@ -1727,12 +1822,18 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
         // Working periods
         const workingPeriods = calculateConsecutivePeriods(monthLogs, 'working');
         for (const period of workingPeriods) {
-          if (period.isOngoing) {
-            // ✅ FIX: For ongoing periods, always use monthStart to avoid 5.5h offset
-            // The issue is that period.startTime was calculated with old parseTimestamp
-            const duration = calculatePeriodDuration(monthStart, getCurrentTimeInIST(), true);
-            monthUsageHours += duration;
-          } else {
+                            if (period.isOngoing) {
+                    // ✅ FIX: For ongoing periods, always use monthStart to avoid 5.5h offset
+                    // The issue is that period.startTime was calculated with old parseTimestamp
+                    console.log(`🔍 [Line Chart] Ongoing period for ${deviceId}:`);
+                    console.log(`🔍 [Line Chart]   - period.startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+                    console.log(`🔍 [Line Chart]   - monthStart: ${monthStart.toISOString()} (${monthStart.toString()})`);
+                    console.log(`🔍 [Line Chart]   - currentTime: ${getCurrentTimeInIST().toISOString()} (${getCurrentTimeInIST().toString()})`);
+                    
+                    const duration = calculatePeriodDuration(monthStart, getCurrentTimeInIST(), true);
+                    monthUsageHours += duration;
+                    console.log(`🔍 [Line Chart]   - Duration calculated: ${duration.toFixed(2)} hours, monthUsageHours now: ${monthUsageHours.toFixed(2)}`);
+                  } else {
             const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
             const effectiveEnd = period.endTime > monthEnd ? monthEnd : period.endTime;
             const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
@@ -1743,12 +1844,18 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
         // Maintenance periods
         const maintenancePeriods = calculateConsecutivePeriods(monthLogs, 'maintenance');
         for (const period of maintenancePeriods) {
-          if (period.isOngoing) {
-            // ✅ FIX: For ongoing periods, always use monthStart to avoid 5.5h offset
-            // The issue is that period.startTime was calculated with old parseTimestamp
-            const duration = calculatePeriodDuration(monthStart, getCurrentTimeInIST(), true);
-            monthMaintenanceHours += duration;
-          } else {
+                            if (period.isOngoing) {
+                    // ✅ FIX: For ongoing periods, always use monthStart to avoid 5.5h offset
+                    // The issue is that period.startTime was calculated with old parseTimestamp
+                    console.log(`🔍 [Line Chart] Ongoing maintenance period for ${deviceId}:`);
+                    console.log(`🔍 [Line Chart]   - period.startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+                    console.log(`🔍 [Line Chart]   - monthStart: ${monthStart.toISOString()} (${monthStart.toString()})`);
+                    console.log(`🔍 [Line Chart]   - currentTime: ${getCurrentTimeInIST().toISOString()} (${getCurrentTimeInIST().toString()})`);
+                    
+                    const duration = calculatePeriodDuration(monthStart, getCurrentTimeInIST(), true);
+                    monthMaintenanceHours += duration;
+                    console.log(`🔍 [Line Chart]   - Duration calculated: ${duration.toFixed(2)} hours, monthMaintenanceHours now: ${monthMaintenanceHours.toFixed(2)}`);
+                  } else {
             const effectiveStart = period.startTime < monthStart ? monthStart : period.startTime;
             const effectiveEnd = period.endTime > monthEnd ? monthEnd : period.endTime;
             const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
@@ -2058,13 +2165,19 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
       const workingPeriods = calculateConsecutivePeriods(monthLogs, 'working');
       
       for (const period of workingPeriods) {
-        if (period.isOngoing) {
-          // ✅ FIX: For ongoing sessions, always use monthStart to avoid 5.5h offset
-          // The issue is that period.startTime was calculated with old parseTimestamp
-          const currentTime = getCurrentTimeInIST();
-          const duration = calculatePeriodDuration(monthStart, currentTime, true);
-          totalWorkingHours += duration;
-        } else {
+                        if (period.isOngoing) {
+                  // ✅ FIX: For ongoing sessions, always use monthStart to avoid 5.5h offset
+                  // The issue is that period.startTime was calculated with old parseTimestamp
+                  console.log(`🔍 [Previous Month Stats] Ongoing working period for ${deviceId}:`);
+                  console.log(`🔍 [Previous Month Stats]   - period.startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+                  console.log(`🔍 [Previous Month Stats]   - monthStart: ${monthStart.toISOString()} (${monthStart.toString()})`);
+                  console.log(`🔍 [Previous Month Stats]   - currentTime: ${getCurrentTimeInIST().toISOString()} (${getCurrentTimeInIST().toString()})`);
+                  
+                  const currentTime = getCurrentTimeInIST();
+                  const duration = calculatePeriodDuration(monthStart, currentTime, true);
+                  totalWorkingHours += duration;
+                  console.log(`🔍 [Previous Month Stats]   - Duration calculated: ${duration.toFixed(2)} hours, totalWorkingHours now: ${totalWorkingHours.toFixed(2)}`);
+                } else {
           // For completed sessions, calculate from period start to period end
           const periodStart = period.startTime;
           const periodEnd = period.endTime;
@@ -2083,13 +2196,19 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
       const maintenancePeriods = calculateConsecutivePeriods(monthLogs, 'maintenance');
       
       for (const period of maintenancePeriods) {
-        if (period.isOngoing) {
-          // ✅ FIX: For ongoing sessions, always use monthStart to avoid 5.5h offset
-          // The issue is that period.startTime was calculated with old parseTimestamp
-          const currentTime = getCurrentTimeInIST();
-          const duration = calculatePeriodDuration(monthStart, currentTime, true);
-          totalMaintenanceHours += duration;
-        } else {
+                        if (period.isOngoing) {
+                  // ✅ FIX: For ongoing sessions, always use monthStart to avoid 5.5h offset
+                  // The issue is that period.startTime was calculated with old parseTimestamp
+                  console.log(`🔍 [Previous Month Stats] Ongoing maintenance period for ${deviceId}:`);
+                  console.log(`🔍 [Previous Month Stats]   - period.startTime: ${period.startTime?.toISOString()} (${period.startTime?.toString()})`);
+                  console.log(`🔍 [Previous Month Stats]   - monthStart: ${monthStart.toISOString()} (${monthStart.toString()})`);
+                  console.log(`🔍 [Previous Month Stats]   - currentTime: ${getCurrentTimeInIST().toISOString()} (${getCurrentTimeInIST().toString()})`);
+                  
+                  const currentTime = getCurrentTimeInIST();
+                  const duration = calculatePeriodDuration(monthStart, currentTime, true);
+                  totalMaintenanceHours += duration;
+                  console.log(`🔍 [Previous Month Stats]   - Duration calculated: ${duration.toFixed(2)} hours, totalMaintenanceHours now: ${totalMaintenanceHours.toFixed(2)}`);
+                } else {
           // For completed sessions, calculate from period start to period end
           const periodStart = period.startTime;
           const periodEnd = period.endTime;
