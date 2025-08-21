@@ -1043,10 +1043,18 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         maintenancePeriods.forEach(period => {
           if (!period.isOngoing) {
             dMaintenanceCompleted += overlapHours(period, startDate, endDate);
+          } else {
+            // ✅ FIX: For ongoing maintenance on current day, use boundary start time to avoid 5.5h offset
+            if (startDate === todayBoundary) {
+              // Current day ongoing maintenance: use boundary start (00:00:00) instead of wrong period.startTime
+              const duration = calculatePeriodDuration(startDate, endDate, true);
+              dMaintenanceOngoing += duration;
             } else {
-            const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
-            const duration = calculatePeriodDuration(effectiveStart, endDate, true);
-            dMaintenanceOngoing += duration;
+              // Other periods: use normal calculation
+              const effectiveStart = period.startTime < startDate ? startDate : period.startTime;
+              const duration = calculatePeriodDuration(effectiveStart, endDate, true);
+              dMaintenanceOngoing += duration;
+            }
           }
         });
 
