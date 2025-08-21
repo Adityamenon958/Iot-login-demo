@@ -106,6 +106,7 @@ const LiveCraneLocations = ({ cranes = [] }) => {
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [showTooltip, setShowTooltip] = useState(false);
   const [craneStats, setCraneStats] = useState({});
+  const [ongoingSessions, setOngoingSessions] = useState({});
 
   // ✅ Fetch live crane data
   useEffect(() => {
@@ -207,6 +208,16 @@ const LiveCraneLocations = ({ cranes = [] }) => {
             console.error('❌ Error pre-loading stats for crane', deviceId, ':', err);
           }
         }
+        if (deviceId && !ongoingSessions[deviceId]) {
+          try {
+            const ongoingResp = await axios.get(`/api/crane/ongoing-session/${deviceId}`, { withCredentials: true });
+            if (isMounted) {
+              setOngoingSessions(prev => ({ ...prev, [deviceId]: ongoingResp.data }));
+            }
+          } catch (err) {
+            console.error('❌ Error pre-loading ongoing session for crane', deviceId, ':', err);
+          }
+        }
       }
     };
 
@@ -270,6 +281,8 @@ const LiveCraneLocations = ({ cranes = [] }) => {
         ...prev,
         [deviceId]: response.data
       }));
+      const ongoingResp = await axios.get(`/api/crane/ongoing-session/${deviceId}`, { withCredentials: true });
+      setOngoingSessions(prev => ({ ...prev, [deviceId]: ongoingResp.data }));
     } catch (err) {
       console.error('❌ Error fetching crane stats:', err);
     }
@@ -288,6 +301,7 @@ const LiveCraneLocations = ({ cranes = [] }) => {
     setTooltipData(crane);
     setTooltipPosition({ x, y });
     setShowTooltip(true);
+    fetchCraneStats(deviceId);
   };
 
   // ✅ Handle crane marker leave
@@ -593,52 +607,41 @@ const LiveCraneLocations = ({ cranes = [] }) => {
               <p><strong>Company:</strong> {tooltipData.company || tooltipData.craneCompany || 'N/A'}</p>
               <p><strong>Last Seen:</strong> {formatTimestamp(tooltipData.lastUpdated || tooltipData.Timestamp)}</p>
              
-                           {/* ✅ Daily Statistics in Tooltip */}
+                           {/* ✅ Ongoing Activity in Tooltip */}
                              {(() => {
                  const deviceId = tooltipData.id || tooltipData.craneId;
-                 const stats = craneStats[deviceId];
-                 
-                 if (stats) {
+                 const ongoing = ongoingSessions[deviceId];
+                 const formatClock = (iso) => {
+                   if (!iso) return '';
+                   try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+                 };
+                 if (ongoing) {
+                   const labelColor = ongoing.currentStatus === 'working' ? '#28a745' : (ongoing.currentStatus === 'maintenance' ? '#fd7e14' : '#007bff');
                    return (
                      <div className={styles.tooltipStats}>
-                       <h6 className="mb-2">Today's Activity</h6>
+                       <h6 className="mb-2">Ongoing Activity</h6>
                        <div className={styles.tooltipStatsGrid}>
                          <div className={styles.tooltipStatItem}>
-                           <span className={styles.statDot} style={{ backgroundColor: '#28a745' }}></span>
-                           <span>Working: {formatHoursToHoursMinutes(stats.workingHours)}</span>
-                         </div>
-                         <div className={styles.tooltipStatItem}>
-                           <span className={styles.statDot} style={{ backgroundColor: '#007bff' }}></span>
-                           <span>Idle: {formatHoursToHoursMinutes(stats.idleHours)}</span>
-                         </div>
-                         <div className={styles.tooltipStatItem}>
-                           <span className={styles.statDot} style={{ backgroundColor: '#fd7e14' }}></span>
-                           <span>Maintenance: {formatHoursToHoursMinutes(stats.maintenanceHours)}</span>
-                         </div>
-                       </div>
-                     </div>
-                   );
-                 } else {
-                   return (
-                     <div className={styles.tooltipStats}>
-                       <h6 className="mb-2">Today's Activity</h6>
-                       <div className={styles.tooltipStatsGrid}>
-                         <div className={styles.tooltipStatItem}>
-                           <span className={styles.statDot} style={{ backgroundColor: '#28a745' }}></span>
-                           <span>Working: 0h 0m</span>
-                         </div>
-                         <div className={styles.tooltipStatItem}>
-                           <span className={styles.statDot} style={{ backgroundColor: '#007bff' }}></span>
-                           <span>Idle: 0h 0m</span>
-                         </div>
-                         <div className={styles.tooltipStatItem}>
-                           <span className={styles.statDot} style={{ backgroundColor: '#fd7e14' }}></span>
-                           <span>Maintenance: 0h 0m</span>
+                           <span className={styles.statDot} style={{ backgroundColor: labelColor }}></span>
+                           <span style={{ textTransform: 'capitalize' }}>
+                             {ongoing.currentStatus}: {formatHoursToHoursMinutes(ongoing.ongoingHours)} (since {formatClock(ongoing.sessionStartISO)})
+                           </span>
                          </div>
                        </div>
                      </div>
                    );
                  }
+                 return (
+                   <div className={styles.tooltipStats}>
+                     <h6 className="mb-2">Ongoing Activity</h6>
+                     <div className={styles.tooltipStatsGrid}>
+                       <div className={styles.tooltipStatItem}>
+                         <span className={styles.statDot} style={{ backgroundColor: '#6c757d' }}></span>
+                         <span>Loading...</span>
+                       </div>
+                     </div>
+                   </div>
+                 );
                })()}
            </div>
          </div>

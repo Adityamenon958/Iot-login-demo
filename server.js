@@ -2853,6 +2853,87 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
   }
 });
 
+// ✅ GET: Ongoing session stats for hover tooltips (status-aware, no date constraints)
+app.get("/api/crane/ongoing-session/:deviceId", authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const { deviceId } = req.params;
+
+    // ✅ Company filter
+    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
+
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+
+    // ✅ Verify the requested device is allowed
+    if (!allowedById.has(deviceId)) {
+      return res.status(403).json({ error: "Device not authorized" });
+    }
+
+    // ✅ Fetch recent logs (no hard date filter). We'll sort reliably in JS using parsed timestamps.
+    const rawLogs = await CraneLog.find({ ...companyFilter, DeviceID: deviceId }).lean();
+    if (!rawLogs || rawLogs.length === 0) {
+      return res.json({
+        deviceId,
+        currentStatus: "unknown",
+        sessionStartTimestamp: null,
+        sessionStartISO: null,
+        ongoingHours: 0,
+        lastSeen: null
+      });
+    }
+
+    // ✅ Sort by actual time using parseTimestamp
+    const logs = [...rawLogs].sort((a, b) => {
+      const ta = parseTimestamp(a.Timestamp);
+      const tb = parseTimestamp(b.Timestamp);
+      if (!ta || !tb) return 0;
+      return ta - tb;
+    });
+
+    const latest = logs[logs.length - 1];
+    const lastSeen = latest?.Timestamp || null;
+
+    // ✅ Determine current status
+    const statusFromLog = (log) => {
+      if (!log) return "unknown";
+      if (log.DigitalInput2 === "1") return "maintenance";
+      if (log.DigitalInput1 === "1" && log.DigitalInput2 === "0") return "working";
+      return "idle";
+    };
+
+    const currentStatus = statusFromLog(latest);
+
+    // ✅ Walk backward to find when this status started
+    let sessionStart = parseTimestamp(latest.Timestamp);
+    for (let i = logs.length - 2; i >= 0; i--) {
+      const s = statusFromLog(logs[i]);
+      if (s !== currentStatus) {
+        // The session started at the next entry after status changed
+        break;
+      }
+      sessionStart = parseTimestamp(logs[i].Timestamp) || sessionStart;
+    }
+
+    const now = getCurrentTimeInIST();
+    const ongoingHours = Math.max(0, (now - sessionStart) / (1000 * 60 * 60));
+
+    return res.json({
+      deviceId,
+      currentStatus,
+      sessionStartTimestamp: logs.find(l => parseTimestamp(l.Timestamp)?.getTime() === sessionStart.getTime())?.Timestamp || latest.Timestamp,
+      sessionStartISO: sessionStart.toISOString(),
+      ongoingHours: Math.round(ongoingHours * 100) / 100,
+      lastSeen
+    });
+  } catch (err) {
+    console.error("❌ Ongoing session stats error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ✅ GET: Fetch individual crane activity data
 app.get("/api/crane/activity", authenticateToken, async (req, res) => {
   try {
