@@ -4335,127 +4335,7 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
 });
 
 // ✅ Flexible time-series stats (EARLY, before static)
-app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
-  try {
-    const { role, companyName } = req.user;
-    const { cranes, start, end, granularity } = req.query;
-    
-    // ✅ Filter by company (except for superadmin)
-    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
-    
-    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
-    const deviceQuery = role !== "superadmin" ? { companyName } : {};
-    const allowedDevices = await Device.find(deviceQuery).lean();
-    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
-    
-    // ✅ Get unique crane devices for this company, then filter by allowlist
-    const craneDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
-    const craneDevices = craneDevicesRaw.filter(id => allowedById.has(id));
-    
-    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
-    const selectedDevices = requested.length > 0 ? craneDevices.filter(id => requested.includes(id)) : craneDevices;
-    if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
-    const toStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
-    const toEndOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-    const now = getCurrentTimeInIST();
-    let rangeStart, rangeEnd;
-    if (start && end) {
-      const [ys, ms, ds] = start.split('-').map(Number);
-      const [ye, me, de] = end.split('-').map(Number);
-      rangeStart = new Date(ys, ms - 1, ds, 0, 0, 0);
-      rangeEnd = new Date(ye, me - 1, de, 23, 59, 59);
-      if (rangeEnd > now) rangeEnd = now;
-    } else {
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      rangeStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1, 0, 0, 0);
-      rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    }
-    if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const rangeDays = Math.max(1, Math.ceil((toStartOfDay(rangeEnd) - toStartOfDay(rangeStart)) / msPerDay) + 1);
-    let mode = (granularity || 'auto').toLowerCase();
-    if (mode === 'auto') {
-      if (rangeDays <= 31) mode = 'daily';
-      else if (rangeDays <= 180) mode = 'weekly';
-      else mode = 'monthly';
-    }
-    const buckets = [];
-    if (mode === 'daily') {
-      let cursor = toStartOfDay(rangeStart);
-      while (cursor <= rangeEnd) {
-        const dayStart = toStartOfDay(cursor);
-        const dayEnd = toEndOfDay(cursor);
-        buckets.push({ start: dayStart, end: dayEnd, label: dayStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) });
-        cursor = new Date(cursor.getTime() + msPerDay);
-      }
-    } else if (mode === 'weekly') {
-      let cursor = toStartOfDay(rangeStart);
-      while (cursor <= rangeEnd) {
-        const weekStart = toStartOfDay(cursor);
-        const weekEnd = toEndOfDay(new Date(cursor.getTime() + 6 * msPerDay));
-        buckets.push({ start: weekStart, end: weekEnd > rangeEnd ? rangeEnd : weekEnd, label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` });
-        cursor = new Date(cursor.getTime() + 7 * msPerDay);
-      }
-    } else {
-      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
-      while (cursor <= lastMonth) {
-        const ms = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-        const me = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
-        const label = `${ms.toLocaleString('default', { month: 'short' })} ${ms.getFullYear()}`;
-        buckets.push({ start: ms, end: me > rangeEnd ? rangeEnd : me, label });
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      }
-    }
-    // Precompute periods per device across the whole range, then clip to each bucket
-    const devicePeriods = {};
-    for (const deviceId of selectedDevices) {
-      const deviceLogs = await CraneLog.find({ ...companyFilter, DeviceID: deviceId }).lean();
-      // ✅ Sort full device logs once
-      const sortedDeviceLogs = deviceLogs.sort((a, b2) => {
-        const [ad, at] = a.Timestamp.split(' ');
-        const [ad1, am1, ay1] = ad.split('/').map(Number);
-        const [ah, ami, as] = at.split(':').map(Number);
-        const aT = new Date(ay1, am1 - 1, ad1, ah, ami, as);
-        const [bd, bt] = b2.Timestamp.split(' ');
-        const [bd1, bm1, by1] = bd.split('/').map(Number);
-        const [bh, bmi, bs] = bt.split(':').map(Number);
-        const bT = new Date(by1, bm1 - 1, bd1, bh, bmi, bs);
-        return aT - bT;
-      });
-      // ✅ Build periods from full history so cross-midnight carry-over is preserved
-      devicePeriods[deviceId] = {
-        working: calculateConsecutivePeriods(sortedDeviceLogs, 'working'),
-        maintenance: calculateConsecutivePeriods(sortedDeviceLogs, 'maintenance')
-      };
-    }
-
-    const points = [];
-    for (const b of buckets) {
-      let usage = 0, maint = 0;
-      for (const deviceId of selectedDevices) {
-        const periods = devicePeriods[deviceId] || { working: [], maintenance: [] };
-        for (const p of periods.working) {
-          const startClip = p.startTime < b.start ? b.start : p.startTime;
-          const pEnd = p.isOngoing ? (getCurrentTimeInIST() < b.end ? getCurrentTimeInIST() : b.end) : p.endTime;
-          const endClip = pEnd > b.end ? b.end : pEnd;
-          if (endClip > startClip) usage += calculatePeriodDuration(startClip, endClip, false);
-        }
-        for (const p of periods.maintenance) {
-          const startClip = p.startTime < b.start ? b.start : p.startTime;
-          const pEnd = p.isOngoing ? (getCurrentTimeInIST() < b.end ? getCurrentTimeInIST() : b.end) : p.endTime;
-          const endClip = pEnd > b.end ? b.end : pEnd;
-          if (endClip > startClip) maint += calculatePeriodDuration(startClip, endClip, false);
-        }
-      }
-      points.push({ label: b.label, usageHours: Math.round(usage * 100) / 100, maintenanceHours: Math.round(maint * 100) / 100 });
-    }
-    return res.json({ granularity: mode, points });
-  } catch (err) {
-    console.error("❌ Timeseries stats fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+// (Removed older non-IST timeseries route; using hardened IST-anchored version below)
 
 // ✅ Serve frontend
 app.use(express.static(path.join(__dirname, "frontend/dist")));
@@ -4524,15 +4404,21 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
     // Company scope
     const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
 
-    // Devices
-    const allDevices = await CraneLog.distinct("DeviceID", companyFilter);
+    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
+
+    // Devices scoped to allowlist
+    const allDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
+    const allDevices = allDevicesRaw.filter(id => allowedById.has(id));
     const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
     const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
     if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
 
     // Date helpers
-    const toStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
-    const toEndOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+    const toStartOfDay = (d) => getDateBoundary(d, true);
+    const toEndOfDay = (d) => getDateBoundary(d, false);
 
     // Range
     const now = getCurrentTimeInIST();
@@ -4540,14 +4426,16 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
     if (start && end) {
       const [ys, ms, ds] = start.split('-').map(Number);
       const [ye, me, de] = end.split('-').map(Number);
-      rangeStart = new Date(ys, ms - 1, ds, 0, 0, 0);
-      rangeEnd = new Date(ye, me - 1, de, 23, 59, 59);
+      const startDateObj = new Date(ys, ms - 1, ds);
+      const endDateObj = new Date(ye, me - 1, de);
+      rangeStart = toStartOfDay(startDateObj);
+      rangeEnd = toEndOfDay(endDateObj);
       if (rangeEnd > now) rangeEnd = now;
     } else {
       // Default: last 6 months monthly buckets
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      rangeStart = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1, 0, 0, 0);
-      rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      rangeStart = toStartOfDay(new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1));
+      rangeEnd = toEndOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     }
     if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
 
@@ -4605,25 +4493,15 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
         const deviceLogs = await CraneLog.find(deviceFilter).lean();
 
         const bucketLogs = deviceLogs.filter(log => {
-          try {
-            const [datePart, timePart] = log.Timestamp.split(' ');
-            const [d, m, y] = datePart.split('/').map(Number);
-            const [hh, mm, ss] = timePart.split(':').map(Number);
-            const t = new Date(y, m - 1, d, hh, mm, ss);
-            return t >= b.start && t <= b.end;
-          } catch (e) { return false; }
+          const t = parseTimestamp(log.Timestamp);
+          return t && t >= b.start && t <= b.end;
         });
         if (bucketLogs.length === 0) continue;
 
         bucketLogs.sort((a, b2) => {
-          const [ad, at] = a.Timestamp.split(' ');
-          const [ad1, am1, ay1] = ad.split('/').map(Number);
-          const [ah, ami, as] = at.split(':').map(Number);
-          const aT = new Date(ay1, am1 - 1, ad1, ah, ami, as);
-          const [bd, bt] = b2.Timestamp.split(' ');
-          const [bd1, bm1, by1] = bd.split('/').map(Number);
-          const [bh, bmi, bs] = bt.split(':').map(Number);
-          const bT = new Date(by1, bm1 - 1, bd1, bh, bmi, bs);
+          const aT = parseTimestamp(a.Timestamp);
+          const bT = parseTimestamp(b2.Timestamp);
+          if (!aT || !bT) return 0;
           return aT - bT;
         });
 
