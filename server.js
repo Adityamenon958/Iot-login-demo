@@ -67,16 +67,14 @@ function parseTimestamp(timestampStr) {
   }
 }
 
-// ✅ NEW: Helper function for consistent date boundary handling
+// ✅ FIXED: Helper function for consistent date boundary handling
 function getDateBoundary(date, isStart = true) {
   if (isStart) {
-    // ✅ Start of day: 00:00:00 IST
-    // Fix: Subtract 5.5 hours from UTC to get correct IST time
-    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0) - (5.5 * 60 * 60 * 1000));
+    // ✅ Start of day: 00:00:00 IST - Direct IST date creation
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
   } else {
-    // ✅ End of day: 23:59:59 IST
-    // Fix: Subtract 5.5 hours from UTC to get correct IST time
-    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59) - (5.5 * 60 * 60 * 1000));
+    // ✅ End of day: 23:59:59 IST - Direct IST date creation
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
   }
 }
 
