@@ -25,45 +25,45 @@ const CraneLog = require("./backend/models/CraneLog");
 const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 
-// ✅ FIXED: Environment-based timezone helper function - now consistent across environments
+// ✅ Time helpers (IST-anchored, environment-independent)
+// Always interpret device timestamps as IST (UTC+05:30) regardless of server TZ (e.g., Azure UTC)
 function getCurrentTimeInIST() {
-  // ✅ FIXED: Use consistent time handling across all environments
-  // No more environment-specific timezone conversions
-  const now = new Date();
-  return now;
+  // Current instant in time; represented as a JS Date. Consumers compare Dates (instants),
+  // so returning now() is correct and TZ-agnostic.
+  return new Date();
 }
 
-// ✅ FIXED: Environment-based timestamp conversion helper - now consistent across environments
+// Convert a JS Date that represents an IST wall-clock time to the corresponding UTC instant
 function convertISTToUTC(istTime) {
-  // ✅ FIXED: Use consistent time handling across all environments
-  // No more environment-specific timezone conversions
-  return istTime;
+  // Subtract 5h30m from IST wall-clock to get UTC instant
+  const IST_OFFSET_MINUTES = 330; // +05:30
+  return new Date(istTime.getTime() - IST_OFFSET_MINUTES * 60 * 1000);
 }
 
-// ✅ FIXED: Helper function for consistent date boundary handling
+// Create day boundaries for IST regardless of host timezone
 function getDateBoundary(date, isStart = true) {
-  let result;
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const d = date.getDate();
   if (isStart) {
-    // ✅ Start of day: 00:00:00 IST - Direct IST date creation
-    result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+    // 00:00:00 IST == previous day 18:30:00 UTC
+    return new Date(Date.UTC(y, m, d, -5, -30, 0));
   } else {
-    // ✅ End of day: 23:59:59 IST - Direct IST date creation
-    result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    // 23:59:59 IST == same day 18:29:59 UTC
+    return new Date(Date.UTC(y, m, d, 18, 29, 59));
   }
-  return result;
 }
 
-// ✅ FIXED: Helper function to parse timestamp string to Date object consistently across environments
+// Parse "DD/MM/YYYY HH:mm:ss" as an IST wall-clock timestamp → UTC instant Date
 function parseTimestamp(timestampStr) {
   try {
     const [datePart, timePart] = timestampStr.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, minute, second] = timePart.split(':').map(Number);
-    
-    // ✅ FIXED: Use consistent timestamp creation across all environments
-    // No more environment-specific timezone conversions
-    const result = new Date(year, month - 1, day, hour, minute, second);
-    return result;
+
+    // Build the UTC instant that corresponds to the provided IST clock time
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 5, minute - 30, second));
+    return utcDate;
   } catch (err) {
     console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
     return null;
