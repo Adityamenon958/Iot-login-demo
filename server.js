@@ -866,9 +866,8 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       });
     }
 
-    // ✅ Establish a consistent time basis for all calculations
-    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-    const nowAligned = isProd ? new Date(Date.now() - IST_OFFSET_MS) : new Date();
+    // ✅ FIXED: Establish a consistent time basis for all calculations across environments
+    const nowAligned = new Date();
 
     // ✅ Calculate total working hours for all cranes
     let totalWorkingHours = 0;
