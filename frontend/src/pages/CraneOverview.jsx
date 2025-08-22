@@ -235,13 +235,20 @@ export default function CraneOverview() {
     load();
   }, [appliedFilters.cranes, appliedFilters.start, appliedFilters.end]);
 
+  // Helper to format a YYYY-MM-DD string as an IST date label safely (no -1d shift)
+  const formatYMDToISTLabel = (ymd) => {
+    if (!ymd) return '';
+    // Construct a date at 00:00 in IST explicitly to avoid timezone drift
+    const d = new Date(`${ymd}T00:00:00+05:30`);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  };
+
   // Helper to format period title
   const formatPeriodTitle = () => {
     if (appliedFilters.start && appliedFilters.end) {
-      const s = new Date(appliedFilters.start);
-      const e = new Date(appliedFilters.end);
-      const fmt = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      return `Total Working Hours (${fmt(s)} – ${fmt(e)})`;
+      const sLabel = formatYMDToISTLabel(appliedFilters.start);
+      const eLabel = formatYMDToISTLabel(appliedFilters.end);
+      return `Total Working Hours (${sLabel} – ${eLabel})`;
     }
     return `Total Working Hours (${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()})`;
   };
