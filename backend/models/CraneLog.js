@@ -1,7 +1,7 @@
-// backend/models/CraneLog.js - COMPLETELY REWRITTEN
+// backend/models/CraneLog.js - UPDATED FOR DATE TIMESTAMPS
 const mongoose = require("mongoose");
 
-// ✅ Create a completely new schema
+// ✅ Updated schema with Date type for Timestamp
 const CraneLogSchema = new mongoose.Schema({
   craneCompany: {
     type: String,
@@ -16,8 +16,9 @@ const CraneLogSchema = new mongoose.Schema({
     required: false // Optional unique device identifier from payload
   },
   Timestamp: {
-    type: String,
-    required: true
+    type: Date,              // ✅ CHANGED: String → Date
+    required: true,
+    index: true              // ✅ ADDED: Enable indexing for fast queries
   },
   Longitude: {
     type: String,
@@ -40,10 +41,11 @@ const CraneLogSchema = new mongoose.Schema({
   collection: 'cranelogs' // Force specific collection name
 });
 
-// ✅ Add indexes
+// ✅ Updated indexes for better performance with Date type
 CraneLogSchema.index({ craneCompany: 1, DeviceID: 1 });
 CraneLogSchema.index({ craneCompany: 1, DeviceID: 1, Uid: 1 });
-CraneLogSchema.index({ craneCompany: 1, Timestamp: -1 });
+CraneLogSchema.index({ craneCompany: 1, Timestamp: -1 }); // ✅ Date indexing
+CraneLogSchema.index({ Timestamp: -1 });                  // ✅ Global timestamp index
 
 // ✅ Add a pre-save hook to log craneCompany
 CraneLogSchema.pre('save', function(next) {

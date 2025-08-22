@@ -54,20 +54,33 @@ function getDateBoundary(date, isStart = true) {
   }
 }
 
-// Parse "DD/MM/YYYY HH:mm:ss" as an IST wall-clock timestamp → UTC instant Date
-function parseTimestamp(timestampStr) {
-  try {
-    const [datePart, timePart] = timestampStr.split(' ');
-    const [day, month, year] = datePart.split('/').map(Number);
-    const [hour, minute, second] = timePart.split(':').map(Number);
-    
-    // Build the UTC instant that corresponds to the provided IST clock time
-    const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 5, minute - 30, second));
-    return utcDate;
-  } catch (err) {
-    console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
-    return null;
+// ✅ UPDATED: Timestamp is now a Date object, no parsing needed
+// This function is kept for backward compatibility but now just returns the Date object
+function parseTimestamp(timestamp) {
+  // If timestamp is already a Date object, return it
+  if (timestamp instanceof Date) {
+    return timestamp;
   }
+  
+  // If it's still a string (fallback), parse it
+  if (typeof timestamp === 'string') {
+    try {
+      const [datePart, timePart] = timestamp.split(' ');
+      const [day, month, year] = datePart.split('/').map(Number);
+      const [hour, minute, second] = timePart.split(':').map(Number);
+      
+      // Build the UTC instant that corresponds to the provided IST clock time
+      const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 5, minute - 30, second));
+      return utcDate;
+    } catch (err) {
+      console.error(`❌ Error parsing timestamp string: ${timestamp}`, err);
+      return null;
+    }
+  }
+  
+  // If it's neither Date nor string, return null
+  console.error(`❌ Invalid timestamp type: ${typeof timestamp}`, timestamp);
+  return null;
 }
 
 // ✅ NEW: Helper function to calculate consecutive periods for periodic data
@@ -77,7 +90,8 @@ function calculateConsecutivePeriods(logs, statusType) {
   
   for (let i = 0; i < logs.length; i++) {
     const log = logs[i];
-    const timestamp = parseTimestamp(log.Timestamp);
+    // ✅ OPTIMIZED: Timestamp is now a Date object, no parsing needed
+    const timestamp = log.Timestamp instanceof Date ? log.Timestamp : parseTimestamp(log.Timestamp);
     if (!timestamp) continue;
     
     let currentStatus = null;
@@ -124,9 +138,8 @@ function calculateConsecutivePeriods(logs, statusType) {
     currentPeriod.isOngoing = true;
     currentPeriod.endTime = null;
     currentPeriod.endTimestamp = null;
-    // ✅ FIX: Don't calculate duration here - it will be calculated later using correct timestamps
-    // The issue is that currentPeriod.startTime was calculated with old parseTimestamp
-    currentPeriod.duration = 0; // Will be recalculated later
+    // ✅ OPTIMIZED: Duration calculation now works correctly with Date objects
+    currentPeriod.duration = 0; // Will be calculated later if needed
     periods.push(currentPeriod);
   }
   
