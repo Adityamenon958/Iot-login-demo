@@ -1004,7 +1004,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           });
 
           // How long we're willing to keep counting after the last ping (tune as needed)
-          const MAX_WITHOUT_PING_MIN = 180; // e.g., 3 hours grace
+          const MAX_WITHOUT_PING_MIN = 1440; // e.g., 24 hours grace
 
           // Cap "now" to avoid infinite growth if device vanished
           let cappedNow = now;
