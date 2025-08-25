@@ -991,18 +991,41 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         const effectiveEnd = periodEnd > now ? now : periodEnd;
 
         if (p.isOngoing) {
-          // ✅ Only count as ongoing if there wasn't a huge gap since last log
+          // ✅ Count ongoing even with sparse pings, but cap it without recent heartbeats
           const lastLogTs = deviceLogs.length ? new Date(deviceLogs[deviceLogs.length - 1].Timestamp) : null;
-          const fresh = lastLogTs && (now - lastLogTs) <= (6 * 60 * 1000);
-          if (fresh && effectiveStart < effectiveEnd) {
-            const ongoingDuration = (effectiveEnd - effectiveStart) / (1000 * 60 * 60);
-        deviceOngoingHours += Math.max(0, ongoingDuration);
-          hasOngoingSession = true;
+
+          // 🔎 Add debug logs (temporarily) to verify behavior
+          console.log('[ongoing] device', deviceId, {
+            periodStart: p.startTime?.toISOString(),
+            periodEnd: p.endTime?.toISOString(),
+            isOngoing: p.isOngoing,
+            lastLogTs: lastLogTs?.toISOString(),
+            minutesSinceLastLog: lastLogTs ? ((now - lastLogTs) / 60000).toFixed(1) : null
+          });
+
+          // How long we're willing to keep counting after the last ping (tune as needed)
+          const MAX_WITHOUT_PING_MIN = 180; // e.g., 3 hours grace
+
+          // Cap "now" to avoid infinite growth if device vanished
+          let cappedNow = now;
+          if (lastLogTs) {
+            const maxAllowed = new Date(lastLogTs.getTime() + MAX_WITHOUT_PING_MIN * 60 * 1000);
+            if (maxAllowed < cappedNow) cappedNow = maxAllowed;
+          }
+
+          const cappedEnd = (effectiveEnd > cappedNow) ? cappedNow : effectiveEnd;
+          if (effectiveStart < cappedEnd) {
+            const ongoingDuration = (cappedEnd - effectiveStart) / (1000 * 60 * 60);
+            deviceOngoingHours += Math.max(0, ongoingDuration);
+            hasOngoingSession = true;
             
             console.log(`🔍 [overview] Device ${deviceId} - Ongoing working session:`, {
               startTime: periodStart.toISOString(),
               ongoingDuration: ongoingDuration.toFixed(2),
-              addedToOngoing: ongoingDuration.toFixed(2)
+              addedToOngoing: ongoingDuration.toFixed(2),
+              lastLogTs: lastLogTs?.toISOString(),
+              minutesSinceLastLog: lastLogTs ? ((now - lastLogTs) / 60000).toFixed(1) : null,
+              cappedEnd: cappedEnd.toISOString()
             });
           }
         } else {
