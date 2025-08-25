@@ -44,8 +44,19 @@ function calculateDailyDistance(craneLogs, targetDate) {
   
   // Sort logs by timestamp
   validGPSLogs.sort((a, b) => {
-    const aTime = new Date(a.Timestamp.split(' ')[1]);
-    const bTime = new Date(b.Timestamp.split(' ')[1]);
+    // ✅ Handle both Date objects and string timestamps
+    if (a.Timestamp instanceof Date && b.Timestamp instanceof Date) {
+      return a.Timestamp.getTime() - b.Timestamp.getTime();
+    }
+    
+    // ✅ Fallback to string parsing if needed
+    const aParts = a.Timestamp.split(' ');
+    const bParts = b.Timestamp.split(' ');
+    
+    if (aParts.length < 2 || bParts.length < 2) return 0;
+    
+    const aTime = new Date(aParts[1]);
+    const bTime = new Date(bParts[1]);
     return aTime - bTime;
   });
   

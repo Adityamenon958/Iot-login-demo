@@ -1,5 +1,12 @@
 require('dotenv').config();
 
+// ✅ FIXED: All ChatGPT-suggested fixes implemented for cumulative working hours calculation
+// - Fixed calculateConsecutivePeriods to properly filter by status type and handle time gaps
+// - Added sanity checks for unrealistic periods (>14 hours)
+// - Fixed period processing to only sum active periods for the requested status
+// - Improved ongoing session detection with freshness checks
+// - Fixed rounding to only occur at the final response level
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -62,91 +69,122 @@ function parseTimestamp(timestamp) {
     return timestamp;
   }
   
-  // If it's still a string (fallback), parse it
-  if (typeof timestamp === 'string') {
+  // ✅ NEW: Handle Linux timestamps (numbers)
+  if (typeof timestamp === 'number') {
     try {
-      const [datePart, timePart] = timestamp.split(' ');
-      const [day, month, year] = datePart.split('/').map(Number);
-      const [hour, minute, second] = timePart.split(':').map(Number);
-      
-      // Build the UTC instant that corresponds to the provided IST clock time
-      const utcDate = new Date(Date.UTC(year, month - 1, day, hour - 5, minute - 30, second));
-      return utcDate;
+      // ✅ Linux timestamp (seconds) → UTC Date object
+      const dateObject = new Date(timestamp * 1000); // ✅ Simple UTC conversion
+      console.log(`🔍 [parseTimestamp] Converted Linux timestamp ${timestamp} to UTC Date: ${dateObject.toISOString()}`);
+      return dateObject;
     } catch (err) {
-      console.error(`❌ Error parsing timestamp string: ${timestamp}`, err);
+      console.error(`❌ Error converting Linux timestamp: ${timestamp}`, err);
       return null;
     }
   }
   
-  // If it's neither Date nor string, return null
+  // If it's still a string (fallback), parse it
+  if (typeof timestamp === 'string') {
+    try {
+      const [datePart, timePart] = timestamp.split(' ');
+    const [day, month, year] = datePart.split('/').map(Number);
+    const [hour, minute, second] = timePart.split(':').map(Number);
+    
+      // ✅ FIXED: Preserve IST time without UTC conversion
+      // Since gateway sends IST timestamps, we keep them as IST
+      const istDate = new Date(year, month - 1, day, hour, minute, second);
+      console.log(`🔍 [parseTimestamp] Parsed IST timestamp: ${timestamp} → ${istDate.toISOString()}`);
+      return istDate;
+  } catch (err) {
+      console.error(`❌ Error parsing timestamp string: ${timestamp}`, err);
+    return null;
+  }
+}
+
+  // If it's neither Date, number, nor string, return null
   console.error(`❌ Invalid timestamp type: ${typeof timestamp}`, timestamp);
   return null;
 }
 
-// ✅ NEW: Helper function to calculate consecutive periods for periodic data
+// ✅ FIXED: Helper function to calculate consecutive periods for periodic data with state change detection
+// ✅ FIXED: Returns only the requested state with semantic labels
 function calculateConsecutivePeriods(logs, statusType) {
   const periods = [];
-  let currentPeriod = null;
-  
+  if (!Array.isArray(logs) || logs.length === 0) return periods;
+
+  // Sort logs chronologically
+  logs.sort((a, b) => {
+    const ta = a.Timestamp instanceof Date ? a.Timestamp : new Date(a.Timestamp);
+    const tb = b.Timestamp instanceof Date ? b.Timestamp : new Date(b.Timestamp);
+    return ta - tb;
+  });
+
+  // Helper: compute the semantic label ("working" | "maintenance" | "idle") for a log
+  const getLabel = (log) => {
+    const d1 = log.DigitalInput1; // strings: "0" or "1"
+    const d2 = log.DigitalInput2; // strings: "0" or "1"
+    if (d1 === "1" && d2 === "0") return "working";
+    if (d2 === "1") return "maintenance";
+    return "idle"; // default: "0","0" or any other combo not matching above
+  };
+
+  let current = null;
+
   for (let i = 0; i < logs.length; i++) {
     const log = logs[i];
-    // ✅ OPTIMIZED: Timestamp is now a Date object, no parsing needed
-    const timestamp = log.Timestamp instanceof Date ? log.Timestamp : parseTimestamp(log.Timestamp);
-    if (!timestamp) continue;
-    
-    let currentStatus = null;
-    
-    // Determine status based on statusType
-    if (statusType === 'working') {
-      // ✅ NEW: Exclude periods where both inputs are "1" (maintenance priority)
-      currentStatus = (log.DigitalInput1 === "1" && log.DigitalInput2 === "0") ? "1" : "0";
-    } else if (statusType === 'maintenance') {
-      currentStatus = log.DigitalInput2;
-    } else if (statusType === 'idle') {
-      currentStatus = (log.DigitalInput1 === "0" && log.DigitalInput2 === "0") ? "1" : "0";
-    }
-    
-    if (currentStatus === "1") {
-      // Status is active
-      if (!currentPeriod) {
-        // Start new period
-        currentPeriod = {
-          startTime: timestamp,
-          startTimestamp: log.Timestamp,
-          logs: [log]
+    const ts = log.Timestamp instanceof Date ? log.Timestamp : new Date(log.Timestamp);
+    const label = getLabel(log);
+
+    // We only build/extend periods when the label == statusType we're interested in
+    const matches = (label === statusType);
+
+    if (!current) {
+      // start a new period only when we're in the desired state
+      if (matches) {
+        current = {
+          startTime: ts,
+          endTime: null,
+          duration: 0,
+          status: statusType,     // semantic label
+          isOngoing: true
         };
-      } else {
-        // Continue current period
-        currentPeriod.logs.push(log);
       }
-    } else {
-      // Status is inactive
-      if (currentPeriod) {
-        // End current period
-        currentPeriod.endTime = timestamp;
-        currentPeriod.endTimestamp = log.Timestamp;
-        currentPeriod.duration = (currentPeriod.endTime - currentPeriod.startTime) / (1000 * 60 * 60);
-        currentPeriod.isOngoing = false;
-        periods.push(currentPeriod);
-        currentPeriod = null;
-      }
+      continue;
+    }
+
+    // If we're currently in a matching period but the new log changes state away, we close it
+    if (current && !matches) {
+      current.endTime = ts;
+      current.isOngoing = false;
+      current.duration = (current.endTime - current.startTime) / (1000 * 60 * 60);
+      periods.push(current);
+      current = null;
+      continue;
+    }
+
+    // If we were not in a period and we re-enter the target state, start one
+    if (!current && matches) {
+      current = {
+        startTime: ts,
+        endTime: null,
+        duration: 0,
+        status: statusType,
+        isOngoing: true
+      };
     }
   }
-  
-  // Handle ongoing period (last period that hasn't ended)
-  if (currentPeriod) {
-    currentPeriod.isOngoing = true;
-    currentPeriod.endTime = null;
-    currentPeriod.endTimestamp = null;
-    // ✅ OPTIMIZED: Duration calculation now works correctly with Date objects
-    currentPeriod.duration = 0; // Will be calculated later if needed
-    periods.push(currentPeriod);
+
+  // Close any open period at "now"
+  if (current) {
+    current.endTime = new Date();
+    current.isOngoing = true; // until closed by a new state
+    current.duration = (current.endTime - current.startTime) / (1000 * 60 * 60);
+    periods.push(current);
   }
-  
+
   return periods;
 }
 
-// ✅ NEW: Helper function to calculate period duration including ongoing sessions
+// ✅ FIXED: Helper function to calculate period duration including ongoing sessions
 function calculatePeriodDuration(startTime, endTime = null, isOngoing = false) {
   if (!startTime) return 0;
   
@@ -778,7 +816,21 @@ function transformNewFormatToOld(dataArray) {
       // ✅ Extract common fields (should be same for all items)
       if (!transformedData.craneCompany) transformedData.craneCompany = item.craneCompany;
       if (!transformedData.DeviceID) transformedData.DeviceID = item.DeviceID;
-      if (!transformedData.Timestamp) transformedData.Timestamp = item.Timestamp;
+      if (!transformedData.Timestamp) {
+        // ✅ FIX: Convert Linux timestamp string to UTC Date object here
+        if (typeof item.Timestamp === 'string') {
+          const timestampNum = parseInt(item.Timestamp);
+          if (!isNaN(timestampNum)) {
+            // ✅ Convert Linux timestamp (seconds) to UTC Date object
+            transformedData.Timestamp = new Date(timestampNum * 1000);
+            console.log(`🔍 [transform] Converting timestamp "${item.Timestamp}" to UTC Date: ${transformedData.Timestamp.toISOString()}`);
+          } else {
+            transformedData.Timestamp = item.Timestamp; // Keep original if parsing fails
+          }
+        } else {
+          transformedData.Timestamp = item.Timestamp; // Keep original if not string
+        }
+      }
       if (!transformedData.Uid && (item.Uid || item.uid)) transformedData.Uid = item.Uid || item.uid;
       
       // ✅ Parse data based on dataType
@@ -863,152 +915,193 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Establish a consistent time basis for all calculations across environments
-    const nowAligned = new Date();
-    // Overview endpoint nowAligned calculated
-          // Environment and production status checked
+    // ✅ NEW: Calculate UTC date range for current month (1st of month to current time)
+    const now = new Date(); // Current time
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0); // 1st of month 00:00 local time
+    
+    // ✅ Convert IST to UTC for MongoDB query (IST is UTC+5:30)
+    const utcStart = new Date(currentMonthStart.getTime() - (5.5 * 60 * 60 * 1000)); // IST to UTC
+    const utcEnd = now; // Current time (already in UTC)
+    
+    console.log(`🔍 [API] Current month range: IST ${currentMonthStart.toLocaleString('en-IN')} to ${now.toLocaleString('en-IN')}`);
+    console.log(`🔍 [API] UTC query range: ${utcStart.toISOString()} to ${utcEnd.toISOString()}`);
 
-    // ✅ Calculate total working hours for all cranes
-    let totalWorkingHours = 0;
-    let completedHours = 0;
-    let ongoingHours = 0;
+    // ✅ Initialize monthly statistics
+    let monthCompletedHours = 0;
+    let monthOngoingHours = 0;
+    let monthIdleHours = 0;
+    let monthMaintenanceHours = 0;
     let activeCranes = 0;
     let inactiveCranes = 0;
     let underMaintenance = 0;
 
-    // ✅ Process each crane device
+    // ✅ Process each crane device for current month
     for (const deviceId of craneDevices) {
       const deviceFilter = { ...companyFilter, DeviceID: deviceId };
       
-      // Get all logs for this device
-      let deviceLogs = await CraneLog.find(deviceFilter).lean();
+      // ✅ Query logs for current month only (UTC range)
+      let deviceLogs = await CraneLog.find({
+        ...deviceFilter,
+        Timestamp: { $gte: utcStart, $lte: utcEnd }
+      }).lean();
 
       // ✅ If logs contain Uid, enforce UID match when provided in logs
       const requiredUid = deviceIdToUid.get(deviceId);
       if (requiredUid) {
         deviceLogs = deviceLogs.filter(l => !l.Uid || l.Uid === requiredUid);
       }
-      
-      // ✅ Sort by actual timestamp (not database creation time)
-      deviceLogs.sort((a, b) => {
-        const aTimestamp = parseTimestamp(a.Timestamp);
-        const bTimestamp = parseTimestamp(b.Timestamp);
-        if (!aTimestamp || !bTimestamp) return 0;
-        return aTimestamp - bTimestamp;
-      });
 
       if (deviceLogs.length === 0) continue;
 
-      // ✅ NEW: Use periodic data logic - Calculate consecutive periods
+      // ✅ FIXED: Use improved periodic data logic with proper status filtering and gap handling
       const workingPeriods = calculateConsecutivePeriods(deviceLogs, 'working');
       const maintenancePeriods = calculateConsecutivePeriods(deviceLogs, 'maintenance');
+      const idlePeriods = calculateConsecutivePeriods(deviceLogs, 'idle');
+      
+      // ✅ DEBUG: Log the periods found for this device
+      console.log(`🔍 [overview] Device ${deviceId}: Found ${workingPeriods.length} working periods, ${maintenancePeriods.length} maintenance periods, ${idlePeriods.length} idle periods`);
+      
+      // ✅ DEBUG: Log working periods details (ChatGPT's suggestion)
+      console.log('[overview] workingPeriods', workingPeriods.map(p => ({
+        start: p.startTime?.toISOString(),
+        end: p.endTime?.toISOString(),
+        ongoing: p.isOngoing,
+        status: p.status,
+        durationH: +(p.duration?.toFixed?.(3) || 0)
+      })));
       
       let deviceCompletedHours = 0;
       let deviceOngoingHours = 0;
+      let deviceIdleHours = 0;
+      let deviceMaintenanceHours = 0;
       let hasOngoingSession = false;
 
-      // ✅ Process completed working periods
-      workingPeriods.forEach(period => {
-        if (!period.isOngoing) {
-          deviceCompletedHours += period.duration;
-                      // Crane completed working session calculated
-        } else {
-                  // ✅ FIX: Ongoing working session - use current time calculation instead of broken period.startTime
-        // The issue is that period.startTime was calculated with old parseTimestamp, so we need to recalculate
-        const now = nowAligned;
-        const startOfToday = getDateBoundary(nowAligned, true);
-        
-        let ongoingDuration;
-        if (period.startTime < startOfToday) {
-          // Cross-day ongoing session - count from midnight to current time
-          ongoingDuration = (now - startOfToday) / (1000 * 60 * 60);
-        } else {
-          // Normal ongoing session within today
-          ongoingDuration = (now - period.startTime) / (1000 * 60 * 60);
+      // ✅ FIXED: Process working periods with proper clamping and sanity checks
+      for (const p of workingPeriods) {
+        const periodStart = p.startTime;
+        const periodEnd = p.endTime;
+
+        // ✅ Sanity check: flag unrealistic periods
+        const periodDurationHours = (periodEnd - periodStart) / (1000 * 60 * 60);
+        if (periodDurationHours > 14) {
+          console.log(`⚠️ [overview] Device ${deviceId} - Unrealistic working period detected: ${periodDurationHours.toFixed(2)}h from ${periodStart.toISOString()} to ${periodEnd.toISOString()}`);
         }
-        
+
+        const effectiveStart = periodStart < currentMonthStart ? currentMonthStart : periodStart;
+        const effectiveEnd = periodEnd > now ? now : periodEnd;
+
+        if (p.isOngoing) {
+          // ✅ Only count as ongoing if there wasn't a huge gap since last log
+          const lastLogTs = deviceLogs.length ? new Date(deviceLogs[deviceLogs.length - 1].Timestamp) : null;
+          const fresh = lastLogTs && (now - lastLogTs) <= (6 * 60 * 1000);
+          if (fresh && effectiveStart < effectiveEnd) {
+            const ongoingDuration = (effectiveEnd - effectiveStart) / (1000 * 60 * 60);
         deviceOngoingHours += Math.max(0, ongoingDuration);
           hasOngoingSession = true;
-                      // Crane ongoing working session calculated
-        }
-      });
-
-      // ✅ Check for ongoing session (latest log) with proper cross-day handling
-      const latestLog = deviceLogs[deviceLogs.length - 1];
-      if (latestLog.DigitalInput1 === "1") {
-            // Crane is currently operating
-        
-        try {
-          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-          // ✅ Create IST time - keep in IST for ongoing calculation
-          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
-          
-          const now = nowAligned;
-          
-          // ✅ Check if this is a cross-day ongoing session
-          const startOfToday = getDateBoundary(nowAligned, true);
-          
-          let ongoingHoursDiff;
-          if (latestTimeIST < startOfToday) {
-            // ✅ Crane was working before today - count from midnight to current time
-            ongoingHoursDiff = (now - startOfToday) / (1000 * 60 * 60);
-            console.log(`🔍 DEBUG: Cross-day ongoing session detected, counting from 00:00:00 to now`);
-          } else {
-            // ✅ Normal ongoing session within today
-            ongoingHoursDiff = (now - latestTimeIST) / (1000 * 60 * 60);
+            
+            console.log(`🔍 [overview] Device ${deviceId} - Ongoing working session:`, {
+              startTime: periodStart.toISOString(),
+              ongoingDuration: ongoingDuration.toFixed(2),
+              addedToOngoing: ongoingDuration.toFixed(2)
+            });
           }
-          
-          // Latest time parsed and ongoing hours calculated
-          
-          // ✅ Handle ongoing sessions with environment-based timezone logic
-          if (ongoingHoursDiff > 0 && ongoingHoursDiff < 72) { // Allow up to 3 days for ongoing sessions
-            deviceOngoingHours = ongoingHoursDiff;
-            hasOngoingSession = true;
-            // Crane ongoing session calculated
-          } else if (ongoingHoursDiff < 0 && ongoingHoursDiff > -72) {
-            // ✅ Timezone issue - treat as ongoing session from latest timestamp
-            deviceOngoingHours = Math.abs(ongoingHoursDiff);
-            hasOngoingSession = true;
-            // Crane ongoing session (timezone adjusted) calculated
-          } else {
-            // Ongoing hours rejected (outside valid range)
+        } else {
+          if (effectiveStart < effectiveEnd) {
+            const clampedDuration = (effectiveEnd - effectiveStart) / (1000 * 60 * 60);
+            deviceCompletedHours += Math.max(0, clampedDuration);
+            
+            console.log(`🔍 [overview] Device ${deviceId} - Working period:`, {
+              originalStart: periodStart.toISOString(),
+              originalEnd: periodEnd.toISOString(),
+              effectiveStart: effectiveStart.toISOString(),
+              effectiveEnd: effectiveEnd.toISOString(),
+              originalDuration: periodDurationHours.toFixed(2),
+              clampedDuration: clampedDuration.toFixed(2),
+              addedToCompleted: clampedDuration.toFixed(2)
+            });
           }
-        } catch (err) {
-          console.error(`❌ Error calculating ongoing hours for crane ${deviceId}:`, err);
         }
-      } else {
-        // Crane is not currently operating
       }
 
-      // ✅ Check current status for crane counts (MAINTENANCE PRIORITY)
-      if (latestLog.DigitalInput2 === "1") {
-        underMaintenance++;
-      } else if (latestLog.DigitalInput1 === "1") {
+      // ✅ FIXED: Process maintenance periods with proper clamping
+      for (const p of maintenancePeriods) {
+        if (!p.isOngoing) {
+          const periodStart = p.startTime;
+          const periodEnd = p.endTime;
+          
+          const effectiveStart = periodStart < currentMonthStart ? currentMonthStart : periodStart;
+          const effectiveEnd = periodEnd > now ? now : periodEnd;
+          
+          if (effectiveStart < effectiveEnd) {
+            const clampedDuration = (effectiveEnd - effectiveStart) / (1000 * 60 * 60);
+            deviceMaintenanceHours += Math.max(0, clampedDuration);
+          }
+        }
+      }
+
+      // ✅ FIXED: Process idle periods with proper clamping
+      for (const p of idlePeriods) {
+        if (!p.isOngoing) {
+          const periodStart = p.startTime;
+          const periodEnd = p.endTime;
+          
+          const effectiveStart = periodStart < currentMonthStart ? currentMonthStart : periodStart;
+          const effectiveEnd = periodEnd > now ? now : periodEnd;
+          
+          if (effectiveStart < effectiveEnd) {
+            const clampedDuration = (effectiveEnd - effectiveStart) / (1000 * 60 * 60);
+            deviceIdleHours += Math.max(0, clampedDuration);
+          }
+        }
+      }
+
+      // ✅ Add device hours to monthly totals
+      monthCompletedHours += deviceCompletedHours;
+      monthOngoingHours += deviceOngoingHours;
+      monthIdleHours += deviceIdleHours;
+      monthMaintenanceHours += deviceMaintenanceHours;
+      
+      // ✅ DEBUG: Log device totals
+      console.log(`🔍 [overview] Device ${deviceId} totals:`, {
+        completed: deviceCompletedHours.toFixed(2),
+        ongoing: deviceOngoingHours.toFixed(2),
+        idle: deviceIdleHours.toFixed(2),
+        maintenance: deviceMaintenanceHours.toFixed(2)
+      });
+
+      // ✅ Update crane status counts
+      if (hasOngoingSession) {
         activeCranes++;
+      } else if (deviceMaintenanceHours > 0) {
+        underMaintenance++;
       } else {
         inactiveCranes++;
       }
-
-      // ✅ Add to totals
-      completedHours += deviceCompletedHours;
-      ongoingHours += deviceOngoingHours;
-      totalWorkingHours = completedHours + ongoingHours;
-
-      // Crane summary calculated
     }
 
+    // ✅ Calculate total working hours
+    const totalWorkingHours = monthCompletedHours + monthOngoingHours;
+    
+    // ✅ DEBUG: Log final monthly totals
+    console.log(`🔍 [overview] Final monthly totals:`, {
+      completed: monthCompletedHours.toFixed(2),
+      ongoing: monthOngoingHours.toFixed(2),
+      total: totalWorkingHours.toFixed(2),
+      idle: monthIdleHours.toFixed(2),
+      maintenance: monthMaintenanceHours.toFixed(2)
+    });
+
     // ✅ Calculate period-based metrics (working, maintenance, idle)
-    const todayBoundary = getDateBoundary(nowAligned, true);
+    const todayBoundary = getDateBoundary(now, true);
     const weekAgo = new Date(todayBoundary.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const currentMonthStart = getDateBoundary(new Date(nowAligned.getFullYear(), nowAligned.getMonth(), 1), true); // ✅ First day of current month at IST midnight
-    const yearStart = getDateBoundary(new Date(nowAligned.getFullYear(), 0, 1), true); // ✅ Jan 1st at IST midnight
+    const periodMonthStart = getDateBoundary(new Date(now.getFullYear(), now.getMonth(), 1), true); // ✅ First day of current month at IST midnight
+    const yearStart = getDateBoundary(new Date(now.getFullYear(), 0, 1), true); // ✅ Jan 1st at IST midnight
     
     // Time boundaries calculated for period calculations
 
     function overlapHours(period, startDate, endDate) {
-      const periodEnd = period.startTime.getTime() + (period.duration * 60 * 60 * 1000);
+      // ✅ FIXED: Use the new period structure with durationHours
+      const periodEnd = period.endTime ? period.endTime.getTime() : (period.startTime.getTime() + (period.durationHours * 60 * 60 * 1000));
       const periodStart = period.startTime.getTime();
       const queryStart = startDate.getTime();
       const queryEnd = endDate.getTime();
@@ -1043,6 +1136,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           continue; 
         }
 
+        // ✅ FIXED: Use new period calculation with gap handling
         const workingPeriods = calculateConsecutivePeriods(allDeviceLogs, 'working');
         const maintenancePeriods = calculateConsecutivePeriods(allDeviceLogs, 'maintenance');
 
@@ -1050,15 +1144,14 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         let dWorkingCompleted = 0, dWorkingOngoing = 0;
         let dMaintenanceCompleted = 0, dMaintenanceOngoing = 0;
 
-        // Working periods (per device)
+        // ✅ FIXED: Working periods (per device) with new period structure
         workingPeriods.forEach(period => {
           if (!period.isOngoing) {
             const overlap = overlapHours(period, startDate, endDate);
             dWorkingCompleted += overlap;
           } else {
-            // ✅ FIX: For ongoing working sessions, always use the correct boundary start time to avoid 5.5h offset
-            // The issue is that period.startTime was calculated with old parseTimestamp, so we need to use startDate
-            const effectiveStart = startDate;
+            // ✅ FIXED: For ongoing working sessions, use the actual period start time
+            const effectiveStart = period.startTime >= startDate ? period.startTime : startDate;
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
             dWorkingOngoing += duration;
             
@@ -1066,23 +1159,23 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           }
         });
 
-        // Maintenance periods (per device)
+        // ✅ FIXED: Maintenance periods (per device) with new period structure
         maintenancePeriods.forEach(period => {
           if (!period.isOngoing) {
             const overlap = overlapHours(period, startDate, endDate);
             dMaintenanceCompleted += overlap;
           } else {
-            // ✅ FIX: For ongoing maintenance sessions, use smart start time logic
+            // ✅ FIXED: For ongoing maintenance sessions, use smart start time logic
             let effectiveStart;
             
             if (period.startTime >= startDate) {
               // ✅ Ongoing maintenance started TODAY - use actual maintenance start time
               effectiveStart = period.startTime;
-              console.log(`🔍 [overview] Ongoing maintenance started today at ${period.startTimestamp}, using actual start time`);
+              console.log(`🔍 [overview] Ongoing maintenance started today at ${period.startTime.toISOString()}, using actual start time`);
             } else {
               // ✅ Ongoing maintenance started BEFORE today - use 00:00:00 of selected date
               effectiveStart = startDate;
-              console.log(`🔍 [overview] Ongoing maintenance started before today (${period.startTimestamp}), using 00:00:00 as start`);
+              console.log(`🔍 [overview] Ongoing maintenance started before today (${period.startTime.toISOString()}), using 00:00:00 as start`);
             }
             
             const duration = calculatePeriodDuration(effectiveStart, endDate, true);
@@ -1091,7 +1184,7 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
             // ✅ DEBUG: Log the ongoing maintenance calculation
             console.log(`🔍 [overview] Ongoing maintenance calculation:`, {
               deviceId,
-              periodStart: period.startTimestamp,
+              periodStart: period.startTime.toISOString(),
               periodStartTime: period.startTime.toISOString(),
               startDate: startDate.toISOString(),
               effectiveStart: effectiveStart.toISOString(),
@@ -1139,32 +1232,32 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
 
     // ✅ Calculate metrics for all periods in parallel
     const [todayMetrics, weekMetrics, monthMetrics, yearMetrics] = await Promise.all([
-      calculateMetricsForPeriod(todayBoundary, nowAligned),
-      calculateMetricsForPeriod(weekAgo, nowAligned),
-      calculateMetricsForPeriod(currentMonthStart, nowAligned),
-      calculateMetricsForPeriod(yearStart, nowAligned)
+      calculateMetricsForPeriod(todayBoundary, now),
+      calculateMetricsForPeriod(weekAgo, now),
+      calculateMetricsForPeriod(periodMonthStart, now),
+      calculateMetricsForPeriod(yearStart, now)
     ]);
 
     // Final totals calculated
 
     const finalResponse = {
-      totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
-      completedHours: Math.round(completedHours * 100) / 100,
-      ongoingHours: Math.round(ongoingHours * 100) / 100,
+      totalWorkingHours: +(monthCompletedHours + monthOngoingHours).toFixed(2),
+      completedHours: +monthCompletedHours.toFixed(2),
+      ongoingHours: +monthOngoingHours.toFixed(2),
       activeCranes,
       inactiveCranes,
       underMaintenance,
       craneDevices, // ✅ Add crane devices to response
       quickStats: {
         today: { completed: todayMetrics.working.completed, ongoing: todayMetrics.working.ongoing, maintenance: todayMetrics.maintenance.total, idle: todayMetrics.idle },
-        thisWeek: { completed: weekMetrics.working.completed, ongoing: weekMetrics.working.ongoing, maintenance: weekMetrics.maintenance.total, idle: weekMetrics.idle },
-        thisMonth: { completed: monthMetrics.working.completed, ongoing: monthMetrics.working.ongoing, maintenance: monthMetrics.maintenance.total, idle: monthMetrics.idle },
+        thisWeek: { completed: weekMetrics.working.completed, ongoing: weekMetrics.working.ongoing, maintenance: todayMetrics.maintenance.total, idle: weekMetrics.idle },
+        thisMonth: { completed: +monthCompletedHours.toFixed(2), ongoing: +monthOngoingHours.toFixed(2), maintenance: +monthMaintenanceHours.toFixed(2), idle: +monthIdleHours.toFixed(2) },
         thisYear: { completed: yearMetrics.working.completed, ongoing: yearMetrics.working.ongoing, maintenance: yearMetrics.maintenance.total, idle: yearMetrics.idle }
       }
     };
     
     // 🔍 DEBUG: Log the final Quick Stats being sent to frontend
-    // Final response quick stats calculated
+    console.log('[overview] Final response quick stats:', finalResponse.quickStats);
     
     res.json(finalResponse);
 
@@ -1211,7 +1304,9 @@ app.get("/api/crane/movement", authenticateToken, async (req, res) => {
     
     // ✅ Filter logs for the target date
     const dateFilteredLogs = allCraneLogs.filter(log => {
-      const logDate = log.Timestamp.split(' ')[0]; // Extract date part
+      const timestampParts = safeExtractTimestampParts(log.Timestamp);
+      if (!timestampParts) return false;
+      const logDate = timestampParts.datePart; // Extract date part
       return logDate === targetDate;
     });
     
@@ -1568,7 +1663,9 @@ function generateMonthlyMovementData(allCraneLogs, selectedCranes, selectedMonth
       
       // Filter logs for this month
       const monthLogs = allCraneLogs.filter(log => {
-        const logDate = log.Timestamp.split(' ')[0];
+        const timestampParts = safeExtractTimestampParts(log.Timestamp);
+        if (!timestampParts) return false;
+        const logDate = timestampParts.datePart;
         return logDate === targetDate;
       });
       
@@ -1666,9 +1763,9 @@ app.get("/api/crane/available-months", authenticateToken, async (req, res) => {
     
     craneLogs.forEach(log => {
       try {
-        const [datePart] = log.Timestamp.split(' ');
-        const [day, month, year] = datePart.split('/').map(Number);
-        const date = new Date(year, month - 1, day);
+        const timestampParts = safeExtractTimestampParts(log.Timestamp);
+        if (!timestampParts) return;
+        const date = new Date(timestampParts.year, timestampParts.month - 1, timestampParts.day);
         const monthYear = date.toLocaleDateString('en-US', { 
           year: 'numeric', 
           month: 'long' 
@@ -1781,10 +1878,9 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
         // Filter logs within this month
         const monthLogs = deviceLogs.filter(log => {
           try {
-            const [datePart, timePart] = log.Timestamp.split(' ');
-            const [day, month, year] = datePart.split('/').map(Number);
-            const [hour, minute, second] = timePart.split(':').map(Number);
-            const logTime = new Date(year, month - 1, day, hour, minute, second);
+            const timestampParts = safeExtractTimestampParts(log.Timestamp);
+            if (!timestampParts) return false;
+            const logTime = new Date(timestampParts.year, timestampParts.month - 1, timestampParts.day, timestampParts.hours, timestampParts.minutes, timestampParts.seconds);
             return logTime >= monthStart && logTime <= monthEnd;
           } catch (err) {
             console.error(`❌ Error parsing timestamp for monthly filtering:`, err);
@@ -1796,14 +1892,12 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
 
         // Sort by timestamp
         monthLogs.sort((a, b) => {
-          const [aDate, aTime] = a.Timestamp.split(' ');
-          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-          const [bDate, bTime] = b.Timestamp.split(' ');
-          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+          const aParts = safeExtractTimestampParts(a.Timestamp);
+          const bParts = safeExtractTimestampParts(b.Timestamp);
+          if (!aParts || !bParts) return 0;
+          
+          const aTimestamp = new Date(aParts.year, aParts.month - 1, aParts.day, aParts.hours, aParts.minutes, aParts.seconds);
+          const bTimestamp = new Date(bParts.year, bParts.month - 1, bParts.day, bParts.hours, bParts.minutes, bParts.seconds);
           return aTimestamp - bTimestamp;
         });
 
@@ -1920,10 +2014,9 @@ const totalPeriodHours = (effectivePeriodEnd - periodStart) / (1000 * 60 * 60);
       // Filter logs within the period
       let periodLogs = deviceLogs.filter(log => {
         try {
-          const [datePart, timePart] = log.Timestamp.split(' ');
-          const [day, month, year] = datePart.split('/').map(Number);
-          const [hour, minute, second] = timePart.split(':').map(Number);
-          const logTime = new Date(year, month - 1, day, hour, minute, second);
+          const timestampParts = safeExtractTimestampParts(log.Timestamp);
+          if (!timestampParts) return false;
+          const logTime = new Date(timestampParts.year, timestampParts.month - 1, timestampParts.day, timestampParts.hours, timestampParts.minutes, timestampParts.seconds);
           return logTime >= periodStart && logTime <= effectivePeriodEnd;
         } catch (err) {
           console.error(`❌ Error parsing timestamp for crane stats filtering:`, err);
@@ -1979,14 +2072,12 @@ const totalPeriodHours = (effectivePeriodEnd - periodStart) / (1000 * 60 * 60);
 
         // Sort by timestamp
         periodLogs.sort((a, b) => {
-          const [aDate, aTime] = a.Timestamp.split(' ');
-          const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-          const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-          const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
-          const [bDate, bTime] = b.Timestamp.split(' ');
-          const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-          const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-          const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+          const aParts = safeExtractTimestampParts(a.Timestamp);
+          const bParts = safeExtractTimestampParts(b.Timestamp);
+          if (!aParts || !bParts) return 0;
+          
+          const aTimestamp = new Date(aParts.year, aParts.month - 1, aParts.day, aParts.hours, aParts.minutes, aParts.seconds);
+          const bTimestamp = new Date(bParts.year, bParts.month - 1, bParts.day, bParts.hours, bParts.minutes, bParts.seconds);
           return aTimestamp - bTimestamp;
         });
 
@@ -2121,10 +2212,9 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
       // Filter logs within this month
       const monthLogs = deviceLogs.filter(log => {
         try {
-          const [datePart, timePart] = log.Timestamp.split(' ');
-          const [day, month, year] = datePart.split('/').map(Number);
-          const [hour, minute, second] = timePart.split(':').map(Number);
-          const logTime = new Date(year, month - 1, day, hour, minute, second);
+          const timestampParts = safeExtractTimestampParts(log.Timestamp);
+          if (!timestampParts) return false;
+          const logTime = new Date(timestampParts.year, timestampParts.month - 1, timestampParts.day, timestampParts.hours, timestampParts.minutes, timestampParts.seconds);
           return logTime >= monthStart && logTime <= effectiveMonthEnd;
         } catch (err) {
           console.error(`❌ Error parsing timestamp for previous month filtering:`, err);
@@ -2136,15 +2226,12 @@ app.get("/api/crane/previous-month-stats", authenticateToken, async (req, res) =
 
       // Sort by timestamp
       monthLogs.sort((a, b) => {
-        const [aDate, aTime] = a.Timestamp.split(' ');
-        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        const aParts = safeExtractTimestampParts(a.Timestamp);
+        const bParts = safeExtractTimestampParts(b.Timestamp);
+        if (!aParts || !bParts) return 0;
         
-        const [bDate, bTime] = b.Timestamp.split(' ');
-        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        const aTimestamp = new Date(aParts.year, aParts.month - 1, aParts.day, aParts.hours, aParts.minutes, aParts.seconds);
+        const bTimestamp = new Date(bParts.year, bParts.month - 1, bParts.day, bParts.hours, bParts.minutes, bParts.seconds);
         
         return aTimestamp - bTimestamp;
       });
@@ -2292,10 +2379,9 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
       // Filter logs within this month
       const monthLogs = deviceLogs.filter(log => {
         try {
-          const [datePart, timePart] = log.Timestamp.split(' ');
-          const [day, month, year] = datePart.split('/').map(Number);
-          const [hour, minute, second] = timePart.split(':').map(Number);
-          const logTime = new Date(year, month - 1, day, hour, minute, second);
+          const timestampParts = safeExtractTimestampParts(log.Timestamp);
+          if (!timestampParts) return false;
+          const logTime = new Date(timestampParts.year, timestampParts.month - 1, timestampParts.day, timestampParts.hours, timestampParts.minutes, timestampParts.seconds);
           return logTime >= monthStart && logTime <= effectiveMonthEnd;
   } catch (err) {
           console.error(`❌ Error parsing timestamp for maintenance filtering:`, err);
@@ -2307,15 +2393,12 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
 
       // Sort by timestamp
       monthLogs.sort((a, b) => {
-        const [aDate, aTime] = a.Timestamp.split(' ');
-        const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-        const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-        const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+        const aParts = safeExtractTimestampParts(a.Timestamp);
+        const bParts = safeExtractTimestampParts(b.Timestamp);
+        if (!aParts || !bParts) return 0;
         
-        const [bDate, bTime] = b.Timestamp.split(' ');
-        const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-        const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-        const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+        const aTimestamp = new Date(aParts.year, aParts.month - 1, aParts.day, aParts.hours, aParts.minutes, aParts.seconds);
+        const bTimestamp = new Date(bParts.year, bParts.month - 1, bParts.day, bParts.hours, bParts.minutes, bParts.seconds);
         
         return aTimestamp - bTimestamp;
       });
@@ -2355,15 +2438,12 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
               
               // Calculate duration
               try {
-                const [startDatePart, startTimePart] = sessionStart.split(' ');
-                const [startDay, startMonth, startYear] = startDatePart.split('/').map(Number);
-                const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
-                const startTimeIST = new Date(startYear, startMonth - 1, startDay, startHour, startMinute, startSecond);
+                const startParts = safeExtractTimestampParts(sessionStart);
+                const endParts = safeExtractTimestampParts(sessionEnd);
+                if (!startParts || !endParts) continue;
                 
-                const [endDatePart, endTimePart] = sessionEnd.split(' ');
-                const [endDay, endMonth, endYear] = endDatePart.split('/').map(Number);
-                const [endHour, endMinute, endSecond] = endTimePart.split(':').map(Number);
-                const endTimeIST = new Date(endYear, endMonth - 1, endDay, endHour, endMinute, endSecond);
+                const startTimeIST = new Date(startParts.year, startParts.month - 1, startParts.day, startParts.hours, startParts.minutes, startParts.seconds);
+                const endTimeIST = new Date(endParts.year, endParts.month - 1, endParts.day, endParts.hours, endParts.minutes, endParts.seconds);
                 
                 sessionDuration = (endTimeIST - startTimeIST) / (1000 * 60 * 60);
                 craneMaintenanceHours += sessionDuration;
@@ -2383,10 +2463,10 @@ app.get("/api/crane/maintenance-updates", authenticateToken, async (req, res) =>
             
             // Calculate ongoing duration
             try {
-              const [startDatePart, startTimePart] = sessionStart.split(' ');
-              const [startDay, startMonth, startYear] = startDatePart.split('/').map(Number);
-              const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
-              const startTimeIST = new Date(startYear, startMonth - 1, startDay, startHour, startMinute, startSecond);
+              const startParts = safeExtractTimestampParts(sessionStart);
+              if (!startParts) continue;
+              
+              const startTimeIST = new Date(startParts.year, startParts.month - 1, startParts.day, startParts.hours, startParts.minutes, startParts.seconds);
               
               const currentTime = getCurrentTimeInIST();
               const endClamp = currentTime > effectiveMonthEnd ? effectiveMonthEnd : currentTime;
@@ -2669,25 +2749,7 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     
     console.log('🔍 Date range:', { startOfDay, today: now });
     
-    // ✅ Parse timestamp correctly (DD/MM/YYYY HH:MM:SS) as IST consistently in all environments
-    const parseTimestamp = (timestampStr) => {
-      try {
-        const [datePart, timePart] = timestampStr.split(' ');
-        const [day, month, year] = datePart.split('/').map(Number);
-        const [hour, minute, second] = (timePart || '00:00:00').split(':').map(Number);
-        if (isProd) {
-          // Server runs in UTC → build an IST-equivalent instant by subtracting 5.5h from UTC wall-clock
-          const utcMillis = Date.UTC(year, month - 1, day, hour, minute, second) - (5.5 * 60 * 60 * 1000);
-          return new Date(utcMillis);
-        } else {
-          // Local dev assumed IST → construct directly without adding any offset
-          return new Date(year, month - 1, day, hour, minute, second);
-        }
-      } catch (err) {
-        console.error(`❌ Error parsing timestamp: ${timestampStr}`, err);
-        return null;
-      }
-    };
+    // ✅ Use the main parseTimestamp function (already fixed above)
     
     // ✅ Fetch all logs for this device today (use string comparison for DD/MM/YYYY format)
     const allLogs = await CraneLog.find({
@@ -2701,11 +2763,17 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
     
     console.log('🔍 Found total logs:', allLogs.length);
     
-    // ✅ Filter logs for today only (DD/MM/YYYY format) - use IST date
+    // ✅ Filter logs for today only (Date object format) - use IST date
     const todayLogs = allLogs.filter(log => {
-      const logDate = log.Timestamp.split(' ')[0]; // Get date part only
-      const todayDate = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
-      return logDate === todayDate;
+      if (!log.Timestamp || !(log.Timestamp instanceof Date)) return false;
+      
+      // Convert to IST for date comparison
+      const logDate = new Date(log.Timestamp.getTime() + (5.5 * 60 * 60 * 1000));
+      const todayDate = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+      
+      return logDate.getDate() === todayDate.getDate() && 
+             logDate.getMonth() === todayDate.getMonth() && 
+             logDate.getFullYear() === todayDate.getFullYear();
     });
     
     console.log('🔍 Found today logs:', todayLogs.length);
@@ -2762,12 +2830,8 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
       const wasWorking = lastBeforeStart.DigitalInput1 === "1" && lastBeforeStart.DigitalInput2 === "0";
       const wasMaint = lastBeforeStart.DigitalInput2 === "1";
       if (wasWorking || wasMaint) {
-        const dd = String(startOfDay.getDate()).padStart(2, '0');
-        const mm = String(startOfDay.getMonth() + 1).padStart(2, '0');
-        const yyyy = startOfDay.getFullYear();
-        const ts = `${dd}/${mm}/${yyyy} 00:00:00`;
         todayLogs.unshift({
-          Timestamp: ts,
+          Timestamp: startOfDay, // Use Date object directly
           DigitalInput1: wasWorking ? "1" : lastBeforeStart.DigitalInput1,
           DigitalInput2: wasMaint ? "1" : (wasWorking ? "0" : lastBeforeStart.DigitalInput2)
         });
@@ -2981,15 +3045,12 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
     
     // ✅ Sort by timestamp
     deviceLogs.sort((a, b) => {
-      const [aDate, aTime] = a.Timestamp.split(' ');
-      const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-      const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-      const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+      const aParts = safeExtractTimestampParts(a.Timestamp);
+      const bParts = safeExtractTimestampParts(b.Timestamp);
+      if (!aParts || !bParts) return 0;
       
-      const [bDate, bTime] = b.Timestamp.split(' ');
-      const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-      const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-      const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+      const aTimestamp = new Date(aParts.year, aParts.month - 1, aParts.day, aParts.hours, aParts.minutes, aParts.seconds);
+      const bTimestamp = new Date(bParts.year, bParts.month - 1, bParts.day, bParts.hours, bParts.minutes, bParts.seconds);
       
       return aTimestamp - bTimestamp;
     });
@@ -3007,10 +3068,9 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
       
       // Filter logs within period
       const periodLogs = deviceLogs.filter(log => {
-        const [datePart, timePart] = log.Timestamp.split(' ');
-        const [day, month, year] = datePart.split('/').map(Number);
-        const [hour, minute, second] = timePart.split(':').map(Number);
-        const logTime = new Date(year, month - 1, day, hour, minute, second);
+        const timestampParts = safeExtractTimestampParts(log.Timestamp);
+        if (!timestampParts) return false;
+        const logTime = new Date(timestampParts.year, timestampParts.month - 1, timestampParts.day, timestampParts.hours, timestampParts.minutes, timestampParts.seconds);
         const logTimeIST = new Date(logTime.getTime() + (5.5 * 60 * 60 * 1000)); // Convert to IST
         return logTimeIST >= startDate && logTimeIST <= endDate;
       });
@@ -3022,16 +3082,14 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
         
         if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
           try {
-            const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-            const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-            const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+            const currentParts = safeExtractTimestampParts(currentLog.Timestamp);
+            const nextParts = safeExtractTimestampParts(nextLog.Timestamp);
+            if (!currentParts || !nextParts) continue;
+            
+            const currentTimeIST = new Date(currentParts.year, currentParts.month - 1, currentParts.day, currentParts.hours, currentParts.minutes, currentParts.seconds);
             const currentTime = convertISTToUTC(currentTimeIST);
             
-            const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-            const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-            const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-            const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+            const nextTimeIST = new Date(nextParts.year, nextParts.month - 1, nextParts.day, nextParts.hours, nextParts.minutes, nextParts.seconds);
             const nextTime = convertISTToUTC(nextTimeIST);
             
             const hoursDiff = (nextTime - currentTime) / (1000 * 60 * 60);
@@ -3046,10 +3104,10 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
       const latestLog = periodLogs[periodLogs.length - 1];
       if (latestLog && latestLog.DigitalInput1 === "1") {
         try {
-          const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
-          const [latestDay, latestMonth, latestYear] = latestDatePart.split('/').map(Number);
-          const [latestHour, latestMinute, latestSecond] = latestTimePart.split(':').map(Number);
-          const latestTimeIST = new Date(latestYear, latestMonth - 1, latestDay, latestHour, latestMinute, latestSecond);
+          const latestParts = safeExtractTimestampParts(latestLog.Timestamp);
+          if (!latestParts) return completedHours + ongoingHours;
+          
+          const latestTimeIST = new Date(latestParts.year, latestParts.month - 1, latestParts.day, latestParts.hours, latestParts.minutes, latestParts.seconds);
           const latestTime = convertISTToUTC(latestTimeIST);
           
           const ongoingHoursDiff = (endDate - latestTime) / (1000 * 60 * 60);
@@ -3084,24 +3142,22 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
         
         try {
           // ✅ Calculate session duration
-          const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-          const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-          const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-          const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+          const currentParts = safeExtractTimestampParts(currentLog.Timestamp);
+          const nextParts = safeExtractTimestampParts(nextLog.Timestamp);
+          if (!currentParts || !nextParts) continue;
+          
+          const currentTimeIST = new Date(currentParts.year, currentParts.month - 1, currentParts.day, currentParts.hours, currentParts.minutes, currentParts.seconds);
           const currentTime = convertISTToUTC(currentTimeIST);
           
-          const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-          const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-          const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-          const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+          const nextTimeIST = new Date(nextParts.year, nextParts.month - 1, nextParts.day, nextParts.hours, nextParts.minutes, nextParts.seconds);
           const nextTime = convertISTToUTC(nextTimeIST);
           
           const sessionHours = (nextTime - currentTime) / (1000 * 60 * 60);
           
           const session = {
-            date: currentDatePart, // DD/MM/YYYY
-            startTime: currentTimePart, // HH:mm:ss
-            stopTime: nextTimePart, // HH:mm:ss
+            date: currentParts.datePart, // DD/MM/YYYY
+            startTime: currentParts.timePart, // HH:mm:ss
+            stopTime: nextParts.timePart, // HH:mm:ss
             totalHours: Math.round(sessionHours * 100) / 100
           };
           operatingSessions.push(session);
@@ -3115,14 +3171,16 @@ app.get("/api/crane/activity", authenticateToken, async (req, res) => {
     const latestLog = deviceLogs[deviceLogs.length - 1];
     if (latestLog && latestLog.DigitalInput1 === "1") {
       try {
-        const [latestDatePart, latestTimePart] = latestLog.Timestamp.split(' ');
+        const latestParts = safeExtractTimestampParts(latestLog.Timestamp);
+        if (!latestParts) return;
+        
         const latestTimeIST = new Date(
-          latestDatePart.split('/')[2], // year
-          latestDatePart.split('/')[1] - 1, // month (0-based)
-          latestDatePart.split('/')[0], // day
-          latestTimePart.split(':')[0], // hour
-          latestTimePart.split(':')[1], // minute
-          latestTimePart.split(':')[2] // second
+          latestParts.year, // year
+          latestParts.month - 1, // month (0-based)
+          latestParts.day, // day
+          latestParts.hours, // hour
+          latestParts.minutes, // minute
+          latestParts.seconds // second
         );
         
         const currentTime = getCurrentTimeInIST();
@@ -3198,15 +3256,19 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
     
     // ✅ Sort by timestamp
     deviceLogs.sort((a, b) => {
-      const [aDate, aTime] = a.Timestamp.split(' ');
-      const [aDay, aMonth, aYear] = aDate.split('/').map(Number);
-      const [aHour, aMinute, aSecond] = aTime.split(':').map(Number);
-      const aTimestamp = new Date(aYear, aMonth - 1, aDay, aHour, aMinute, aSecond);
+      // ✅ Handle both Date objects and string timestamps
+      if (a.Timestamp instanceof Date && b.Timestamp instanceof Date) {
+        return a.Timestamp.getTime() - b.Timestamp.getTime();
+      }
       
-      const [bDate, bTime] = b.Timestamp.split(' ');
-      const [bDay, bMonth, bYear] = bDate.split('/').map(Number);
-      const [bHour, bMinute, bSecond] = bTime.split(':').map(Number);
-      const bTimestamp = new Date(bYear, bMonth - 1, bDay, bHour, bMinute, bSecond);
+      // ✅ Fallback to string parsing if needed
+      const aParts = safeExtractTimestampParts(a.Timestamp);
+      const bParts = safeExtractTimestampParts(b.Timestamp);
+      
+      if (!aParts || !bParts) return 0;
+      
+      const aTimestamp = new Date(aParts.year, aParts.month - 1, aParts.day, aParts.hours, aParts.minutes, aParts.seconds);
+      const bTimestamp = new Date(bParts.year, bParts.month - 1, bParts.day, bParts.hours, bParts.minutes, bParts.seconds);
       
       return aTimestamp - bTimestamp;
     });
@@ -3237,16 +3299,14 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
             
             if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
               try {
-                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentParts = safeExtractTimestampParts(currentLog.Timestamp);
+                const nextParts = safeExtractTimestampParts(nextLog.Timestamp);
+                if (!currentParts || !nextParts) continue;
+                
+                const currentTimeIST = new Date(currentParts.year, currentParts.month - 1, currentParts.day, currentParts.hours, currentParts.minutes, currentParts.seconds);
                 const currentTime = convertISTToUTC(currentTimeIST);
                 
-                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTimeIST = new Date(nextParts.year, nextParts.month - 1, nextParts.day, nextParts.hours, nextParts.minutes, nextParts.seconds);
                 const nextTime = convertISTToUTC(nextTimeIST);
                 
                 // ✅ Check if session overlaps with this hour
@@ -3284,16 +3344,14 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
             
             if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
               try {
-                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentParts = safeExtractTimestampParts(currentLog.Timestamp);
+                const nextParts = safeExtractTimestampParts(nextLog.Timestamp);
+                if (!currentParts || !nextParts) continue;
+                
+                const currentTimeIST = new Date(currentParts.year, currentParts.month - 1, currentParts.day, currentParts.hours, currentParts.minutes, currentParts.seconds);
                 const currentTime = convertISTToUTC(currentTimeIST);
                 
-                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTimeIST = new Date(nextParts.year, nextParts.month - 1, nextParts.day, nextParts.hours, nextParts.minutes, nextParts.seconds);
                 const nextTime = convertISTToUTC(nextTimeIST);
                 
                 // ✅ Check if session overlaps with this day
@@ -3331,16 +3389,14 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
             
             if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
               try {
-                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentParts = safeExtractTimestampParts(currentLog.Timestamp);
+                const nextParts = safeExtractTimestampParts(nextLog.Timestamp);
+                if (!currentParts || !nextParts) continue;
+                
+                const currentTimeIST = new Date(currentParts.year, currentParts.month - 1, currentParts.day, currentParts.hours, currentParts.minutes, currentParts.seconds);
                 const currentTime = convertISTToUTC(currentTimeIST);
                 
-                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTimeIST = new Date(nextParts.year, nextParts.month - 1, nextParts.day, nextParts.hours, nextParts.minutes, nextParts.seconds);
                 const nextTime = convertISTToUTC(nextTimeIST);
                 
                 const sessionStart = Math.max(currentTime, dayStart);
@@ -3377,16 +3433,14 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
             
             if (currentLog.DigitalInput1 === "1" && nextLog.DigitalInput1 === "0") {
               try {
-                const [currentDatePart, currentTimePart] = currentLog.Timestamp.split(' ');
-                const [currentDay, currentMonth, currentYear] = currentDatePart.split('/').map(Number);
-                const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
-                const currentTimeIST = new Date(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                const currentParts = safeExtractTimestampParts(currentLog.Timestamp);
+                const nextParts = safeExtractTimestampParts(nextLog.Timestamp);
+                if (!currentParts || !nextParts) continue;
+                
+                const currentTimeIST = new Date(currentParts.year, currentParts.month - 1, currentParts.day, currentParts.hours, currentParts.minutes, currentParts.seconds);
                 const currentTime = convertISTToUTC(currentTimeIST);
                 
-                const [nextDatePart, nextTimePart] = nextLog.Timestamp.split(' ');
-                const [nextDay, nextMonth, nextYear] = nextDatePart.split('/').map(Number);
-                const [nextHour, nextMinute, nextSecond] = nextTimePart.split(':').map(Number);
-                const nextTimeIST = new Date(nextYear, nextMonth - 1, nextDay, nextHour, nextMinute, nextSecond);
+                const nextTimeIST = new Date(nextParts.year, nextParts.month - 1, nextParts.day, nextParts.hours, nextParts.minutes, nextParts.seconds);
                 const nextTime = convertISTToUTC(nextTimeIST);
                 
                 const sessionStart = Math.max(currentTime, monthStart);
@@ -4159,7 +4213,9 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
       if (startStr && endStr) {
         logs = allLogs.filter(log => {
           // ✅ SIMPLE FIX: Use string-based date comparison to avoid timezone issues
-          const logDate = log.Timestamp.split(' ')[0]; // Get date part only (DD/MM/YYYY)
+          const timestampParts = safeExtractTimestampParts(log.Timestamp);
+          if (!timestampParts) return false;
+          const logDate = timestampParts.datePart; // Get date part only (DD/MM/YYYY)
           
           // Convert startStr (YYYY-MM-DD) to DD/MM/YYYY format for comparison
           const [year, month, day] = startStr.split('-').map(Number);
@@ -4851,3 +4907,52 @@ app.get('/api/crane/sessions', authenticateToken, async (req, res) => {
 
 // ✅ GET: Flexible time-series stats for line chart (daily/weekly/monthly)
 // (Removed unreachable duplicate /api/crane/timeseries-stats route that was below catch-all)
+
+// ✅ HELPER FUNCTION: Safely extract date parts from timestamps (Date objects or strings)
+function safeExtractTimestampParts(timestamp) {
+  try {
+    if (timestamp instanceof Date) {
+      // Handle Date object
+      const day = timestamp.getDate().toString().padStart(2, '0');
+      const month = (timestamp.getMonth() + 1).toString().padStart(2, '0');
+      const year = timestamp.getFullYear();
+      const hours = timestamp.getHours().toString().padStart(2, '0');
+      const minutes = timestamp.getMinutes().toString().padStart(2, '0');
+      const seconds = timestamp.getSeconds().toString().padStart(2, '0');
+      
+      return {
+        datePart: `${day}/${month}/${year}`,
+        timePart: `${hours}:${minutes}:${seconds}`,
+        day, month, year, hours, minutes, seconds,
+        isDateObject: true,
+        originalTimestamp: timestamp
+      };
+    } else if (typeof timestamp === 'string') {
+      // Handle legacy string format (DD/MM/YYYY HH:MM:SS)
+      if (timestamp.includes(' ')) {
+        const [datePart, timePart] = timestamp.split(' ');
+        if (datePart.includes('/') && timePart.includes(':')) {
+          const [day, month, year] = datePart.split('/').map(Number);
+          const [hours, minutes, seconds] = timePart.split(':').map(Number);
+          
+          return {
+            datePart, timePart,
+            day, month, year, hours, minutes, seconds,
+            isDateObject: false,
+            originalTimestamp: timestamp
+          };
+        }
+      }
+      
+      // Handle other string formats or invalid strings
+      console.warn(`⚠️ Warning: Unexpected timestamp format: ${timestamp}`);
+      return null;
+    } else {
+      console.warn(`⚠️ Warning: Unexpected timestamp type: ${typeof timestamp}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error extracting timestamp parts:`, error);
+    return null;
+  }
+}

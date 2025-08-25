@@ -99,6 +99,16 @@ export default function CraneOverview() {
 
   // ✅ Use dashboard data or default (restored)
   const currentData = dashboardData || defaultData;
+  
+  // ✅ DEBUG: Log what data we're receiving
+  console.log('🔍 [Frontend] dashboardData:', dashboardData);
+  console.log('🔍 [Frontend] currentData.quickStats?.thisMonth:', currentData.quickStats?.thisMonth);
+  console.log('🔍 [Frontend] workingCompleted fallback:', currentData.quickStats?.thisMonth?.completed || 0);
+  
+  // ✅ Debug: Log the data being received
+  console.log('🔍 [Frontend] Dashboard Data:', dashboardData);
+  console.log('🔍 [Frontend] Current Data:', currentData);
+  console.log('🔍 [Frontend] Quick Stats thisMonth:', currentData.quickStats?.thisMonth);
 
   // ✅ Available cranes from overview (once loaded) (restored)
   const availableCranes = (dashboardData?.craneDevices || []).sort();
@@ -211,26 +221,46 @@ export default function CraneOverview() {
     console.log('🔍 [Frontend] Applied Filters:', appliedFilters);
     console.log('🔍 [Frontend] hasCrane:', hasCrane, 'hasRange:', hasRange);
     
-    // ✅ FIX: Allow API call with either cranes OR date range (not requiring both)
-    if (!hasCrane && !hasRange) { 
-      console.log('🔍 [Frontend] No filters, skipping API call');
-      setFilteredTotals(null); 
-      return; 
-    }
-    
+    // ✅ FIX: Always fetch data - either filtered or default monthly data
     const load = async () => {
       try {
-        const params = {};
-        if (hasCrane) params.cranes = appliedFilters.cranes.join(',');
-        if (hasRange) { params.start = appliedFilters.start; params.end = appliedFilters.end; }
+        let params = {};
+        let endpoint = '/api/crane/working-totals';
         
-        console.log('🔍 [Frontend] Calling API with params:', params);
-        const resp = await axios.get('/api/crane/working-totals', { params, withCredentials: true });
+        if (hasCrane || hasRange) {
+          // Apply specific filters
+          if (hasCrane) params.cranes = appliedFilters.cranes.join(',');
+          if (hasRange) { 
+            params.start = appliedFilters.start; 
+            params.end = appliedFilters.end; 
+          }
+          console.log('🔍 [Frontend] Calling filtered API with params:', params);
+        } else {
+          // No filters - fetch default monthly data
+          console.log('🔍 [Frontend] No filters, fetching default monthly data');
+          endpoint = '/api/crane/overview'; // Use the main overview endpoint for default data
+        }
+        
+        const resp = await axios.get(endpoint, { params, withCredentials: true });
         console.log('🔍 [Frontend] API response:', resp.data);
         
-        if (resp.data?.success) setFilteredTotals(resp.data);
-        else setFilteredTotals(null);
-      } catch (e) { console.error('working totals error', e); setFilteredTotals(null); }
+        if (hasCrane || hasRange) {
+          // Filtered data
+          if (resp.data?.success) setFilteredTotals(resp.data);
+          else setFilteredTotals(null);
+        } else {
+          // Default monthly data - update the main dashboard data
+          if (resp.data?.quickStats?.thisMonth) {
+            console.log('🔍 [Frontend] Updated default monthly stats:', resp.data.quickStats.thisMonth);
+            // Force a re-render by updating the dashboard data
+            manualRefresh();
+          }
+          setFilteredTotals(null);
+        }
+      } catch (e) { 
+        console.error('working totals error', e); 
+        setFilteredTotals(null); 
+      }
     };
     load();
   }, [appliedFilters.cranes, appliedFilters.start, appliedFilters.end]);
@@ -250,7 +280,18 @@ export default function CraneOverview() {
       const eLabel = formatYMDToISTLabel(appliedFilters.end);
       return `Total Working Hours (${sLabel} – ${eLabel})`;
     }
-    return `Total Working Hours (${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()})`;
+    
+    // ✅ Default: Show current month with IST time range (1st of month 00:00 to current time)
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    return `Total Working Hours (1st ${currentMonthStart.toLocaleString('default', { month: 'long' })} 00:00 - ${now.toLocaleString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })} IST)`;
   };
 
   // Build first card data

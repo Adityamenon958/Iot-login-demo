@@ -1,7 +1,7 @@
-// backend/models/CraneLog.js - UPDATED FOR DATE TIMESTAMPS
+// backend/models/CraneLog.js - FIXED VERSION
 const mongoose = require("mongoose");
 
-// ✅ Updated schema with Date type for Timestamp
+// ✅ Fixed schema without problematic pre-save hooks
 const CraneLogSchema = new mongoose.Schema({
   craneCompany: {
     type: String,
@@ -16,9 +16,9 @@ const CraneLogSchema = new mongoose.Schema({
     required: false // Optional unique device identifier from payload
   },
   Timestamp: {
-    type: Date,              // ✅ CHANGED: String → Date
+    type: Date,              // ✅ Date type for storage
     required: true,
-    index: true              // ✅ ADDED: Enable indexing for fast queries
+    index: true              // ✅ Indexed for fast queries
   },
   Longitude: {
     type: String,
@@ -35,23 +35,21 @@ const CraneLogSchema = new mongoose.Schema({
   DigitalInput2: {
     type: String,
     required: true
+  },
+  maintenance: {
+    type: String,
+    required: false
   }
 }, { 
   timestamps: true,
-  collection: 'cranelogs' // Force specific collection name
+  collection: 'cranelogs', // Force specific collection name
+  strict: false // Allow extra fields to prevent validation errors
 });
 
-// ✅ Updated indexes for better performance with Date type
+// ✅ Essential indexes for performance
 CraneLogSchema.index({ craneCompany: 1, DeviceID: 1 });
-CraneLogSchema.index({ craneCompany: 1, DeviceID: 1, Uid: 1 });
-CraneLogSchema.index({ craneCompany: 1, Timestamp: -1 }); // ✅ Date indexing
-CraneLogSchema.index({ Timestamp: -1 });                  // ✅ Global timestamp index
+CraneLogSchema.index({ craneCompany: 1, Timestamp: -1 });
+CraneLogSchema.index({ Timestamp: -1 }); // Global timestamp index
 
-// ✅ Add a pre-save hook to log craneCompany
-CraneLogSchema.pre('save', function(next) {
-  console.log('🔍 Debug - Pre-save hook - craneCompany:', this.craneCompany);
-  next();
-});
-
-// ✅ Export the model
+// ✅ Export the fixed model
 module.exports = mongoose.model("CraneLog", CraneLogSchema);
