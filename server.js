@@ -6,6 +6,7 @@ require('dotenv').config();
 // - Fixed period processing to only sum active periods for the requested status
 // - Improved ongoing session detection with freshness checks
 // - Fixed rounding to only occur at the final response level
+// - ✅ NEW: Fixed line chart daily aggregation with prevLog seeding for carry-over state detection
 
 const express = require('express');
 const cors = require('cors');
@@ -128,7 +129,7 @@ function calculateConsecutivePeriods(logs, statusType) {
   };
 
   let current = null;
-
+  
   for (let i = 0; i < logs.length; i++) {
     const log = logs[i];
     const ts = log.Timestamp instanceof Date ? log.Timestamp : new Date(log.Timestamp);
@@ -180,7 +181,7 @@ function calculateConsecutivePeriods(logs, statusType) {
     current.duration = (current.endTime - current.startTime) / (1000 * 60 * 60);
     periods.push(current);
   }
-
+  
   return periods;
 }
 
@@ -1016,8 +1017,8 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
           const cappedEnd = (effectiveEnd > cappedNow) ? cappedNow : effectiveEnd;
           if (effectiveStart < cappedEnd) {
             const ongoingDuration = (cappedEnd - effectiveStart) / (1000 * 60 * 60);
-            deviceOngoingHours += Math.max(0, ongoingDuration);
-            hasOngoingSession = true;
+        deviceOngoingHours += Math.max(0, ongoingDuration);
+          hasOngoingSession = true;
             
             console.log(`🔍 [overview] Device ${deviceId} - Ongoing working session:`, {
               startTime: periodStart.toISOString(),
@@ -4544,7 +4545,7 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
 
     const points = [];
 
-    // Aggregate by bucket in IST using parseTimestamp
+    // ✅ FIXED: Aggregate by bucket in IST using parseTimestamp with prevLog seeding
     for (const b of buckets) {
       let usage = 0;
       let maint = 0;
@@ -4554,34 +4555,65 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
         const deviceFilter = { ...companyFilter, DeviceID: deviceId };
         const deviceLogs = await CraneLog.find(deviceFilter).lean();
 
+        // ✅ FIX: Find the last log before this bucket starts (for carry-over state)
+        let prevLog = null;
+        for (const log of deviceLogs) {
+          const t = parseTimestamp(log.Timestamp);
+          if (t && t < b.start) {
+            if (!prevLog) {
+              prevLog = log;
+            } else {
+              const prevT = parseTimestamp(prevLog.Timestamp);
+              if (prevT && t > prevT) prevLog = log;
+            }
+          }
+        }
+
+        // ✅ FIX: Get logs that fall within this bucket
         const bucketLogs = deviceLogs.filter(log => {
           const t = parseTimestamp(log.Timestamp);
           return t && t >= b.start && t <= b.end;
         });
-        totalBucketLogs += bucketLogs.length;
-        if (bucketLogs.length === 0) continue;
 
-        bucketLogs.sort((a, b2) => {
+        // ✅ FIX: Seed the bucket with prevLog if it exists and crane was working/maintenance
+        let augmentedBucketLogs = [...bucketLogs];
+        if (prevLog) {
+          const wasWorking = prevLog.DigitalInput1 === "1" && prevLog.DigitalInput2 === "0";
+          const wasMaintenance = prevLog.DigitalInput2 === "1";
+          
+          if (wasWorking || wasMaintenance) {
+            // Create a synthetic log at bucket start with the previous state
+            const syntheticLog = {
+              ...prevLog,
+              Timestamp: b.start, // Start of bucket
+              _isSynthetic: true // Flag to identify this as synthetic
+            };
+            augmentedBucketLogs.unshift(syntheticLog);
+            
+            if (debug) {
+              console.log(`🔍 [timeseries] Device ${deviceId} - Seeded bucket ${b.label} with synthetic log:`, {
+                prevLogState: { DI1: prevLog.DigitalInput1, DI2: prevLog.DigitalInput2 },
+                syntheticTimestamp: b.start.toISOString(),
+                bucketStart: b.start.toISOString(),
+                bucketEnd: b.end.toISOString()
+              });
+            }
+          }
+        }
+
+        totalBucketLogs += bucketLogs.length; // Keep original count for debug
+        if (augmentedBucketLogs.length === 0) continue;
+
+        // ✅ FIX: Sort augmented logs chronologically
+        augmentedBucketLogs.sort((a, b2) => {
           const aT = parseTimestamp(a.Timestamp);
           const bT = parseTimestamp(b2.Timestamp);
           if (!aT || !bT) return 0;
-        return aT - bT;
-      });
+          return aT - bT;
+        });
 
         // 🔍 Extra debug to diagnose missing last-day data: show prev and first-in-bucket logs per device
         if (debug && lastLabels.has(b.label)) {
-          let prevLog = null;
-          for (const log of deviceLogs) {
-            const t = parseTimestamp(log.Timestamp);
-            if (t && t < b.start) {
-              if (!prevLog) {
-                prevLog = log;
-              } else {
-                const prevT = parseTimestamp(prevLog.Timestamp);
-                if (prevT && t > prevT) prevLog = log;
-              }
-            }
-          }
           const firstInBucket = bucketLogs.length > 0 ? bucketLogs[0] : null;
           const prevTs = prevLog ? parseTimestamp(prevLog.Timestamp) : null;
           const firstTs = firstInBucket ? parseTimestamp(firstInBucket.Timestamp) : null;
@@ -4592,11 +4624,14 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
             bucketEnd: b.end.toISOString(),
             prevLog: prevLog ? { tsISO: prevTs ? prevTs.toISOString() : null, raw: prevLog.Timestamp, DI1: prevLog.DigitalInput1, DI2: prevLog.DigitalInput2 } : null,
             firstInBucket: firstInBucket ? { tsISO: firstTs ? firstTs.toISOString() : null, raw: firstInBucket.Timestamp, DI1: firstInBucket.DigitalInput1, DI2: firstInBucket.DigitalInput2 } : null,
-            totalBucketLogsForDevice: bucketLogs.length
+            totalBucketLogsForDevice: bucketLogs.length,
+            augmentedLogsCount: augmentedBucketLogs.length,
+            hasSyntheticLog: augmentedBucketLogs.some(log => log._isSynthetic)
           });
         }
 
-        const workingPeriods = calculateConsecutivePeriods(bucketLogs, 'working');
+        // ✅ FIX: Calculate periods using augmented logs (includes carry-over state)
+        const workingPeriods = calculateConsecutivePeriods(augmentedBucketLogs, 'working');
         for (const p of workingPeriods) {
           if (p.isOngoing) {
             const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
@@ -4612,7 +4647,7 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
           }
         }
 
-        const maintenancePeriods = calculateConsecutivePeriods(bucketLogs, 'maintenance');
+        const maintenancePeriods = calculateConsecutivePeriods(augmentedBucketLogs, 'maintenance');
         for (const p of maintenancePeriods) {
           if (p.isOngoing) {
             const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
