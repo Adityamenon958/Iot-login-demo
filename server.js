@@ -62,6 +62,19 @@ function getDateBoundary(date, isStart = true) {
   }
 }
 
+// ✅ NEW: IST helpers for timezone-agnostic date parsing
+const IST_OFFSET_MIN = 330; // +05:30
+
+function istStartUtcFromYMD(y, m, d) {
+  // 00:00:00 IST for that date, expressed in UTC
+  return new Date(Date.UTC(y, m, d, -5, -30, 0));
+}
+
+function istEndUtcFromYMD(y, m, d) {
+  // 23:59:59 IST for that date, expressed in UTC
+  return new Date(Date.UTC(y, m, d, 18, 29, 59));
+}
+
 // ✅ UPDATED: Timestamp is now a Date object, no parsing needed
 // This function is kept for backward compatibility but now just returns the Date object
 function parseTimestamp(timestamp) {
@@ -1852,7 +1865,8 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
     const toISTDate = (yyyy_mm_dd, endOfDay = false) => {
       const [y, m, d] = (yyyy_mm_dd || '').split('-').map(Number);
       if (!y || !m || !d) return null;
-      return endOfDay ? new Date(y, m - 1, d, 23, 59, 59) : new Date(y, m - 1, d, 0, 0, 0);
+      // ✅ FIXED: Use IST helpers for timezone-agnostic date parsing
+      return endOfDay ? istEndUtcFromYMD(y, m - 1, d) : istStartUtcFromYMD(y, m - 1, d);
     };
 
     const now = getCurrentTimeInIST();
@@ -2004,7 +2018,8 @@ app.get("/api/crane/crane-stats", authenticateToken, async (req, res) => {
     const toISTDate = (yyyy_mm_dd, endOfDay = false) => {
       const [y, m, d] = (yyyy_mm_dd || '').split('-').map(Number);
       if (!y || !m || !d) return null;
-      return endOfDay ? new Date(y, m - 1, d, 23, 59, 59) : new Date(y, m - 1, d, 0, 0, 0);
+      // ✅ FIXED: Use IST helpers for timezone-agnostic date parsing
+      return endOfDay ? istEndUtcFromYMD(y, m - 1, d) : istStartUtcFromYMD(y, m - 1, d);
     };
 
     // ✅ Determine period
@@ -4199,15 +4214,13 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
     const now = getCurrentTimeInIST();
     let startDate, endDate;
     if (startStr && endStr) {
-      // ✅ Fix: Create dates in IST timezone for proper comparison
+      // ✅ FIXED: Use IST helpers for timezone-agnostic date parsing
       const [ys, ms, ds] = startStr.split('-').map(Number);
       const [ye, me, de] = endStr.split('-').map(Number);
       
-      // ✅ Use helper function for consistent date boundaries
-      const startDateObj = new Date(ys, ms - 1, ds);
-      const endDateObj = new Date(ye, me - 1, de);
-      startDate = getDateBoundary(startDateObj, true);  // 00:00:00 IST
-      endDate = getDateBoundary(endDateObj, false);     // 23:59:59 IST
+      // ✅ Use IST helpers directly for consistent date boundaries
+      startDate = istStartUtcFromYMD(ys, ms - 1, ds);  // 00:00:00 IST
+      endDate = istEndUtcFromYMD(ye, me - 1, de);      // 23:59:59 IST
       
       console.log(`🔍 [working-totals] Date range created:`, {
         startStr,
@@ -4464,9 +4477,18 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
     if (start && end) {
       const [ys, ms, ds] = start.split('-').map(Number);
       const [ye, me, de] = end.split('-').map(Number);
-      rangeStart = toStartOfDay(new Date(ys, ms - 1, ds));
-      rangeEnd = toEndOfDay(new Date(ye, me - 1, de));
+      // ✅ FIXED: Use IST helpers for timezone-agnostic date parsing
+      rangeStart = istStartUtcFromYMD(ys, ms - 1, ds);
+      rangeEnd = istEndUtcFromYMD(ye, me - 1, de);
       if (rangeEnd > now) rangeEnd = now;
+      
+      // ✅ DEBUG: Log the resolved boundaries
+      console.log('[timeseries] parsed range (IST)', {
+        startParam: start, 
+        endParam: end,
+        rangeStartISO: rangeStart.toISOString(),
+        rangeEndISO: rangeEnd.toISOString()
+      });
     } else {
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
       rangeStart = toStartOfDay(new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1));
@@ -4728,9 +4750,18 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
     if (start && end) {
       const [ys, ms, ds] = start.split('-').map(Number);
       const [ye, me, de] = end.split('-').map(Number);
-      rangeStart = toStartOfDay(new Date(ys, ms - 1, ds));
-      rangeEnd = toEndOfDay(new Date(ye, me - 1, de));
+      // ✅ FIXED: Use IST helpers for timezone-agnostic date parsing
+      rangeStart = istStartUtcFromYMD(ys, ms - 1, ds);
+      rangeEnd = istEndUtcFromYMD(ye, me - 1, de);
       if (rangeEnd > now) rangeEnd = now;
+      
+      // ✅ DEBUG: Log the resolved boundaries
+      console.log('[timeseries] parsed range (IST)', {
+        startParam: start, 
+        endParam: end,
+        rangeStartISO: rangeStart.toISOString(),
+        rangeEndISO: rangeEnd.toISOString()
+      });
     } else {
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
       rangeStart = toStartOfDay(new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1));
