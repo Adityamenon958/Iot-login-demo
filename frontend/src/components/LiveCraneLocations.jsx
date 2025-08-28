@@ -62,14 +62,26 @@ const LiveCraneLocations = ({ cranes = [] }) => {
     return `${wholeHours}h ${minutes}m`;
   };
 
-  // ✅ Format timestamp to readable format
+  // ✅ Format timestamp to readable format (Date object only)
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return "Never";
+    
     try {
-      const [datePart, timePart] = timestamp.split(' ');
-      const [day, month, year] = datePart.split('/');
-      const [hour, minute] = timePart.split(':');
-      const date = new Date(year, month - 1, day, hour, minute);
+      // ✅ Handle Date objects (new format)
+      let date;
+      if (timestamp instanceof Date) {
+        date = timestamp;
+      } else if (typeof timestamp === 'string') {
+        // ✅ Handle ISO string format as fallback
+        date = new Date(timestamp);
+      } else {
+        return "Invalid date";
+      }
+      
+      if (isNaN(date.getTime())) {
+        return "Invalid date";
+      }
+      
       const now = new Date();
       const diffMs = now - date;
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -84,11 +96,16 @@ const LiveCraneLocations = ({ cranes = [] }) => {
         }
       } else {
         // ✅ More than 24 hours ago - show actual date and time
-        const formattedDate = `${day}/${month}/${year.toString().slice(-2)}`; // dd/mm/yy
-        const formattedTime = `${hour}:${minute}`; // hh:mm
-        return `${formattedDate} ${formattedTime}`;
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear().toString().slice(-2);
+        const hour = date.getHours().toString().padStart(2, '0');
+        const minute = date.getMinutes().toString().padStart(2, '0');
+        
+        return `${day}/${month}/${year} ${hour}:${minute}`;
       }
     } catch (err) {
+      console.error('❌ Error formatting timestamp:', err, timestamp);
       return "Invalid date";
     }
   };
