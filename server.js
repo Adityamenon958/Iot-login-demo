@@ -15,6 +15,7 @@ const connectDB = require('./backend/db');
 const Device = require('./backend/models/Device');
 const User = require('./backend/models/User');
 const LevelSensor = require('./backend/models/LevelSensor');
+const SimulatorDevice = require('./backend/models/SimulatorDevice');
 
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -32,6 +33,153 @@ const isProd = process.env.NODE_ENV === 'production';
 const CraneLog = require("./backend/models/CraneLog");
 const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
+
+// ✅ SIMULATOR: Database-backed data simulator for testing
+const ENABLE_SIMULATOR = process.env.NODE_ENV === 'production';
+
+// ✅ Log simulator status
+if (ENABLE_SIMULATOR) {
+  console.log('[sim] 🚀 Simulator enabled in production mode');
+} else {
+  console.log('[sim] ⏸️ Simulator disabled in development mode');
+}
+
+// Simulator state management (timers only - devices stored in database)
+const simulatorTimers = new Map();  // DeviceID -> interval timer
+
+// Simulator profiles for state mapping
+const simulatorProfiles = {
+  A: { working: [0, 1], maintenance: [1, 0], idle: [0, 0] },
+  B: { working: [1, 0], maintenance: [0, 1], idle: [0, 0] }
+};
+
+// ✅ Build exact payload matching gateway format
+function buildSimulatorPayload(device) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const timestampStr = device.padTimestamp ? `   ${timestamp}` : `${timestamp}`;
+  
+  // Apply jitter if enabled
+  let lat = device.latitude;
+  let lon = device.longitude;
+  if (device.jitter) {
+    lat += (Math.random() - 0.5) * 0.0004; // ±0.0002
+    lon += (Math.random() - 0.5) * 0.0004;
+  }
+  
+  const profile = simulatorProfiles[device.profile] || simulatorProfiles.A;
+  const [maintenance, ignition] = profile[device.state];
+  
+  return [
+    { 
+      craneCompany: device.name, // Use name field from database
+      DeviceID: device.deviceId, // Use deviceId field from database
+      dataType: "Gps", 
+      Timestamp: timestampStr, 
+      data: `[${lat.toFixed(6)},${lon.toFixed(6)}]` 
+    },
+    { 
+      craneCompany: device.name, // Use name field from database
+      DeviceID: device.deviceId, // Use deviceId field from database
+      dataType: "maintenance", 
+      Timestamp: timestampStr, 
+      data: `[${maintenance}]` 
+    },
+    { 
+      craneCompany: device.name, // Use name field from database
+      DeviceID: device.deviceId, // Use deviceId field from database
+      Timestamp: timestampStr, 
+      dataType: "Ignition", 
+      data: `[${ignition}]` 
+    }
+  ];
+}
+
+// ✅ Simulator tick function - posts data to /api/crane/log
+async function simulatorTick(deviceId) {
+  try {
+    const device = await SimulatorDevice.findOne({ deviceId }).lean();
+    if (!device) {
+      console.log(`[sim] Device ${deviceId} not found in database, stopping timer`);
+      stopSimulator(deviceId);
+      return;
+    }
+    
+    const payload = buildSimulatorPayload(device);
+    
+    // ✅ Post to existing crane log endpoint (use localhost for Node.js fetch)
+    const response = await fetch(`http://localhost:${PORT}/api/crane/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      console.log(`[sim] ✅ Posted data for ${deviceId}: ${device.state} at [${device.latitude.toFixed(6)}, ${device.longitude.toFixed(6)}]`);
+    } else {
+      console.error(`[sim] ❌ Failed to post data for ${deviceId}: ${response.status}`);
+    }
+  } catch (err) {
+    console.error(`[sim] ❌ Simulator tick error for ${deviceId}:`, err.message);
+  }
+}
+
+// ✅ Start simulator for a device
+async function startSimulator(deviceId) {
+  const device = await SimulatorDevice.findOne({ deviceId }).lean();
+  if (!device) {
+    throw new Error(`Device ${deviceId} not found in database`);
+  }
+  
+  if (simulatorTimers.has(deviceId)) {
+    throw new Error(`Device ${deviceId} is already running`);
+  }
+  
+  const frequencyMs = device.frequencyMinutes * 60 * 1000;
+  const timer = setInterval(() => simulatorTick(deviceId), frequencyMs);
+  simulatorTimers.set(deviceId, timer);
+  
+  // ✅ Update database to mark device as running
+  await SimulatorDevice.updateOne({ deviceId }, { isRunning: true });
+  
+  console.log(`[sim] 🚀 Started simulator for ${deviceId} (${device.frequencyMinutes}m interval)`);
+}
+
+// ✅ Stop simulator for a device
+async function stopSimulator(deviceId) {
+  const timer = simulatorTimers.get(deviceId);
+  if (timer) {
+    clearInterval(timer);
+    simulatorTimers.delete(deviceId);
+    
+    // ✅ Update database to mark device as stopped
+    await SimulatorDevice.updateOne({ deviceId }, { isRunning: false });
+    
+    console.log(`[sim] ⏹️ Stopped simulator for ${deviceId}`);
+  }
+}
+
+// ✅ Auto-restart running devices on server start
+async function restartRunningSimulators() {
+  try {
+    const runningDevices = await SimulatorDevice.find({ isRunning: true }).lean();
+    console.log(`[sim] 🔄 Found ${runningDevices.length} running devices to restart`);
+    
+    for (const device of runningDevices) {
+      try {
+        const frequencyMs = device.frequencyMinutes * 60 * 1000;
+        const timer = setInterval(() => simulatorTick(device.deviceId), frequencyMs);
+        simulatorTimers.set(device.deviceId, timer);
+        console.log(`[sim] ✅ Auto-restarted simulator for ${device.deviceId} (${device.frequencyMinutes}m interval)`);
+      } catch (err) {
+        console.error(`[sim] ❌ Failed to auto-restart ${device.deviceId}:`, err.message);
+        // Mark as stopped in database if restart fails
+        await SimulatorDevice.updateOne({ deviceId: device.deviceId }, { isRunning: false });
+      }
+    }
+  } catch (err) {
+    console.error('[sim] ❌ Error during auto-restart:', err.message);
+  }
+}
 
 // ✅ Time helpers (IST-anchored, environment-independent)
 // Always interpret device timestamps as IST (UTC+05:30) regardless of server TZ (e.g., Azure UTC)
@@ -236,8 +384,15 @@ function authenticateToken(req, res, next) {
 }
 
 // ✅ Connect MongoDB
-connectDB().then(() => {
+connectDB().then(async () => {
   // MongoDB connected successfully
+  console.log('✅ MongoDB connected successfully');
+  
+  // ✅ Auto-restart running simulators after database connection
+  if (ENABLE_SIMULATOR) {
+    console.log('[sim] 🔄 Restarting running simulators...');
+    await restartRunningSimulators();
+  }
 }).catch((err) => {
   console.error('❌ MongoDB connection failed:', err);
 });
@@ -3512,6 +3667,210 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ SIMULATOR ENDPOINTS (superadmin only)
+if (ENABLE_SIMULATOR) {
+  // ✅ POST: Add simulated crane device
+  app.post('/api/sim/add', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      
+      const { craneCompany, DeviceID, latitude, longitude, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
+      
+      // ✅ Debug logging
+      console.log('[sim] 📝 Received data:', { craneCompany, DeviceID, latitude, longitude, state, frequencyMinutes, padTimestamp, profile, jitter });
+      
+      // ✅ Validation
+      if (!craneCompany || !DeviceID || latitude === undefined || longitude === undefined || !state) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      if (!['working', 'idle', 'maintenance'].includes(state)) {
+        return res.status(400).json({ error: 'Invalid state. Must be working, idle, or maintenance' });
+      }
+      
+      if (!['A', 'B'].includes(profile)) {
+        return res.status(400).json({ error: 'Invalid profile. Must be A or B' });
+      }
+      
+      const validFrequencies = [1, 2, 5, 10, 15, 30];
+      const frequencyNum = parseInt(frequencyMinutes);
+      console.log('[sim] 🔍 Frequency validation:', { frequencyMinutes, frequencyNum, isValid: validFrequencies.includes(frequencyNum) });
+      if (!validFrequencies.includes(frequencyNum)) {
+        return res.status(400).json({ error: 'Invalid frequency. Must be 1, 2, 5, 10, 15, or 30 minutes' });
+      }
+      
+      // ✅ Create device config
+      const device = new SimulatorDevice({
+        deviceId: DeviceID,
+        name: DeviceID, // Use DeviceID as name for now
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        state,
+        frequencyMinutes: parseInt(frequencyMinutes),
+        padTimestamp: padTimestamp !== false, // default true
+        profile: profile || 'A',
+        jitter: jitter === true, // default false
+        isRunning: false
+      });
+      
+      await device.save();
+      console.log(`[sim] ✅ Added simulated device: ${DeviceID} (${state}) at [${latitude}, ${longitude}]`);
+      
+      res.json({ success: true, device: device.toObject() });
+    } catch (err) {
+      console.error('[sim] ❌ Add device error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // ✅ POST: Start simulator for a device
+  app.post('/api/sim/start', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      
+      const { DeviceID } = req.body;
+      if (!DeviceID) {
+        return res.status(400).json({ error: 'DeviceID is required' });
+      }
+      
+      await startSimulator(DeviceID);
+      res.json({ success: true, message: `Simulator started for ${DeviceID}` });
+    } catch (err) {
+      console.error('[sim] ❌ Start simulator error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  // ✅ POST: Stop simulator for a device
+  app.post('/api/sim/stop', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      
+      const { DeviceID } = req.body;
+      if (!DeviceID) {
+        return res.status(400).json({ error: 'DeviceID is required' });
+      }
+      
+      await stopSimulator(DeviceID);
+      res.json({ success: true, message: `Simulator stopped for ${DeviceID}` });
+    } catch (err) {
+      console.error('[sim] ❌ Stop simulator error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  // ✅ POST: Update device configuration
+  app.post('/api/sim/update', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      
+      const { craneCompany, DeviceID, latitude, longitude, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
+      if (!DeviceID) {
+        return res.status(400).json({ error: 'DeviceID is required' });
+      }
+      
+      const device = await SimulatorDevice.findOne({ deviceId: DeviceID });
+      if (!device) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+      
+                      // ✅ Update fields if provided
+                if (craneCompany !== undefined) device.name = craneCompany;
+                if (latitude !== undefined) device.latitude = parseFloat(latitude);
+                if (longitude !== undefined) device.longitude = parseFloat(longitude);
+                if (state && ['working', 'idle', 'maintenance'].includes(state)) device.state = state;
+                if (frequencyMinutes !== undefined) {
+                  const freq = parseInt(frequencyMinutes);
+                  if ([1, 2, 5, 10, 15, 30].includes(freq)) {
+                    device.frequencyMinutes = freq;
+                  }
+                }
+                if (padTimestamp !== undefined) device.padTimestamp = padTimestamp;
+                if (profile && ['A', 'B'].includes(profile)) device.profile = profile;
+                if (jitter !== undefined) device.jitter = jitter;
+      
+      // ✅ Save changes to database
+      await device.save();
+      
+      // ✅ If device is running, restart with new frequency
+      if (simulatorTimers.has(DeviceID)) {
+        await stopSimulator(DeviceID);
+        await startSimulator(DeviceID);
+      }
+      
+      console.log(`[sim] ✅ Updated device ${DeviceID}:`, device.toObject());
+      res.json({ success: true, device: device.toObject() });
+    } catch (err) {
+      console.error('[sim] ❌ Update device error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // ✅ GET: List all simulated devices
+  app.get('/api/sim/list', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      
+      const devices = await SimulatorDevice.find({}).lean();
+      
+      // ✅ Add isRunning status from timers
+      const devicesWithStatus = devices.map(device => ({
+        ...device,
+        DeviceID: device.deviceId, // Maintain backward compatibility
+        craneCompany: device.name, // Maintain backward compatibility
+        isRunning: simulatorTimers.has(device.deviceId)
+      }));
+      
+      res.json({ devices: devicesWithStatus });
+    } catch (err) {
+      console.error('[sim] ❌ List devices error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // ✅ DELETE: Remove simulated device
+  app.delete('/api/sim/remove/:deviceId', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      
+      const { deviceId } = req.params;
+      
+      // ✅ Stop simulator if running
+      await stopSimulator(deviceId);
+      
+      // ✅ Remove device from database
+      const removed = await SimulatorDevice.deleteOne({ deviceId });
+      if (removed.deletedCount > 0) {
+        console.log(`[sim] ✅ Removed device ${deviceId}`);
+        res.json({ success: true, message: `Device ${deviceId} removed` });
+      } else {
+        res.status(404).json({ error: 'Device not found' });
+      }
+    } catch (err) {
+      console.error('[sim] ❌ Remove device error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+}
+
 // ✅ Level Sensor
 // ✅ POST: Store sensor data from TRB245
 
@@ -4631,8 +4990,8 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
           const aT = parseTimestamp(a.Timestamp);
           const bT = parseTimestamp(b2.Timestamp);
           if (!aT || !bT) return 0;
-          return aT - bT;
-        });
+        return aT - bT;
+      });
 
         // 🔍 Extra debug to diagnose missing last-day data: show prev and first-in-bucket logs per device
         if (debug && lastLabels.has(b.label)) {

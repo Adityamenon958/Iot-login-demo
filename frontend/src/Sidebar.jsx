@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Col, Button, Nav, Spinner } from 'react-bootstrap';
-import { LayoutDashboard, FileText, Settings, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, FileText, Settings, LogOut, X, Activity } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { googleLogout } from '@react-oauth/google';
 import styles from './Sidebar.module.css';
@@ -192,6 +192,14 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             <Button className={`${styles.iconButton2} ${location.pathname === '/dashboard/managecompany' ? styles.active2 : ''}`} onClick={() => navigate('/dashboard/managecompany')}>
               <HiOutlineOfficeBuilding size={25} className={`${styles.navText} me-2`} />
               <div className={`${styles.Text} text-nowrap`}>Manage Company</div>
+            </Button>
+          )}
+
+          {/* ✅ Simulator - Superadmin only in production */}
+          {role === "superadmin" && process.env.NODE_ENV === 'production' && (
+            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/simulator' ? styles.active : ''}`} onClick={() => navigate('/dashboard/simulator')}>
+              <Activity size={20} className="me-2" />
+              Simulator
             </Button>
           )}
 

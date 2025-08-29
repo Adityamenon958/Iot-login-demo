@@ -19,6 +19,7 @@ import DynamicDb from './components/DynamicDb';
 import CraneDashboard from './pages/CraneDashboard';
 import CraneOverview from './pages/CraneOverview';
 import ElevatorOverview from './pages/ElevatorOverview';
+import Simulator from './pages/Simulator';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,11 @@ function App() {
             <Subscription />
           </RouteGuard>
         } />
+        
+        {/* ✅ Simulator Route - Superadmin only in production */}
+        {process.env.NODE_ENV === 'production' && (
+          <Route path="simulator" element={<Simulator />} />
+        )}
       </Route>
     </Routes>
   );
