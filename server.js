@@ -197,21 +197,20 @@ function convertISTToUTC(istTime) {
 }
 
 // Create day boundaries for IST regardless of host timezone
-function getDateBoundary(date, isStart = true) {
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const d = date.getDate();
-  if (isStart) {
-    // 00:00:00 IST == previous day 18:30:00 UTC
-    return new Date(Date.UTC(y, m, d, -5, -30, 0));
-  } else {
-    // 23:59:59 IST == same day 18:29:59 UTC
-    return new Date(Date.UTC(y, m, d, 18, 29, 59));
-  }
-}
+
 
 // ✅ NEW: IST helpers for timezone-agnostic date parsing
 const IST_OFFSET_MIN = 330; // +05:30
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +05:30 in milliseconds
+
+function getISTDateComponentsFromUtcDate(utcDate) {
+  const istDate = new Date(utcDate.getTime() + IST_OFFSET_MS);
+  return {
+    year: istDate.getUTCFullYear(),
+    month: istDate.getUTCMonth(), // 0-indexed
+    day: istDate.getUTCDate()
+  };
+}
 
 function istStartUtcFromYMD(y, m, d) {
   // 00:00:00 IST for that date, expressed in UTC
@@ -1300,10 +1299,11 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     });
 
     // ✅ Calculate period-based metrics (working, maintenance, idle)
-    const todayBoundary = getDateBoundary(now, true);
+    const { year: nowYear, month: nowMonth, day: nowDay } = getISTDateComponentsFromUtcDate(now);
+    const todayBoundary = istStartUtcFromYMD(nowYear, nowMonth, nowDay);
     const weekAgo = new Date(todayBoundary.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const periodMonthStart = getDateBoundary(new Date(now.getFullYear(), now.getMonth(), 1), true); // ✅ First day of current month at IST midnight
-    const yearStart = getDateBoundary(new Date(now.getFullYear(), 0, 1), true); // ✅ Jan 1st at IST midnight
+    const periodMonthStart = istStartUtcFromYMD(nowYear, nowMonth, 1); // ✅ First day of current month at IST midnight
+    const yearStart = istStartUtcFromYMD(nowYear, 0, 1); // ✅ Jan 1st at IST midnight
     
     // Time boundaries calculated for period calculations
 
@@ -2961,9 +2961,10 @@ app.get("/api/crane/daily-stats/:deviceId", authenticateToken, async (req, res) 
       return res.status(403).json({ error: "Device not authorized" });
     }
     
-    // ✅ Get today's date range in IST consistently (use same basis as parseTimestamp/getDateBoundary)
+    // ✅ Get today's date range in IST consistently (use same basis as parseTimestamp/istStartUtcFromYMD)
     const now = new Date();
-    const startOfDay = getDateBoundary(now, true); // 00:00:00 IST
+    const { year: nowYear, month: nowMonth, day: nowDay } = getISTDateComponentsFromUtcDate(now);
+    const startOfDay = istStartUtcFromYMD(nowYear, nowMonth, nowDay); // 00:00:00 IST
     
     console.log('🔍 Date range:', { startOfDay, today: now });
     
@@ -4851,8 +4852,14 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
     if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
 
     // Date helpers
-    const toStartOfDay = (d) => getDateBoundary(d, true);
-    const toEndOfDay = (d) => getDateBoundary(d, false);
+    const toStartOfDay = (utcDate) => {
+      const { year, month, day } = getISTDateComponentsFromUtcDate(utcDate);
+      return istStartUtcFromYMD(year, month, day);
+    };
+    const toEndOfDay = (utcDate) => {
+      const { year, month, day } = getISTDateComponentsFromUtcDate(utcDate);
+      return istEndUtcFromYMD(year, month, day);
+    };
 
     // Range
     const now = getCurrentTimeInIST();
@@ -4873,9 +4880,13 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
         rangeEndISO: rangeEnd.toISOString()
       });
     } else {
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      rangeStart = toStartOfDay(new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1));
-      rangeEnd = toEndOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      const { year: istNowYear, month: istNowMonth } = getISTDateComponentsFromUtcDate(now);
+
+      // Calculate the start of the month 6 months ago (IST)
+      rangeStart = istStartUtcFromYMD(istNowYear, istNowMonth - 5, 1);
+
+      // Calculate the end of the current month (IST)
+      rangeEnd = istEndUtcFromYMD(istNowYear, istNowMonth + 1, 0); // Day 0 of next month is last day of current month
     }
 
     if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
@@ -4902,43 +4913,58 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
     if (mode === 'daily') {
       let cursor = toStartOfDay(rangeStart);
       while (cursor <= rangeEnd) {
-        const dayStart = toStartOfDay(cursor);
-        const dayEnd = toEndOfDay(cursor);
+        const { year: cY, month: cM, day: cD } = getISTDateComponentsFromUtcDate(cursor);
+        const dayStart = istStartUtcFromYMD(cY, cM, cD);
+        const dayEnd = istEndUtcFromYMD(cY, cM, cD);
         buckets.push({
           start: dayStart,
           end: dayEnd,
           label: dayStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })
         });
-        cursor = new Date(cursor.getTime() + msPerDay);
+        // Advance cursor to the start of the next IST day
+        cursor = istStartUtcFromYMD(cY, cM, cD + 1);
       }
     } else if (mode === 'weekly') {
       let cursor = toStartOfDay(rangeStart);
       while (cursor <= rangeEnd) {
-        const weekStart = toStartOfDay(cursor);
-        const weekEnd = toEndOfDay(new Date(cursor.getTime() + 6 * msPerDay));
+        const { year: cY, month: cM, day: cD } = getISTDateComponentsFromUtcDate(cursor);
+        const weekStart = istStartUtcFromYMD(cY, cM, cD);
+        const weekEnd = istEndUtcFromYMD(cY, cM, cD + 6); // End of 7th day (current day + 6)
         buckets.push({
           start: weekStart,
           end: weekEnd > rangeEnd ? rangeEnd : weekEnd,
           label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}`
         });
-        cursor = new Date(cursor.getTime() + 7 * msPerDay);
+        // Advance cursor to the start of the next IST week
+        cursor = istStartUtcFromYMD(cY, cM, cD + 7);
       }
     } else {
       // ✅ FIXED: Use IST calendar dates for bucket generation
-      const IST_OFFSET_MIN = 330;
-      const istRangeStart = new Date(rangeStart.getTime() + IST_OFFSET_MIN * 60 * 1000);
-      const istRangeEnd = new Date(rangeEnd.getTime() + IST_OFFSET_MIN * 60 * 1000);
-      let cursor = new Date(Date.UTC(istRangeStart.getUTCFullYear(), istRangeStart.getUTCMonth(), 1));
-      const lastMonth = new Date(Date.UTC(istRangeEnd.getUTCFullYear(), istRangeEnd.getUTCMonth(), 1));
-      while (cursor <= lastMonth) {
-        const monthStartWall = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-        const monthEndWall = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-        const ms = getDateBoundary(monthStartWall, true);
-        let me = getDateBoundary(monthEndWall, false);
-        if (me > rangeEnd) me = rangeEnd;
-        const label = ms.toLocaleString('en-GB', { month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
-        buckets.push({ start: ms, end: me, label });
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const { year: rsY, month: rsM } = getISTDateComponentsFromUtcDate(rangeStart);
+      const { year: reY, month: reM } = getISTDateComponentsFromUtcDate(rangeEnd);
+
+      let cursorISTYear = rsY;
+      let cursorISTMonth = rsM;
+
+      while (true) {
+        const monthStart = istStartUtcFromYMD(cursorISTYear, cursorISTMonth, 1);
+        let monthEnd = istEndUtcFromYMD(cursorISTYear, cursorISTMonth + 1, 0); // Day 0 of next month is last day of current month
+
+        if (monthStart > rangeEnd) break; // Stop if the current month starts after the overall range ends
+
+        if (monthEnd > rangeEnd) monthEnd = rangeEnd; // Clamp monthEnd to overall rangeEnd
+
+        const label = monthStart.toLocaleString('en-GB', { month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+        buckets.push({ start: monthStart, end: monthEnd, label });
+
+        // Move to the next month (IST)
+        cursorISTMonth++;
+        if (cursorISTMonth > 11) {
+          cursorISTMonth = 0;
+          cursorISTYear++;
+        }
+        // Break condition for the loop
+        if (istStartUtcFromYMD(cursorISTYear, cursorISTMonth, 1) > rangeEnd) break;
       }
     }
 
@@ -5103,239 +5129,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
 
-// 🔁 RESTORED LATE DUPLICATE: /api/crane/timeseries-stats (per user request)
-// NOTE: This route is registered AFTER the static and catch‑all handlers and may be shadowed.
-app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
-  try {
-    console.log('🔍 [timeseries] Incoming request', { path: req.path, query: req.query, user: req.user ? { role: req.user.role, companyName: req.user.companyName } : null });
-    const { role, companyName } = req.user;
-    const { cranes, start, end, granularity } = req.query;
-    const debug = req.query.debug === '1' || req.query.debug === 'true';
 
-    // Company scope
-    const companyFilter = role !== "superadmin" ? { craneCompany: companyName } : {};
-
-    // ✅ Build allowlist from Device collection (admin = own company, superadmin = all)
-    const deviceQuery = role !== "superadmin" ? { companyName } : {};
-    const allowedDevices = await Device.find(deviceQuery).lean();
-    const allowedById = new Set(allowedDevices.map(d => d.deviceId));
-
-    // Devices scoped to allowlist
-    const allDevicesRaw = await CraneLog.distinct("DeviceID", companyFilter);
-    const allDevices = allDevicesRaw.filter(id => allowedById.has(id));
-    const requested = (cranes || "").split(',').map(s => s.trim()).filter(Boolean);
-    const selectedDevices = requested.length > 0 ? allDevices.filter(id => requested.includes(id)) : allDevices;
-    if (selectedDevices.length === 0) return res.json({ granularity: "monthly", points: [] });
-
-    // Date helpers
-    const toStartOfDay = (d) => getDateBoundary(d, true);
-    const toEndOfDay = (d) => getDateBoundary(d, false);
-
-    // Range
-    const now = getCurrentTimeInIST();
-    let rangeStart, rangeEnd;
-    if (start && end) {
-      const [ys, ms, ds] = start.split('-').map(Number);
-      const [ye, me, de] = end.split('-').map(Number);
-      // ✅ FIXED: Use IST helpers for timezone-agnostic date parsing
-      rangeStart = istStartUtcFromYMD(ys, ms - 1, ds);
-      rangeEnd = istEndUtcFromYMD(ye, me - 1, de);
-      if (rangeEnd > now) rangeEnd = now;
-      
-      // ✅ DEBUG: Log the resolved boundaries
-      console.log('[timeseries] parsed range (IST)', {
-        startParam: start, 
-        endParam: end,
-        rangeStartISO: rangeStart.toISOString(),
-        rangeEndISO: rangeEnd.toISOString()
-      });
-    } else {
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      rangeStart = toStartOfDay(new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1));
-      rangeEnd = toEndOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-    }
-
-    if (rangeStart > rangeEnd) return res.json({ granularity: "monthly", points: [] });
-
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const rangeDays = Math.max(1, Math.ceil((toStartOfDay(rangeEnd) - toStartOfDay(rangeStart)) / msPerDay) + 1);
-    let mode = (granularity || 'auto').toLowerCase();
-    if (mode === 'auto') {
-      if (rangeDays <= 31) mode = 'daily';
-      else if (rangeDays <= 180) mode = 'weekly';
-      else mode = 'monthly';
-    }
-
-    if (debug) {
-      console.log('🔍 [timeseries][debug] range', {
-        mode,
-        rangeStart: rangeStart.toISOString(),
-        rangeEnd: rangeEnd.toISOString()
-      });
-    }
-
-    // Buckets in IST
-    const buckets = [];
-    if (mode === 'daily') {
-      let cursor = toStartOfDay(rangeStart);
-      while (cursor <= rangeEnd) {
-        const dayStart = toStartOfDay(cursor);
-        const dayEnd = toEndOfDay(cursor);
-        buckets.push({
-          start: dayStart,
-          end: dayEnd,
-          label: dayStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })
-        });
-        cursor = new Date(cursor.getTime() + msPerDay);
-      }
-    } else if (mode === 'weekly') {
-      let cursor = toStartOfDay(rangeStart);
-      while (cursor <= rangeEnd) {
-        const weekStart = toStartOfDay(cursor);
-        const weekEnd = toEndOfDay(new Date(cursor.getTime() + 6 * msPerDay));
-        buckets.push({
-          start: weekStart,
-          end: weekEnd > rangeEnd ? rangeEnd : weekEnd,
-          label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}`
-        });
-        cursor = new Date(cursor.getTime() + 7 * msPerDay);
-      }
-    } else {
-      // ✅ FIXED: Use IST calendar dates for bucket generation
-      const IST_OFFSET_MIN = 330;
-      const istRangeStart = new Date(rangeStart.getTime() + IST_OFFSET_MIN * 60 * 1000);
-      const istRangeEnd = new Date(rangeEnd.getTime() + IST_OFFSET_MIN * 60 * 1000);
-      let cursor = new Date(Date.UTC(istRangeStart.getUTCFullYear(), istRangeStart.getUTCMonth(), 1));
-      const lastMonth = new Date(Date.UTC(istRangeEnd.getUTCFullYear(), istRangeEnd.getUTCMonth(), 1));
-      while (cursor <= lastMonth) {
-        const monthStartWall = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-        const monthEndWall = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-        const ms = getDateBoundary(monthStartWall, true);
-        let me = getDateBoundary(monthEndWall, false);
-        if (me > rangeEnd) me = rangeEnd;
-        const label = ms.toLocaleString('en-GB', { month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
-        buckets.push({ start: ms, end: me, label });
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      }
-    }
-
-    if (debug) {
-      console.log('🔍 [timeseries][debug] lastBuckets', buckets.slice(-3).map(b => ({
-        label: b.label,
-        start: b.start.toISOString(),
-        end: b.end.toISOString()
-      })));
-    }
-
-    const lastLabels = new Set(buckets.slice(-3).map(b => b.label));
-
-    const points = [];
-
-    // Aggregate by bucket in IST using parseTimestamp
-    for (const b of buckets) {
-      let usage = 0;
-      let maint = 0;
-      let totalBucketLogs = 0;
-
-      for (const deviceId of selectedDevices) {
-        const deviceFilter = { ...companyFilter, DeviceID: deviceId };
-        const deviceLogs = await CraneLog.find(deviceFilter).lean();
-
-        const bucketLogs = deviceLogs.filter(log => {
-          const t = parseTimestamp(log.Timestamp);
-          return t && t >= b.start && t <= b.end;
-        });
-        totalBucketLogs += bucketLogs.length;
-        if (bucketLogs.length === 0) continue;
-
-        bucketLogs.sort((a, b2) => {
-          const aT = parseTimestamp(a.Timestamp);
-          const bT = parseTimestamp(b2.Timestamp);
-          if (!aT || !bT) return 0;
-          return aT - bT;
-        });
-
-        // 🔍 Extra debug to diagnose missing last-day data: show prev and first-in-bucket logs per device
-        if (debug && lastLabels.has(b.label)) {
-          let prevLog = null;
-          for (const log of deviceLogs) {
-            const t = parseTimestamp(log.Timestamp);
-            if (t && t < b.start) {
-              if (!prevLog) {
-                prevLog = log;
-              } else {
-                const prevT = parseTimestamp(prevLog.Timestamp);
-                if (prevT && t > prevT) prevLog = log;
-              }
-            }
-          }
-          const firstInBucket = bucketLogs.length > 0 ? bucketLogs[0] : null;
-          const prevTs = prevLog ? parseTimestamp(prevLog.Timestamp) : null;
-          const firstTs = firstInBucket ? parseTimestamp(firstInBucket.Timestamp) : null;
-          console.log('🔍 [timeseries][debug] deviceBucketEdges', {
-            deviceId,
-            bucketLabel: b.label,
-            bucketStart: b.start.toISOString(),
-            bucketEnd: b.end.toISOString(),
-            prevLog: prevLog ? { tsISO: prevTs ? prevTs.toISOString() : null, raw: prevLog.Timestamp, DI1: prevLog.DigitalInput1, DI2: prevLog.DigitalInput2 } : null,
-            firstInBucket: firstInBucket ? { tsISO: firstTs ? firstTs.toISOString() : null, raw: firstInBucket.Timestamp, DI1: firstInBucket.DigitalInput1, DI2: firstInBucket.DigitalInput2 } : null,
-            totalBucketLogsForDevice: bucketLogs.length
-          });
-        }
-
-        const workingPeriods = calculateConsecutivePeriods(bucketLogs, 'working');
-        for (const p of workingPeriods) {
-          if (p.isOngoing) {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            let endClamp = getCurrentTimeInIST();
-            if (endClamp > b.end) endClamp = b.end;
-            const duration = calculatePeriodDuration(effectiveStart, endClamp, true);
-            usage += duration;
-          } else {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            const effectiveEnd = p.endTime > b.end ? b.end : p.endTime;
-            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
-            usage += duration;
-          }
-        }
-
-        const maintenancePeriods = calculateConsecutivePeriods(bucketLogs, 'maintenance');
-        for (const p of maintenancePeriods) {
-          if (p.isOngoing) {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            let endClamp = getCurrentTimeInIST();
-            if (endClamp > b.end) endClamp = b.end;
-            const duration = calculatePeriodDuration(effectiveStart, endClamp, true);
-            maint += duration;
-          } else {
-            const effectiveStart = p.startTime < b.start ? b.start : p.startTime;
-            const effectiveEnd = p.endTime > b.end ? b.end : p.endTime;
-            const duration = calculatePeriodDuration(effectiveStart, effectiveEnd, false);
-            maint += duration;
-          }
-        }
-      }
-
-      if (debug && lastLabels.has(b.label)) {
-        console.log('🔍 [timeseries][debug] bucketSummary', {
-          label: b.label,
-          start: b.start.toISOString(),
-          end: b.end.toISOString(),
-          totalBucketLogs,
-          usageHours: Math.round(usage * 100) / 100,
-          maintenanceHours: Math.round(maint * 100) / 100
-        });
-      }
-
-      points.push({ label: b.label, usageHours: Math.round(usage * 100) / 100, maintenanceHours: Math.round(maint * 100) / 100 });
-    }
-
-    return res.json({ granularity: mode, points });
-  } catch (err) {
-    console.error("❌ Timeseries stats fetch error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
