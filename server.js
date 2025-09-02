@@ -1261,10 +1261,14 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         maintenance: deviceMaintenanceHours.toFixed(2)
       });
 
-      // ✅ Update crane status counts
+      // ✅ Update crane status counts based on CURRENT live status
+      // Get the most recent log to check current status
+      const latestLog = deviceLogs[deviceLogs.length - 1];
+      const isCurrentlyInMaintenance = latestLog && latestLog.DigitalInput2 === '1';
+      
       if (hasOngoingSession) {
         activeCranes++;
-      } else if (deviceMaintenanceHours > 0) {
+      } else if (isCurrentlyInMaintenance) {
         underMaintenance++;
       } else {
         inactiveCranes++;
