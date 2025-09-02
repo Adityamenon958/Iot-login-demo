@@ -2054,8 +2054,12 @@ app.get("/api/crane/monthly-stats", authenticateToken, async (req, res) => {
       if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) {
         return res.json({ monthlyData: [] });
       }
-      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+      // ✅ FIXED: Use IST calendar dates for bucket generation
+      const IST_OFFSET_MIN = 330;
+      const istRangeStart = new Date(rangeStart.getTime() + IST_OFFSET_MIN * 60 * 1000);
+      const istRangeEnd = new Date(rangeEnd.getTime() + IST_OFFSET_MIN * 60 * 1000);
+      let cursor = new Date(Date.UTC(istRangeStart.getUTCFullYear(), istRangeStart.getUTCMonth(), 1));
+      const lastMonth = new Date(Date.UTC(istRangeEnd.getUTCFullYear(), istRangeEnd.getUTCMonth(), 1));
       while (cursor <= lastMonth) {
         const ms = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
         const me = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
@@ -4920,8 +4924,12 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
         cursor = new Date(cursor.getTime() + 7 * msPerDay);
       }
     } else {
-      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+      // ✅ FIXED: Use IST calendar dates for bucket generation
+      const IST_OFFSET_MIN = 330;
+      const istRangeStart = new Date(rangeStart.getTime() + IST_OFFSET_MIN * 60 * 1000);
+      const istRangeEnd = new Date(rangeEnd.getTime() + IST_OFFSET_MIN * 60 * 1000);
+      let cursor = new Date(Date.UTC(istRangeStart.getUTCFullYear(), istRangeStart.getUTCMonth(), 1));
+      const lastMonth = new Date(Date.UTC(istRangeEnd.getUTCFullYear(), istRangeEnd.getUTCMonth(), 1));
       while (cursor <= lastMonth) {
         const monthStartWall = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
         const monthEndWall = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
@@ -5193,8 +5201,12 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
         cursor = new Date(cursor.getTime() + 7 * msPerDay);
       }
     } else {
-      let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      const lastMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1);
+      // ✅ FIXED: Use IST calendar dates for bucket generation
+      const IST_OFFSET_MIN = 330;
+      const istRangeStart = new Date(rangeStart.getTime() + IST_OFFSET_MIN * 60 * 1000);
+      const istRangeEnd = new Date(rangeEnd.getTime() + IST_OFFSET_MIN * 60 * 1000);
+      let cursor = new Date(Date.UTC(istRangeStart.getUTCFullYear(), istRangeStart.getUTCMonth(), 1));
+      const lastMonth = new Date(Date.UTC(istRangeEnd.getUTCFullYear(), istRangeEnd.getUTCMonth(), 1));
       while (cursor <= lastMonth) {
         const monthStartWall = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
         const monthEndWall = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
