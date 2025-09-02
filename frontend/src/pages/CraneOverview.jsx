@@ -18,6 +18,7 @@ import MaintenanceUpdatesContent from '../components/MaintenanceUpdatesContent';
 import CraneDistanceChart from '../components/CraneDistanceChart';
 import CraneDetails from '../components/CraneDetails';
 import ExportModal from '../components/ExportModal';
+import CraneTooltip from '../components/CraneTooltip';
 // ✅ Import background refresh hook and components
 import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
 import { SmoothValueTransition, SmoothNumberTransition, SmoothTimeTransition } from '../components/SmoothValueTransition';
@@ -364,58 +365,80 @@ export default function CraneOverview() {
       // ✅ Other cards: Active/Inactive/Maintenance - show just the number
       displayValue = Math.max(0, card.value).toString();
     }
+
+    // ✅ Get crane IDs for tooltip (skip first card)
+    let craneIds = [];
+    if (card.id === 2) {
+      craneIds = currentData.activeCraneIds || [];
+    } else if (card.id === 3) {
+      craneIds = currentData.inactiveCraneIds || [];
+    } else if (card.id === 4) {
+      craneIds = currentData.maintenanceCraneIds || [];
+    }
+
+    // ✅ Create card content
+    const cardContent = (
+      <Card 
+        className="h-100 border-0 shadow-sm" 
+        style={{ 
+          background: card.gradient,
+          minHeight: '120px'
+        }}
+      >
+        <Card.Body className="p-3 text-white position-relative">
+          <div className="d-flex justify-content-between align-items-start">
+            <div>
+              <h3 className="mb-1 fw-bold" style={{ fontSize: '1.8rem' }}>
+                {!isInitialized ? '...' : (
+                  card.id === 1 ? (
+                    // ✅ Working Hours with smooth transitions
+                    <SmoothTimeTransition
+                      value={card.value}
+                      formatFunction={(value) => {
+                        const ongoingHours = card.ongoingHours || 0;
+                        if (ongoingHours > 0) {
+                          return `${formatHoursToHoursMinutes(Math.max(0, value))} + ${formatHoursToHoursMinutes(ongoingHours)} ongoing`;
+                        } else {
+                          return formatHoursToHoursMinutes(Math.max(0, value));
+                        }
+                      }}
+                    />
+                  ) : (
+                    // ✅ Other cards with smooth number transitions
+                    <SmoothNumberTransition
+                      value={Math.max(0, card.value)}
+                    />
+                  )
+                )}
+              </h3>
+              <p className="mb-0" style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                {!isInitialized ? '...' : card.title}
+              </p>
+              {/* ✅ Show subtitle for Working Hours card */}
+              {card.id === 1 && card.subtitle && (
+                <p className="mb-0 mt-1" style={{ fontSize: '0.65rem', opacity: 0.7 }}>
+                  {card.subtitle}
+                </p>
+              )}
+            </div>
+            <div style={{ opacity: 0.8 }}>
+              <IconComponent size={card.iconSize} />
+            </div>
+          </div>
+        </Card.Body>
+      </Card>
+    );
   
     return (
       <Col xs={6} sm={6} md={3} className="mb-2" key={card.id}>
-        <Card 
-          className="h-100 border-0 shadow-sm" 
-          style={{ 
-            background: card.gradient,
-            minHeight: '120px'
-          }}
-        >
-          <Card.Body className="p-3 text-white position-relative">
-            <div className="d-flex justify-content-between align-items-start">
-              <div>
-                <h3 className="mb-1 fw-bold" style={{ fontSize: '1.8rem' }}>
-                  {!isInitialized ? '...' : (
-                    card.id === 1 ? (
-                      // ✅ Working Hours with smooth transitions
-                      <SmoothTimeTransition
-                        value={card.value}
-                        formatFunction={(value) => {
-                          const ongoingHours = card.ongoingHours || 0;
-                          if (ongoingHours > 0) {
-                            return `${formatHoursToHoursMinutes(Math.max(0, value))} + ${formatHoursToHoursMinutes(ongoingHours)} ongoing`;
-                          } else {
-                            return formatHoursToHoursMinutes(Math.max(0, value));
-                          }
-                        }}
-                      />
-                    ) : (
-                      // ✅ Other cards with smooth number transitions
-                      <SmoothNumberTransition
-                        value={Math.max(0, card.value)}
-                      />
-                    )
-                  )}
-                </h3>
-                <p className="mb-0" style={{ fontSize: '0.75rem', opacity: 0.9 }}>
-                  {!isInitialized ? '...' : card.title}
-                </p>
-                {/* ✅ Show subtitle for Working Hours card */}
-                {card.id === 1 && card.subtitle && (
-                  <p className="mb-0 mt-1" style={{ fontSize: '0.65rem', opacity: 0.7 }}>
-                    {card.subtitle}
-                  </p>
-                )}
-              </div>
-              <div style={{ opacity: 0.8 }}>
-                <IconComponent size={card.iconSize} />
-              </div>
-            </div>
-          </Card.Body>
-        </Card>
+        {/* ✅ Add tooltip for cards 2, 3, and 4 (skip first card) */}
+        {card.id > 1 && craneIds.length > 0 ? (
+          <CraneTooltip craneIds={craneIds}>
+            {cardContent}
+          </CraneTooltip>
+        ) : (
+          cardContent
+        )}
       </Col>
     );
   };

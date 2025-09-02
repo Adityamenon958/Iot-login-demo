@@ -1075,6 +1075,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
         inactiveCranes: 0,
         underMaintenance: 0,
         craneDevices: [], // ✅ Add crane devices to response
+        // ✅ Add empty crane ID arrays for tooltips
+        activeCraneIds: [],
+        inactiveCraneIds: [],
+        maintenanceCraneIds: [],
         quickStats: {
           today: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
           thisWeek: { completed: 0, ongoing: 0, idle: 0, maintenance: 0 },
@@ -1103,6 +1107,11 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
     let activeCranes = 0;
     let inactiveCranes = 0;
     let underMaintenance = 0;
+    
+    // ✅ Initialize crane ID arrays for tooltips
+    let activeCraneIds = [];
+    let inactiveCraneIds = [];
+    let maintenanceCraneIds = [];
 
     // ✅ Process each crane device for current month
     for (const deviceId of craneDevices) {
@@ -1268,10 +1277,13 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       
       if (hasOngoingSession) {
         activeCranes++;
+        activeCraneIds.push(deviceId);
       } else if (isCurrentlyInMaintenance) {
         underMaintenance++;
+        maintenanceCraneIds.push(deviceId);
       } else {
         inactiveCranes++;
+        inactiveCraneIds.push(deviceId);
       }
     }
 
@@ -1444,6 +1456,10 @@ app.get("/api/crane/overview", authenticateToken, async (req, res) => {
       inactiveCranes,
       underMaintenance,
       craneDevices, // ✅ Add crane devices to response
+      // ✅ Add crane ID arrays for tooltips
+      activeCraneIds,
+      inactiveCraneIds,
+      maintenanceCraneIds,
       quickStats: {
         today: { completed: todayMetrics.working.completed, ongoing: todayMetrics.working.ongoing, maintenance: todayMetrics.maintenance.total, idle: todayMetrics.idle },
         thisWeek: { completed: weekMetrics.working.completed, ongoing: weekMetrics.working.ongoing, maintenance: todayMetrics.maintenance.total, idle: weekMetrics.idle },
