@@ -4633,33 +4633,24 @@ app.get('/api/crane/working-totals', authenticateToken, async (req, res) => {
       let logs = allLogs;
       if (startStr && endStr) {
         logs = allLogs.filter(log => {
-          // ✅ SIMPLE FIX: Use string-based date comparison to avoid timezone issues
-          const timestampParts = safeExtractTimestampParts(log.Timestamp);
-          if (!timestampParts) return false;
-          const logDate = timestampParts.datePart; // Get date part only (DD/MM/YYYY)
+          // ✅ FIXED: Use proper date object comparison instead of string comparison
+          const logTimestamp = parseTimestamp(log.Timestamp);
+          if (!logTimestamp) return false;
           
-          // Convert startStr (YYYY-MM-DD) to DD/MM/YYYY format for comparison
-          const [year, month, day] = startStr.split('-').map(Number);
-          const startDateFormatted = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
-          
-          // Convert endStr (YYYY-MM-DD) to DD/MM/YYYY format for comparison
-          const [yearEnd, monthEnd, dayEnd] = endStr.split('-').map(Number);
-          const endDateFormatted = `${dayEnd.toString().padStart(2, '0')}/${monthEnd.toString().padStart(2, '0')}/${yearEnd}`;
-          
-          // ✅ Debug: Log the comparison values
-          if (allLogs.length <= 5) { // Only log for first few logs to avoid spam
-            console.log(`🔍 [working-totals] String date comparison for ${deviceId}:`, {
+          // ✅ Debug: Log the comparison values for first few logs
+          if (allLogs.length <= 5) {
+            console.log(`🔍 [working-totals] Date comparison for ${deviceId}:`, {
               original: log.Timestamp,
-              logDate: logDate,
-              startDateFormatted: startDateFormatted,
-              endDateFormatted: endDateFormatted,
-              isAfterStart: logDate >= startDateFormatted,
-              isBeforeEnd: logDate <= endDateFormatted,
-              included: (logDate >= startDateFormatted && logDate <= endDateFormatted)
+              logTimestamp: logTimestamp.toISOString(),
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              isAfterStart: logTimestamp >= startDate,
+              isBeforeEnd: logTimestamp <= endDate,
+              included: (logTimestamp >= startDate && logTimestamp <= endDate)
             });
           }
           
-          return logDate >= startDateFormatted && logDate <= endDateFormatted;
+          return logTimestamp >= startDate && logTimestamp <= endDate;
         });
         
         // ✅ Debug logging
