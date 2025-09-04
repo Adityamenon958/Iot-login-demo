@@ -7,7 +7,10 @@ const FloatingActionButton = ({ onFiltersClick, onGenerateReportClick }) => {
   const [tooltipText, setTooltipText] = useState('');
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isHoveringButton, setIsHoveringButton] = useState(false);
+  const [isHoveringTooltip, setIsHoveringTooltip] = useState(false);
   const buttonRef = useRef(null);
+  const tooltipTimeoutRef = useRef(null);
 
   const handleToggle = () => {
     setIsExpanded(!isExpanded);
@@ -35,12 +38,75 @@ const FloatingActionButton = ({ onFiltersClick, onGenerateReportClick }) => {
       y: rect.bottom + 10
     });
     setTooltipText(text);
+    setIsHoveringButton(true);
     setShowTooltip(true);
+    
+    // Clear any existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
   };
 
   const handleMouseLeave = () => {
-    setShowTooltip(false);
+    setIsHoveringButton(false);
+    
+    // Clear any existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    
+    // Hide tooltip after a short delay if not hovering over tooltip
+    tooltipTimeoutRef.current = setTimeout(() => {
+      if (!isHoveringTooltip) {
+        setShowTooltip(false);
+      }
+    }, 150);
   };
+
+  const handleTooltipMouseEnter = () => {
+    setIsHoveringTooltip(true);
+    
+    // Clear any existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
+  };
+
+  const handleTooltipMouseLeave = () => {
+    setIsHoveringTooltip(false);
+    setShowTooltip(false);
+    
+    // Clear any existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Close tooltip when clicking anywhere
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowTooltip(false);
+      setIsHoveringButton(false);
+      setIsHoveringTooltip(false);
+    };
+
+    if (showTooltip) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showTooltip]);
 
   return (
     <div className={styles.fabContainer}>
@@ -98,6 +164,8 @@ const FloatingActionButton = ({ onFiltersClick, onGenerateReportClick }) => {
             transform: 'translateX(-50%)',
             zIndex: 99999
           }}
+          onMouseEnter={handleTooltipMouseEnter}
+          onMouseLeave={handleTooltipMouseLeave}
         >
           {tooltipText}
           <div className={styles.tooltipArrow}></div>

@@ -573,8 +573,8 @@ export default function CraneOverview() {
             onGenerateReportClick={handleExportModal}
           />
           
-          {/* ✅ Hidden FiltersButton controlled by FAB - positioned on right */}
-          <div style={{ position: 'absolute', right: 0, top: 0, visibility: 'hidden' }}>
+          {/* ✅ Hidden FiltersButton controlled by FAB - positioned with proper spacing */}
+          <div style={{ position: 'absolute', right: '1rem', top: 0, visibility: 'hidden' }}>
             <FiltersButton
               ref={filtersButtonRef}
               cranes={availableCranes}
