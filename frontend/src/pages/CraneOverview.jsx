@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Col, Row, Card, Button, Form } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 import styles from "./MainContent.module.css";
 // ✅ Import icons from react-icons
 import { PiCraneDuotone, PiTimerDuotone, PiBandaidsFill } from "react-icons/pi";
@@ -56,6 +57,8 @@ export default function CraneOverview() {
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedMaintenanceMonth, setSelectedMaintenanceMonth] = useState('');
   const [selectedMaintenanceYear, setSelectedMaintenanceYear] = useState('');
+  const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
+  const [userRole, setUserRole] = useState('user');
   
   // ✅ Ref for FiltersButton
   const filtersButtonRef = useRef();
@@ -64,6 +67,9 @@ export default function CraneOverview() {
   const [showRefreshTooltip, setShowRefreshTooltip] = useState(false);
   const [refreshTooltipPosition, setRefreshTooltipPosition] = useState({ x: 0, y: 0 });
   const refreshRef = useRef(null);
+  
+  // ✅ Navigation hook
+  const navigate = useNavigate();
 
   // ✅ Background refresh hook for dashboard data (restored)
   const {
@@ -124,6 +130,25 @@ export default function CraneOverview() {
     setIsMaintenanceCollapsed(!isMaintenanceCollapsed);
   };
 
+  // ✅ Fetch user info for subscription status
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const response = await axios.get('/api/auth/userinfo', { 
+          withCredentials: true 
+        });
+        setSubscriptionStatus(response.data.subscriptionStatus || 'inactive');
+        setUserRole(response.data.role || 'user');
+      } catch (error) {
+        console.error('Error fetching user info:', error);
+        setSubscriptionStatus('inactive');
+        setUserRole('user');
+      }
+    };
+    
+    fetchUserInfo();
+  }, []);
+
   // ✅ Handle month selection change
   const handleMonthChange = (event) => {
     const [month, year] = event.target.value.split('-').map(Number);
@@ -136,6 +161,33 @@ export default function CraneOverview() {
     const [month, year] = event.target.value.split('-').map(Number);
     setSelectedMaintenanceMonth(month);
     setSelectedMaintenanceYear(year);
+  };
+
+  // ✅ Handle card clicks
+  const handleCardClick = (cardId) => {
+    // Check if subscription is active or user is superadmin
+    const isAccessible = subscriptionStatus === 'active' || userRole === 'superadmin';
+    
+    if (!isAccessible) {
+      return; // Do nothing if subscription is inactive
+    }
+
+    if (cardId === 2) {
+      // Card 2: Active Cranes - Navigate to Manage Device page
+      navigate('/dashboard/adddevice');
+    } else if (cardId === 4) {
+      // Card 4: Under Maintenance - Expand maintenance component
+      if (isMaintenanceCollapsed) {
+        setIsMaintenanceCollapsed(false);
+        // Scroll to maintenance component after a short delay
+        setTimeout(() => {
+          const maintenanceElement = document.querySelector('[data-maintenance-component]');
+          if (maintenanceElement) {
+            maintenanceElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 300);
+      }
+    }
   };
 
   // ✅ Helper function to get formatted date labels for Quick Statistics (restored)
@@ -376,14 +428,20 @@ export default function CraneOverview() {
       craneIds = currentData.maintenanceCraneIds || [];
     }
 
+    // ✅ Check if card is clickable
+    const isClickable = (card.id === 2 || card.id === 4) && (subscriptionStatus === 'active' || userRole === 'superadmin');
+
     // ✅ Create card content
     const cardContent = (
       <Card 
-        className="h-100 border-0 shadow-sm" 
+        className={`h-100 border-0 shadow-sm ${isClickable ? 'clickable-card' : ''}`}
         style={{ 
           background: card.gradient,
-          minHeight: '120px'
+          minHeight: '120px',
+          cursor: isClickable ? 'pointer' : 'default',
+          transition: 'all 0.2s ease'
         }}
+        onClick={() => handleCardClick(card.id)}
       >
         <Card.Body className="p-3 text-white position-relative">
           <div className="d-flex justify-content-between align-items-start">
@@ -648,7 +706,7 @@ export default function CraneOverview() {
           </Card>
 
           {/* Maintenance Updates - Now inside left column */}
-          <Card className="border-0 shadow-sm mt-2">
+          <Card className="border-0 shadow-sm mt-2" data-maintenance-component>
             <Card.Header 
               className={`py-2 bg-white border-bottom ${styles.collapsibleHeader}`}
               onClick={toggleMaintenanceCollapse}

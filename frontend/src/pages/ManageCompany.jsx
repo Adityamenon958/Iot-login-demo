@@ -808,51 +808,55 @@ const AddUser = () => {
       <style jsx>{`
         .modern-tabs-container {
           background: #ffffff;
-          border-radius: 1.625rem;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+          border-radius: 1.5rem;
+          box-shadow: 0 8px 24px rgba(77, 179, 179, 0.1);
           padding: 2rem;
           margin: 1rem 0;
+          border: 1px solid rgba(77, 179, 179, 0.1);
         }
 
         /* ✅ Hover effects for action buttons */
         .edit-btn:hover {
-          color: #1e40af !important;
+          color: #4db3b3 !important;
           transform: scale(1.1);
           transition: all 0.2s ease;
         }
 
         .delete-btn:hover {
-          color: #b91c1c !important;
+          color: #dc3545 !important;
           transform: scale(1.1);
           transition: all 0.2s ease;
         }
 
         .modern-tabs .nav-tabs {
-          border-bottom: 2px solid #f0f4f8;
+          border-bottom: 2px solid #e9ecef;
           margin-bottom: 2rem;
         }
 
         .modern-tabs .nav-link {
           border: none;
-          border-radius: 0.75rem 0.75rem 0 0;
+          border-radius: 1rem 1rem 0 0;
           padding: 1rem 1.5rem;
           font-weight: 600;
-          color: #64748b;
+          color: #6c757d;
           transition: all 0.3s ease;
           margin-right: 0.5rem;
+          background: transparent;
         }
 
         .modern-tabs .nav-link:hover {
-          background: #f8fafc;
-          color: #3b82f6;
+          background: rgba(77, 179, 179, 0.1);
+          color: #4db3b3;
           border-color: transparent;
+          transform: translateY(-2px);
         }
 
         .modern-tabs .nav-link.active {
-          background: #eff6ff;
-          color: #3b82f6;
+          background: rgba(77, 179, 179, 0.15);
+          color: #4db3b3;
           border-color: transparent;
-          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+          box-shadow: 0 4px 12px rgba(77, 179, 179, 0.2);
+          transform: translateY(-2px);
         }
 
         .modern-tab-content {

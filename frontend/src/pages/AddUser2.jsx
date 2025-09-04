@@ -11,7 +11,7 @@ const AddUser = ({ children }) => {
       try {
         const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
         const { role } = res.data;
-        setIsAuthorized(role === "admin");
+        setIsAuthorized(role === "admin" || role === "superadmin");
       } catch (err) {
         setIsAuthorized(false);
       }

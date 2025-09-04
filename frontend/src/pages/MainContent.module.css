@@ -734,3 +734,14 @@
   background-color: #f8f9fa !important;
 }
 
+/* ✅ Clickable card styles */
+.clickable-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+.clickable-card:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+}
+

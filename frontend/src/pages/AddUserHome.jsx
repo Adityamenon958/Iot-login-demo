@@ -57,7 +57,7 @@ export default function AddUserHome() {
         const res = await axios.get('/api/auth/userinfo', { withCredentials: true });
         const { companyName, role, subscriptionStatus } = res.data;
 
-        if (role !== "admin" || subscriptionStatus !== "active") {
+        if ((role !== "admin" && role !== "superadmin") || (role === "admin" && subscriptionStatus !== "active")) {
           console.warn("Unauthorized access or inactive subscription ❌");
           navigate('/dashboard');
           return;
@@ -518,7 +518,6 @@ export default function AddUserHome() {
             </Form.Group>
             
             <Button 
-              variant="primary" 
               type="submit" 
               className={`w-100 signIn1 mb-2 ${validationStyles.submitButton}`}
               disabled={!validation.email.isValid || !validation.password.isValid}

@@ -48,24 +48,132 @@
 }
 
 .std_button{
-  border-radius: 30px;
-  height: 45px;
+  background-color: #4db3b3;
+  border: none;
+  border-radius: 1rem;
+  height: 3rem;
+  font-weight: 600;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
 }
 
+.std_button:hover {
+  background-color: #3a9a9a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(77, 179, 179, 0.3);
+  color: white;
+}
+
+.std_button:focus {
+  background-color: #3a9a9a;
+  box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25);
+  color: white;
+}
+
+.std_button:active {
+  background-color: #2d7a7a;
+  transform: translateY(0);
+  color: white;
+}
+
+/* ✅ Manage Company Modal - Teal Theme */
 .custom_modal1 .modal-content {
-  border-radius: 30px !important;
-
+  border-radius: 2rem !important;
+  border: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
+
+.custom_modal1 .modal-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e9ecef;
+  border-radius: 2rem 2rem 0 0 !important;
+  padding: 1.5rem 2rem 1rem 2rem;
+}
+
+.custom_modal1 .modal-title {
+  color: #444;
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+
+.custom_modal1 .modal-body {
+  background-color: #ffffff;
+  padding: 1rem 2rem 2rem 2rem;
+  border-radius: 0 0 2rem 2rem !important;
+}
+
+.custom_modal1 .btn-close {
+  background: none;
+  border: none;
+  color: #4db3b3;
+  font-size: 1.2rem;
+  padding: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.custom_modal1 .btn-close:hover,
+.custom_modal1 .btn-close:focus {
+  color: #3a9a9a;
+  background-color: rgba(77, 179, 179, 0.1);
+  border-radius: 50%;
+}
+
 .custom_label1 {
-  color: #333333;
-}
-.custom_input1 {
-  height: 34px !important;
+  color: #444;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
 }
 
-.signIn1{
-  height: 40px;
-  border-radius: 30px;
+.custom_input1 {
+  border: 2px solid #e9ecef;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  height: auto !important;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.custom_input1:focus {
+  border-color: #4db3b3;
+  box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25);
+  outline: none;
+}
+
+.signIn1 {
+  background-color: #4db3b3 !important;
+  border: none !important;
+  border-radius: 1rem !important;
+  height: 3rem !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  transition: all 0.2s ease !important;
+  color: white !important;
+}
+
+.signIn1:hover {
+  background-color: #3a9a9a !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(77, 179, 179, 0.3) !important;
+  color: white !important;
+}
+
+.signIn1:focus {
+  background-color: #3a9a9a !important;
+  box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25) !important;
+  color: white !important;
+}
+
+.signIn1:active {
+  background-color: #2d7a7a !important;
+  transform: translateY(0) !important;
+  color: white !important;
+}
+
+.signIn1:disabled {
+  background-color: #94a3b8 !important;
+  color: white !important;
+  opacity: 0.6 !important;
 }
 
 /* Modern Pagination Styling */

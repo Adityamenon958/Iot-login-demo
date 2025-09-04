@@ -221,7 +221,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
 
           {/* ✅ Add Users - Check access for non-superadmin OR allow superadmin */}
           {((role === "admin" && companyAccess.addUsers) || role === "superadmin") && (
-            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adduser' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adduser')} disabled={subscriptionStatus !== 'active'}>
+            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adduser' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adduser')} disabled={subscriptionStatus !== 'active' && role !== 'superadmin'}>
               <UserPlus size={20} className={`${styles.navText} me-2`} />
               Manage Users
             </Button>
@@ -229,7 +229,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
 
           {/* ✅ Add Device - Check access for non-superadmin */}
           {((role === "admin" && companyAccess.addDevices) || role === "superadmin") && (
-            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adddevice')} disabled={subscriptionStatus !== 'active'}>
+            <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/adddevice' ? styles.active : ''}`} onClick={() => navigate('/dashboard/adddevice')} disabled={subscriptionStatus !== 'active' && role !== 'superadmin'}>
               <PlusSquare size={20} className="me-2" />
               Manage Device
             </Button>

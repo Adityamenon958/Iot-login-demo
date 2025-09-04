@@ -1,10 +1,11 @@
-/* Modern Dashboard Access Manager Styles */
+/* ✅ Modern Dashboard Access Manager - Teal Theme */
 .dashboardAccessContainer {
   background: #ffffff;
-  border-radius: 1.625rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(77, 179, 179, 0.1);
   padding: 2rem;
   margin: 1rem 0;
+  border: 1px solid rgba(77, 179, 179, 0.1);
 }
 
 .headerSection {
@@ -13,7 +14,7 @@
   align-items: center;
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
-  border-bottom: 2px solid #f0f4f8;
+  border-bottom: 2px solid #e9ecef;
 }
 
 .headerTitle {
@@ -22,30 +23,30 @@
   gap: 0.75rem;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #444;
 }
 
 .headerIcon {
   font-size: 1.75rem;
-  color: #3b82f6;
+  color: #4db3b3;
 }
 
 .saveAllButton {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #4db3b3 0%, #3a9a9a 100%);
   border: none;
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   padding: 0.75rem 1.5rem;
   font-weight: 600;
   color: white;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(77, 179, 179, 0.3);
   white-space: nowrap;
 }
 
 .saveAllButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  box-shadow: 0 6px 20px rgba(77, 179, 179, 0.4);
+  background: linear-gradient(135deg, #3a9a9a 0%, #2d7a7a 100%);
 }
 
 .saveAllButton:disabled {
@@ -56,17 +57,17 @@
 
 .companyCard {
   background: #ffffff;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #e9ecef;
   border-radius: 1rem;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(77, 179, 179, 0.05);
 }
 
 .companyCard:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.1);
+  border-color: #4db3b3;
+  box-shadow: 0 4px 16px rgba(77, 179, 179, 0.1);
   transform: translateY(-2px);
 }
 
@@ -76,7 +77,7 @@
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e9ecef;
   flex-wrap: wrap;
   gap: 1rem;
 }
@@ -84,7 +85,7 @@
 .companyName {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #444;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -93,28 +94,28 @@
 }
 
 .companyIcon {
-  color: #3b82f6;
+  color: #4db3b3;
   font-size: 1.5rem;
   flex-shrink: 0;
 }
 
 .saveButton {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #4db3b3 0%, #3a9a9a 100%);
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   padding: 0.5rem 1rem;
   font-weight: 600;
   color: white;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 8px rgba(77, 179, 179, 0.3);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .saveButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 12px rgba(77, 179, 179, 0.4);
+  background: linear-gradient(135deg, #3a9a9a 0%, #2d7a7a 100%);
 }
 
 .saveButton:disabled {
@@ -131,7 +132,7 @@
 
 .permissionItem {
   background: #f8fafc;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #e9ecef;
   border-radius: 0.75rem;
   padding: 1rem;
   transition: all 0.3s ease;
@@ -140,18 +141,18 @@
 }
 
 .permissionItem:hover {
-  border-color: #cbd5e1;
-  background: #f1f5f9;
+  border-color: #4db3b3;
+  background: rgba(77, 179, 179, 0.05);
 }
 
 .permissionItem.allowed {
-  border-color: #10b981;
-  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-color: #4db3b3;
+  background: linear-gradient(135deg, rgba(77, 179, 179, 0.1) 0%, rgba(77, 179, 179, 0.05) 100%);
 }
 
 .permissionItem.denied {
-  border-color: #ef4444;
-  background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%);
+  border-color: #dc3545;
+  background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(220, 53, 69, 0.05) 100%);
 }
 
 .permissionHeader {
@@ -201,31 +202,31 @@
 }
 
 .radioOption:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(77, 179, 179, 0.1);
 }
 
 .radioOption.allow {
-  color: #059669;
+  color: #4db3b3;
 }
 
 .radioOption.deny {
-  color: #dc2626;
+  color: #dc3545;
 }
 
 .radioOption input[type="radio"] {
   width: 1.2rem;
   height: 1.2rem;
-  accent-color: #3b82f6;
+  accent-color: #4db3b3;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .radioOption.allow input[type="radio"]:checked {
-  accent-color: #10b981;
+  accent-color: #4db3b3;
 }
 
 .radioOption.deny input[type="radio"]:checked {
-  accent-color: #ef4444;
+  accent-color: #dc3545;
 }
 
 .statusIndicator {
@@ -239,13 +240,13 @@
 }
 
 .statusIndicator.allowed {
-  background: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  background: #4db3b3;
+  box-shadow: 0 0 0 2px rgba(77, 179, 179, 0.2);
 }
 
 .statusIndicator.denied {
-  background: #ef4444;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+  background: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2);
 }
 
 .alertContainer {
@@ -260,15 +261,15 @@
 }
 
 .alertSuccess {
-  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
-  color: #065f46;
-  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, rgba(77, 179, 179, 0.1) 0%, rgba(77, 179, 179, 0.05) 100%);
+  color: #2d7a7a;
+  border-left: 4px solid #4db3b3;
 }
 
 .alertDanger {
-  background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%);
-  color: #991b1b;
-  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(220, 53, 69, 0.05) 100%);
+  color: #b02a37;
+  border-left: 4px solid #dc3545;
 }
 
 .loadingContainer {
@@ -278,12 +279,13 @@
   justify-content: center;
   padding: 3rem;
   background: #ffffff;
-  border-radius: 1.625rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(77, 179, 179, 0.1);
+  border: 1px solid rgba(77, 179, 179, 0.1);
 }
 
 .loadingSpinner {
-  color: #3b82f6;
+  color: #4db3b3;
   margin-bottom: 1rem;
 }
 
@@ -296,35 +298,36 @@
   text-align: center;
   padding: 3rem;
   background: #ffffff;
-  border-radius: 1.625rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(77, 179, 179, 0.1);
+  border: 1px solid rgba(77, 179, 179, 0.1);
 }
 
 .accessDeniedIcon {
   font-size: 3rem;
-  color: #ef4444;
+  color: #dc3545;
   margin-bottom: 1rem;
 }
 
 .accessDeniedTitle {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #444;
   margin-bottom: 1rem;
 }
 
 .accessDeniedText {
-  color: #64748b;
+  color: #6c757d;
   margin-bottom: 0.5rem;
 }
 
 .accessDeniedRole {
-  background: #f1f5f9;
+  background: rgba(77, 179, 179, 0.1);
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
   display: inline-block;
   font-weight: 600;
-  color: #374151;
+  color: #4db3b3;
   margin: 0.5rem;
 }
 
@@ -332,25 +335,26 @@
   text-align: center;
   padding: 3rem;
   background: #ffffff;
-  border-radius: 1.625rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(77, 179, 179, 0.1);
+  border: 1px solid rgba(77, 179, 179, 0.1);
 }
 
 .noCompaniesIcon {
   font-size: 3rem;
-  color: #f59e0b;
+  color: #4db3b3;
   margin-bottom: 1rem;
 }
 
 .noCompaniesTitle {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #444;
   margin-bottom: 1rem;
 }
 
 .noCompaniesText {
-  color: #64748b;
+  color: #6c757d;
 }
 
 /* Responsive Design */
