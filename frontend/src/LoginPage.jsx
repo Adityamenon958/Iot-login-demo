@@ -6,6 +6,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { SiGmail } from "react-icons/si";
 import { X } from 'lucide-react';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import "./LoginPage.css";
 import axios from 'axios';
 
@@ -14,6 +15,7 @@ const LoginPage = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // ✅ Updated Google Login flow
   const login = useGoogleLogin({
@@ -55,6 +57,10 @@ const LoginPage = () => {
 
   const handleEmailLogin = () => {
     setShowEmailModal(true);
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
   };
 
   const handleEmailLoginSubmit = async (e) => {
@@ -137,11 +143,15 @@ const LoginPage = () => {
         backdrop="static"
         className="custom_modal"
       >
-        <Modal.Header className="border-0 px-4 pt-4 d-flex justify-content-between align-items-center">
+        <Modal.Header className="border-0 d-flex justify-content-between align-items-center">
           <Modal.Title>Sign in</Modal.Title>
-          <Button variant="light" onClick={() => setShowEmailModal(false)} className="border-0">
+          <button 
+            onClick={() => setShowEmailModal(false)} 
+            className="btn-close"
+            aria-label="Close"
+          >
             <X size={20} />
-          </Button>
+          </button>
         </Modal.Header>
 
         <Modal.Body className="px-4 pb-4">
@@ -159,13 +169,23 @@ const LoginPage = () => {
 
             <Form.Group controlId="formPassword" className="mt-3">
               <Form.Label className="custom_label">Password</Form.Label>
-              <Form.Control
-                type="password"
-                placeholder="Password"
-                className="custom_input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <div className="password-input-wrapper">
+                <Form.Control
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  className="custom_input password-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={togglePasswordVisibility}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
+                </button>
+              </div>
             </Form.Group>
 
             <div className="text-end mt-2">

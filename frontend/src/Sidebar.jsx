@@ -10,6 +10,7 @@ import { PlusSquare } from 'lucide-react';
 import { MdOutlineSubscriptions } from "react-icons/md";
 import { Truck } from 'lucide-react';
 import { PiElevatorDuotone } from "react-icons/pi";
+import Dlogo from './assets/DashboardLogo.png';
 
 import axios from 'axios';
 
@@ -148,6 +149,21 @@ export default function Sidebar({ isOpen, closeSidebar }) {
   return (
     <div className={`${styles.sidebarWrapper} ${isOpen ? styles.open : ''}`} ref={sidebarRef}>
       <Col xs={12} md={3} lg={2} xl={2} className={`${styles.sidebar} p-0 pt-4`}>
+        {/* ✅ Company Branding Section */}
+        <div className={`${styles.sidebarBranding} px-3 mb-4`}>
+          <div className="d-flex align-items-center">
+            <img src={Dlogo} className={`${styles.sidebarLogo} me-2`} alt="Logo" />
+            <div className="d-flex flex-column">
+              <h5 className={`${styles.sidebarCompanyName} mb-0`}>
+                {companyName || 'Company'}
+              </h5>
+              <small className={`${styles.sidebarSubtitle}`}>
+                Internet Of Things
+              </small>
+            </div>
+          </div>
+        </div>
+
         <Nav className="flex-column align-items-start px-3">
           {/* ✅ Home - Always accessible */}
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard' ? styles.active : ''}`} onClick={() => navigate('/dashboard')}>

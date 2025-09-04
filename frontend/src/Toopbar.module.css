@@ -17,6 +17,49 @@
     color: #4db3b3;
   }
 
+  /* ✅ Burger Button Styles */
+  .burgerButton {
+    background-color: #4db3b3 !important;
+    border: none !important;
+    color: white !important;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(77, 179, 179, 0.2);
+  }
+
+  .burgerButton:hover {
+    background-color: #3a9a9a !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(77, 179, 179, 0.3);
+    color: white !important;
+  }
+
+  .burgerButton:focus {
+    background-color: #3a9a9a !important;
+    box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25) !important;
+    outline: none !important;
+    color: white !important;
+  }
+
+  .burgerButton:active {
+    background-color: #2d7a7a !important;
+    transform: translateY(0);
+    color: white !important;
+  }
+
+  .burgerButton:focus-visible {
+    background-color: #3a9a9a !important;
+    box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25) !important;
+    outline: none !important;
+    color: white !important;
+  }
+
+  .burgerButton:not(:disabled):not(.disabled):active {
+    background-color: #2d7a7a !important;
+    color: white !important;
+  }
+
   @media (min-width: 799px) {
     .burgerButton{
       display: none;

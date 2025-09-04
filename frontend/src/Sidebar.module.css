@@ -20,6 +20,41 @@
     border-bottom: 1px solid #ccc;
     width: 190px;
   }
+
+  /* ✅ Sidebar Branding Styles - Hidden on desktop */
+  .sidebarBranding {
+    display: none;
+  }
+
+  .sidebarLogo {
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .sidebarCompanyName {
+    color: #4db3b3;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  .sidebarSubtitle {
+    color: #6c757d;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+
+  /* ✅ Show branding only on mobile (below 800px) */
+  @media (max-width: 799px) {
+    .sidebarBranding {
+      display: block;
+      border-bottom: 1px solid #e9ecef;
+      padding-bottom: 1rem;
+    }
+  }
   
   
   .iconButton {
