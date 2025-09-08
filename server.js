@@ -981,10 +981,12 @@ app.post("/api/elevators/log", async (req, res) => {
     }
 
     const docs = items.map((it) => {
+      // Parse timestamp (Unix seconds to Date, like CraneLog)
       const rawTs = it.Timestamp != null ? String(it.Timestamp) : "";
       const tsNum = Number(rawTs);
       const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
 
+      // Parse data array
       let parsedData = [];
       if (Array.isArray(it.data)) {
         parsedData = it.data.map((n) => Number(n) || 0);
@@ -995,14 +997,13 @@ app.post("/api/elevators/log", async (req, res) => {
         } catch {}
       }
 
+      // Store data only once, matching CraneLog pattern
       return {
         elevatorCompany: it.elevatorCompany || it.craneCompany || null,
         DeviceID: it.DeviceID || null,
         dataType: it.dataType || null,
-        rawTimestamp: rawTs,
-        timestamp: tsDate,
-        data: parsedData,
-        raw: it
+        Timestamp: tsDate,  // Single timestamp field like CraneLog
+        data: parsedData
       };
     });
 

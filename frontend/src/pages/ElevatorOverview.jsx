@@ -160,12 +160,12 @@ export default function ElevatorOverview() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r._id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(r.timestamp)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(r.Timestamp)}</td>
                     <td>{r.elevatorCompany || "-"}</td>
                     <td><Badge bg="secondary">{r.DeviceID}</Badge></td>
                     <td>{r.dataType || "-"}</td>
                     <td><code className="small">{Array.isArray(r.data) ? JSON.stringify(r.data) : "-"}</code></td>
-                    <td>{r.rawTimestamp || "-"}</td>
+                    <td>{r.Timestamp ? new Date(r.Timestamp).getTime() / 1000 : "-"}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(r.createdAt)}</td>
                   </tr>
                 ))}
