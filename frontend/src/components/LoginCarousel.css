@@ -46,3 +46,15 @@
     background-color: #4db3b3;
   }
   
+  /* ✅ Plan selection notification animation */
+  @keyframes slideDown {
+    0% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+  

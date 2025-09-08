@@ -33,6 +33,7 @@ const isProd = process.env.NODE_ENV === 'production';
 const CraneLog = require("./backend/models/CraneLog");
 const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
+const ElevatorEvent = require("./backend/models/ElevatorEvent");
 
 // ✅ SIMULATOR: Database-backed data simulator for testing
 const ENABLE_SIMULATOR = process.env.NODE_ENV === 'production';
@@ -957,6 +958,84 @@ app.post("/api/crane/log", async (req, res) => {
   } catch (err) {
     console.error("❌ Crane log save error:", err);
     res.status(500).json({ error: "Failed to save crane data" });
+  }
+});
+
+// ✅ Elevator ingestion (open) — accepts an array or single object in the provided format
+// Example payload:
+// [
+//   {
+//     "elevatorCompany": "Gsn Soln",
+//     "DeviceID": "ELEV001",
+//     "dataType": "floor",
+//     "Timestamp": "1757316764",
+//     "data": "[0,0,0,0,0,0,0,0]"
+//   }
+// ]
+app.post("/api/elevators/log", async (req, res) => {
+  try {
+    const body = req.body;
+    const items = Array.isArray(body) ? body : [body];
+    if (!items || items.length === 0 || typeof items[0] !== "object") {
+      return res.status(400).json({ message: "Invalid payload. Expecting array of objects." });
+    }
+
+    const docs = items.map((it) => {
+      const rawTs = it.Timestamp != null ? String(it.Timestamp) : "";
+      const tsNum = Number(rawTs);
+      const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
+
+      let parsedData = [];
+      if (Array.isArray(it.data)) {
+        parsedData = it.data.map((n) => Number(n) || 0);
+      } else if (typeof it.data === "string") {
+        try {
+          const asJson = JSON.parse(it.data);
+          if (Array.isArray(asJson)) parsedData = asJson.map((n) => Number(n) || 0);
+        } catch {}
+      }
+
+      return {
+        elevatorCompany: it.elevatorCompany || it.craneCompany || null,
+        DeviceID: it.DeviceID || null,
+        dataType: it.dataType || null,
+        rawTimestamp: rawTs,
+        timestamp: tsDate,
+        data: parsedData,
+        raw: it
+      };
+    });
+
+    const validDocs = docs.filter((d) => d.DeviceID);
+    if (validDocs.length === 0) {
+      return res.status(400).json({ message: "No valid items with DeviceID." });
+    }
+
+    const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
+    return res.status(201).json({ ok: true, inserted: result.length });
+  } catch (err) {
+    console.error("❌ /api/elevators/log error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ✅ Recent logs viewer (protected via JWT cookie)
+app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
+  try {
+    const { deviceId, companyName, limit = 50 } = req.query;
+    const filter = {};
+    if (deviceId) filter.DeviceID = deviceId;
+    if (companyName) filter.elevatorCompany = companyName;
+
+    const logs = await ElevatorEvent.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Math.min(Number(limit) || 50, 200))
+      .lean();
+
+    res.json({ logs });
+  } catch (err) {
+    console.error("❌ /api/elevators/recent error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

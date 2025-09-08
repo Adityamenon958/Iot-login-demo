@@ -199,18 +199,80 @@
     height: 100%;
     padding: 28px 24px;
     border-radius: 20px;
-  
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    
     /* ✅ Glass-like background with semi-transparency */
-    background: rgba(255, 255, 255, 0.35); /* Semi-transparent white */
-    backdrop-filter: blur(10px); /* Smooth blur effect */
-    -webkit-backdrop-filter: blur(10px); /* Safari support */
-  
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
     color: #212529;
-    position: relative;
-    transition: transform 0.4s ease, box-shadow 0.4s ease;
-    overflow: hidden;
     border: 1px solid rgba(200, 200, 200, 0.3);
+  }
+  
+  /* ✅ Hover effects for clickable cards */
+  .subscriptionCard2:hover {
+    transform: scale(1.05) translateY(-8px) !important;
+    box-shadow: 0 20px 40px rgba(77, 179, 179, 0.25) !important;
+    border: 2px solid #4db3b3 !important;
+  }
+  
+  /* ✅ Click animation states */
+  .clickedCard {
+    animation: clickPulse 0.6s ease-out;
+  }
+  
+  .scrollingCard {
+    transform: scale(1.02) !important;
+    box-shadow: 0 15px 30px rgba(77, 179, 179, 0.3) !important;
+    border: 2px solid #4db3b3 !important;
+    pointer-events: none;
+  }
+  
+  /* ✅ Keyframe animations */
+  @keyframes clickPulse {
+    0% { 
+      transform: scale(1); 
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+    }
+    50% { 
+      transform: scale(0.95); 
+      box-shadow: 0 5px 20px rgba(77, 179, 179, 0.3);
+    }
+    100% { 
+      transform: scale(1.05); 
+      box-shadow: 0 20px 40px rgba(77, 179, 179, 0.25);
+    }
+  }
+  
+  @keyframes fadeInOut {
+    0% { 
+      opacity: 0; 
+      transform: translate(-50%, -50%) scale(0.8);
+    }
+    20% { 
+      opacity: 1; 
+      transform: translate(-50%, -50%) scale(1);
+    }
+    80% { 
+      opacity: 1; 
+      transform: translate(-50%, -50%) scale(1);
+    }
+    100% { 
+      opacity: 0; 
+      transform: translate(-50%, -50%) scale(0.8);
+    }
+  }
+  
+  /* ✅ Mobile touch feedback */
+  @media (max-width: 768px) {
+    .subscriptionCard2:active {
+      transform: scale(0.98) !important;
+      transition: transform 0.1s ease;
+    }
   }
   
   

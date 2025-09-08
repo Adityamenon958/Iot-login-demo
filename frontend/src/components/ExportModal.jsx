@@ -436,127 +436,457 @@ export default function ExportModal({ show, onHide, companyName }) {
   };
 
   return (
-    <Modal show={show} onHide={onHide} size="lg" centered>
-      <Modal.Header closeButton>
-        <Modal.Title>📊 Export Crane Analysis Report</Modal.Title>
+    <Modal show={show} onHide={onHide} size="md" centered>
+      <Modal.Header 
+        closeButton
+        style={{
+          background: 'linear-gradient(135deg, #4db3b3 0%, #3a9a9a 100%)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '1rem 1rem 0 0',
+          padding: '1rem'
+        }}
+      >
+        <Modal.Title style={{
+          color: 'white',
+          fontWeight: '600',
+          fontSize: '1rem',
+          margin: 0
+        }}>
+          📊 Export Report
+        </Modal.Title>
       </Modal.Header>
       
-      <Modal.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
+      <Modal.Body style={{
+        padding: '1rem',
+        background: '#ffffff',
+        borderRadius: '0 0 1rem 1rem'
+      }}>
+        {error && <Alert variant="danger" style={{ fontSize: '0.75rem', padding: '0.5rem' }}>{error}</Alert>}
         
         {loading && (
           <div className="text-center mb-3">
-            <Spinner animation="border" variant="primary" />
-            <p className="mt-2">{exportProgress}</p>
+            <Spinner animation="border" variant="primary" size="sm" />
+            <p className="mt-2" style={{ fontSize: '0.75rem', margin: 0 }}>{exportProgress}</p>
           </div>
         )}
 
         {/* Crane Selection */}
-        <div className="mb-4">
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <h6>🏗️ Select Cranes ({selectedCranes.length}/{availableCranes.length})</h6>
-            <div>
-              <Button size="sm" variant="outline-primary" onClick={selectAllCranes} className="me-2">
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{
+            fontWeight: '600',
+            color: '#374151',
+            fontSize: '0.75rem',
+            marginBottom: '0.5rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.025em'
+          }}>
+            🏗️ Select Cranes ({selectedCranes.length}/{availableCranes.length})
+          </div>
+          
+          <div style={{
+            border: '2px solid #e5e7eb',
+            borderRadius: '0.5rem',
+            padding: '0.75rem',
+            background: '#f9fafb'
+          }}>
+            <div style={{
+              display: 'flex',
+              gap: '0.25rem',
+              marginBottom: '0.75rem',
+              justifyContent: 'center'
+            }}>
+              <Button 
+                size="sm" 
+                variant="outline-secondary" 
+                onClick={selectAllCranes}
+                style={{
+                  borderRadius: '0.375rem',
+                  fontWeight: '500',
+                  padding: '0.25rem 0.5rem',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
+                  border: '2px solid #6c757d',
+                  color: '#6c757d',
+                  fontSize: '0.7rem'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                  e.target.style.background = '#6c757d';
+                  e.target.style.color = 'white';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#6c757d';
+                }}
+              >
                 Select All
               </Button>
-              <Button size="sm" variant="outline-secondary" onClick={deselectAllCranes}>
+              <Button 
+                size="sm" 
+                variant="outline-secondary" 
+                onClick={deselectAllCranes}
+                style={{
+                  borderRadius: '0.375rem',
+                  fontWeight: '500',
+                  padding: '0.25rem 0.5rem',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
+                  border: '2px solid #6c757d',
+                  color: '#6c757d',
+                  fontSize: '0.7rem'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                  e.target.style.background = '#6c757d';
+                  e.target.style.color = 'white';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#6c757d';
+                }}
+              >
                 Deselect All
               </Button>
             </div>
-          </div>
-          
-          <div className="border rounded p-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-            {availableCranes.map(crane => (
-              <Form.Check
-                key={crane}
-                type="checkbox"
-                id={`crane-${crane}`}
-                label={crane}
-                checked={selectedCranes.includes(crane)}
-                onChange={() => handleCraneToggle(crane)}
-                className="mb-2"
-              />
-            ))}
+            
+            <div style={{
+              maxHeight: '120px',
+              overflowY: 'auto',
+              paddingRight: '0.25rem'
+            }}>
+              {availableCranes.map(crane => {
+                const isSelected = selectedCranes.includes(crane);
+                return (
+                  <div
+                    key={crane}
+                    onClick={() => handleCraneToggle(crane)}
+                    style={{
+                      padding: '0.5rem',
+                      background: isSelected ? '#4db3b3' : 'white',
+                      color: isSelected ? 'white' : '#374151',
+                      borderRadius: '0.375rem',
+                      border: isSelected ? '2px solid #4db3b3' : '2px solid #e5e7eb',
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer',
+                      marginBottom: '0.25rem',
+                      fontWeight: '500',
+                      fontSize: '0.75rem',
+                      textAlign: 'center',
+                      position: 'relative'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = '#f8fafc';
+                        e.currentTarget.style.borderColor = '#4db3b3';
+                      } else {
+                        e.currentTarget.style.background = '#3a9a9a';
+                        e.currentTarget.style.borderColor = '#3a9a9a';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'white';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                      } else {
+                        e.currentTarget.style.background = '#4db3b3';
+                        e.currentTarget.style.borderColor = '#4db3b3';
+                      }
+                    }}
+                  >
+                    {isSelected && (
+                      <span style={{
+                        position: 'absolute',
+                        left: '0.5rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '0.8rem'
+                      }}>✓</span>
+                    )}
+                    {crane}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Month Selection */}
-        <div className="mb-4">
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <h6>📅 Select Months ({selectedMonths.length}/{availableMonths.length})</h6>
-            <div>
-              <Button size="sm" variant="outline-primary" onClick={selectAllMonths} className="me-2">
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{
+            fontWeight: '600',
+            color: '#374151',
+            fontSize: '0.75rem',
+            marginBottom: '0.5rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.025em'
+          }}>
+            📅 Select Months ({selectedMonths.length}/{availableMonths.length})
+          </div>
+          
+          <div style={{
+            border: '2px solid #e5e7eb',
+            borderRadius: '0.5rem',
+            padding: '0.75rem',
+            background: '#f9fafb'
+          }}>
+            <div style={{
+              display: 'flex',
+              gap: '0.25rem',
+              marginBottom: '0.75rem',
+              justifyContent: 'center'
+            }}>
+              <Button 
+                size="sm" 
+                variant="outline-secondary" 
+                onClick={selectAllMonths}
+                style={{
+                  borderRadius: '0.375rem',
+                  fontWeight: '500',
+                  padding: '0.25rem 0.5rem',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
+                  border: '2px solid #6c757d',
+                  color: '#6c757d',
+                  fontSize: '0.7rem'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                  e.target.style.background = '#6c757d';
+                  e.target.style.color = 'white';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#6c757d';
+                }}
+              >
                 Select All
               </Button>
-              <Button size="sm" variant="outline-secondary" onClick={deselectAllMonths}>
+              <Button 
+                size="sm" 
+                variant="outline-secondary" 
+                onClick={deselectAllMonths}
+                style={{
+                  borderRadius: '0.375rem',
+                  fontWeight: '500',
+                  padding: '0.25rem 0.5rem',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
+                  border: '2px solid #6c757d',
+                  color: '#6c757d',
+                  fontSize: '0.7rem'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                  e.target.style.background = '#6c757d';
+                  e.target.style.color = 'white';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#6c757d';
+                }}
+              >
                 Deselect All
               </Button>
             </div>
-          </div>
-          
-          <div className="border rounded p-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-            {monthsLoading ? (
-              <div className="text-center py-3">
-                <Spinner animation="border" size="sm" />
-                <p className="mt-2 mb-0" style={{ fontSize: '0.8rem' }}>Loading available months...</p>
-              </div>
-            ) : availableMonths.length === 0 ? (
-              <div className="text-center py-3">
-                <p className="mb-0 text-muted" style={{ fontSize: '0.8rem' }}>
-                  {selectedCranes.length === 0 
-                    ? 'Select cranes to see available months' 
-                    : 'No data available for selected cranes'
-                  }
-                </p>
-              </div>
-            ) : (
-              availableMonths.map(month => (
-                <Form.Check
-                  key={month}
-                  type="checkbox"
-                  id={`month-${month}`}
-                  label={month}
-                  checked={selectedMonths.includes(month)}
-                  onChange={() => handleMonthToggle(month)}
-                  className="mb-2"
-                />
-              ))
-            )}
+            
+            <div style={{
+              maxHeight: '120px',
+              overflowY: 'auto',
+              paddingRight: '0.25rem'
+            }}>
+              {monthsLoading ? (
+                <div className="text-center" style={{ padding: '1rem' }}>
+                  <Spinner animation="border" size="sm" />
+                  <p className="mt-2 mb-0" style={{ fontSize: '0.7rem' }}>Loading available months...</p>
+                </div>
+              ) : availableMonths.length === 0 ? (
+                <div className="text-center" style={{ padding: '1rem' }}>
+                  <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>
+                    {selectedCranes.length === 0 
+                      ? 'Select cranes to see available months' 
+                      : 'No data available for selected cranes'
+                    }
+                  </p>
+                </div>
+              ) : (
+                availableMonths.map(month => {
+                  const isSelected = selectedMonths.includes(month);
+                  return (
+                    <div
+                      key={month}
+                      onClick={() => handleMonthToggle(month)}
+                      style={{
+                        padding: '0.5rem',
+                        background: isSelected ? '#4db3b3' : 'white',
+                        color: isSelected ? 'white' : '#374151',
+                        borderRadius: '0.375rem',
+                        border: isSelected ? '2px solid #4db3b3' : '2px solid #e5e7eb',
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer',
+                        marginBottom: '0.25rem',
+                        fontWeight: '500',
+                        fontSize: '0.75rem',
+                        textAlign: 'center',
+                        position: 'relative'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = '#f8fafc';
+                          e.currentTarget.style.borderColor = '#4db3b3';
+                        } else {
+                          e.currentTarget.style.background = '#3a9a9a';
+                          e.currentTarget.style.borderColor = '#3a9a9a';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'white';
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                        } else {
+                          e.currentTarget.style.background = '#4db3b3';
+                          e.currentTarget.style.borderColor = '#4db3b3';
+                        }
+                      }}
+                    >
+                      {isSelected && (
+                        <span style={{
+                          position: 'absolute',
+                          left: '0.5rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          fontSize: '0.8rem'
+                        }}>✓</span>
+                      )}
+                      {month}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
 
         {/* Export Summary */}
-        <div className="bg-light p-3 rounded">
-          <h6>📋 Export Summary</h6>
-          <Row>
-            <Col md={6}>
-              <p className="mb-1"><strong>Cranes:</strong> {selectedCranes.length}</p>
-              <p className="mb-1"><strong>Months:</strong> {selectedMonths.length}</p>
-            </Col>
-            <Col md={6}>
-              <p className="mb-1"><strong>Report Type:</strong> Comprehensive Analysis</p>
-              <p className="mb-0"><strong>Format:</strong> PDF</p>
-            </Col>
-          </Row>
+        <div style={{
+          background: '#f8f9fa',
+          padding: '0.75rem',
+          borderRadius: '0.5rem',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{
+            fontWeight: '600',
+            color: '#374151',
+            fontSize: '0.75rem',
+            marginBottom: '0.5rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.025em'
+          }}>📋 Export Summary</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+            <div>
+              <p style={{ margin: '0.25rem 0', fontWeight: '500' }}><strong>Cranes:</strong> {selectedCranes.length}</p>
+              <p style={{ margin: '0.25rem 0', fontWeight: '500' }}><strong>Months:</strong> {selectedMonths.length}</p>
+            </div>
+            <div>
+              <p style={{ margin: '0.25rem 0', fontWeight: '500' }}><strong>Type:</strong> PDF</p>
+              <p style={{ margin: '0.25rem 0', fontWeight: '500' }}><strong>Format:</strong> Analysis</p>
+            </div>
+          </div>
         </div>
       </Modal.Body>
 
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide} disabled={loading}>
+      <Modal.Footer style={{
+        background: '#ffffff',
+        border: 'none',
+        padding: '1rem',
+        borderRadius: '0 0 1rem 1rem',
+        justifyContent: 'center',
+        gap: '0.5rem'
+      }}>
+        <Button 
+          variant="outline-secondary" 
+          onClick={onHide} 
+          disabled={loading}
+          style={{
+            borderRadius: '0.375rem',
+            fontWeight: '500',
+            padding: '0.5rem 0.75rem',
+            transition: 'all 0.2s ease',
+            flex: 1,
+            border: '2px solid #6c757d',
+            color: '#6c757d',
+            fontSize: '0.7rem'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) {
+              e.target.style.transform = 'translateY(-1px)';
+              e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+              e.target.style.background = '#6c757d';
+              e.target.style.color = 'white';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = 'none';
+              e.target.style.background = 'transparent';
+              e.target.style.color = '#6c757d';
+            }
+          }}
+        >
           Cancel
         </Button>
         <Button 
           variant="primary" 
           onClick={generatePDF} 
           disabled={loading || selectedCranes.length === 0 || selectedMonths.length === 0}
+          style={{
+            background: loading || selectedCranes.length === 0 || selectedMonths.length === 0 
+              ? '#94a3b8' 
+              : 'linear-gradient(135deg, #4db3b3 0%, #3a9a9a 100%)',
+            border: 'none',
+            borderRadius: '0.375rem',
+            fontWeight: '600',
+            padding: '0.5rem 0.75rem',
+            transition: 'all 0.2s ease',
+            flex: 1,
+            color: 'white',
+            fontSize: '0.7rem'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading && selectedCranes.length > 0 && selectedMonths.length > 0) {
+              e.target.style.background = 'linear-gradient(135deg, #3a9a9a 0%, #2d7a7a 100%)';
+              e.target.style.transform = 'translateY(-1px)';
+              e.target.style.boxShadow = '0 4px 12px rgba(77, 179, 179, 0.4)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading && selectedCranes.length > 0 && selectedMonths.length > 0) {
+              e.target.style.background = 'linear-gradient(135deg, #4db3b3 0%, #3a9a9a 100%)';
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = 'none';
+            }
+          }}
         >
           {loading ? (
             <>
-              <Spinner animation="border" size="sm" className="me-2" />
-              Generating PDF...
+              <Spinner animation="border" size="sm" style={{ marginRight: '0.5rem' }} />
+              Generating...
             </>
           ) : (
-            '📄 Export as PDF'
+            '📄 Export PDF'
           )}
         </Button>
       </Modal.Footer>

@@ -140,3 +140,15 @@
     color: #3a9a9a;
     background-color: rgba(77, 179, 179, 0.15);
   }
+
+  /* ✅ Plan selection animation */
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }

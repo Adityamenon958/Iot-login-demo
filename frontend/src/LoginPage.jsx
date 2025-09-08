@@ -10,7 +10,7 @@ import { FiEye, FiEyeOff } from 'react-icons/fi';
 import "./LoginPage.css";
 import axios from 'axios';
 
-const LoginPage = () => {
+const LoginPage = ({ selectedPlan }) => {
   const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
@@ -103,6 +103,25 @@ const LoginPage = () => {
                 <Card.Title className={styles.iotText}>
                   Your Intelligent IoT Dashboard Gateway
                 </Card.Title>
+                
+                {/* ✅ Plan selection context */}
+                {selectedPlan && (
+                  <div 
+                    style={{
+                      marginTop: '1rem',
+                      padding: '0.75rem 1.5rem',
+                      background: 'linear-gradient(135deg, rgba(77, 179, 179, 0.1) 0%, rgba(77, 179, 179, 0.05) 100%)',
+                      borderRadius: '15px',
+                      border: '2px solid rgba(77, 179, 179, 0.3)',
+                      color: '#4db3b3',
+                      fontSize: '0.9rem',
+                      fontWeight: '600',
+                      animation: 'fadeIn 0.8s ease-out'
+                    }}
+                  >
+                    🎯 Ready to start with your <strong>{selectedPlan}</strong> plan!
+                  </div>
+                )}
               </Card.Body>
             </Card>
           </Col>
