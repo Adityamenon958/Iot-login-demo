@@ -126,7 +126,7 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    z-index: 10;
+    z-index: 20;
     border-radius: 0.5rem;
   }
 
@@ -139,6 +139,27 @@
     outline: none;
     color: #3a9a9a;
     background-color: rgba(77, 179, 179, 0.15);
+  }
+
+  /* ✅ Password input error state - custom styling without Bootstrap overlap */
+  .password-input-error {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+  }
+
+  .password-input-error:focus {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+  }
+
+  /* ✅ Password error feedback - positioned below input, no overlap */
+  .password-error-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #dc3545;
+    animation: fadeIn 0.3s ease-in-out;
   }
 
   /* ✅ Plan selection animation */

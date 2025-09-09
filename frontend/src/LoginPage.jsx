@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Card, Button, Modal, Form } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Modal, Form, Alert } from 'react-bootstrap';
 import styles from './LoginPage.module.css';
 import Logo from "../src/assets/DashboardLogo.png";
 import { useGoogleLogin } from '@react-oauth/google';
@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { SiGmail } from "react-icons/si";
 import { X } from 'lucide-react';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { validateEmail } from './lib/validation';
 import "./LoginPage.css";
 import axios from 'axios';
 
@@ -16,6 +17,12 @@ const LoginPage = ({ selectedPlan }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // ✅ Validation state management
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isFormValid, setIsFormValid] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ✅ Updated Google Login flow
   const login = useGoogleLogin({
@@ -63,12 +70,81 @@ const LoginPage = ({ selectedPlan }) => {
     setShowPassword(!showPassword);
   };
 
+  // ✅ Validation functions with sanitization
+  const validateEmailField = (emailValue) => {
+    // ✅ Email is already sanitized (trimmed and lowercased) in handleEmailChange
+    if (!emailValue) {
+      setEmailError('Email is required');
+      return false;
+    }
+    
+    const emailValidation = validateEmail(emailValue);
+    if (!emailValidation.isValid) {
+      setEmailError(emailValidation.message);
+      return false;
+    }
+    
+    setEmailError('');
+    return true;
+  };
+
+  const validatePasswordField = (passwordValue) => {
+    // ✅ Password is already sanitized (trimmed) in handlePasswordChange
+    if (!passwordValue) {
+      setPasswordError('Password is required');
+      return false;
+    }
+    
+    setPasswordError('');
+    return true;
+  };
+
+  const validateForm = () => {
+    const isEmailValid = validateEmailField(email);
+    const isPasswordValid = validatePasswordField(password);
+    const formValid = isEmailValid && isPasswordValid;
+    setIsFormValid(formValid);
+    return formValid;
+  };
+
+  // ✅ Handle input changes with real-time validation and sanitization
+  const handleEmailChange = (e) => {
+    // ✅ Sanitize email: trim spaces and convert to lowercase
+    const value = e.target.value.trim().toLowerCase();
+    setEmail(value);
+    validateEmailField(value);
+    // Re-validate form after email change
+    setTimeout(() => validateForm(), 0);
+  };
+
+  const handlePasswordChange = (e) => {
+    // ✅ For password, we'll trim spaces but preserve case sensitivity
+    // (Some systems allow spaces in passwords, others don't - we'll trim for consistency)
+    const value = e.target.value.trim();
+    setPassword(value);
+    validatePasswordField(value);
+    // Re-validate form after password change
+    setTimeout(() => validateForm(), 0);
+  };
+
   const handleEmailLoginSubmit = async (e) => {
     e.preventDefault();
+    
+    // ✅ Validate form before submission
+    if (!validateForm()) {
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
     try {
+      // ✅ Send sanitized data to backend
+      const sanitizedEmail = email.trim().toLowerCase();
+      const sanitizedPassword = password.trim();
+      
       const response = await axios.post(
         '/api/login',
-        { email, password },
+        { email: sanitizedEmail, password: sanitizedPassword },
         { withCredentials: true }
       );
   
@@ -89,6 +165,8 @@ const LoginPage = ({ selectedPlan }) => {
       } else {
       alert("Invalid login");
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -180,10 +258,16 @@ const LoginPage = ({ selectedPlan }) => {
               <Form.Control
                 type="email"
                 placeholder="Enter email"
-                className="custom_input"
+                className={`custom_input ${emailError ? 'is-invalid' : ''}`}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={handleEmailChange}
+                isInvalid={!!emailError}
               />
+              {emailError && (
+                <Form.Control.Feedback type="invalid" className="d-block">
+                  {emailError}
+                </Form.Control.Feedback>
+              )}
             </Form.Group>
 
             <Form.Group controlId="formPassword" className="mt-3">
@@ -192,9 +276,9 @@ const LoginPage = ({ selectedPlan }) => {
                 <Form.Control
                   type={showPassword ? "text" : "password"}
                   placeholder="Password"
-                  className="custom_input password-input"
+                  className={`custom_input password-input ${passwordError ? 'password-input-error' : ''}`}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handlePasswordChange}
                 />
                 <button
                   type="button"
@@ -205,14 +289,31 @@ const LoginPage = ({ selectedPlan }) => {
                   {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                 </button>
               </div>
+              {passwordError && (
+                <div className="password-error-feedback">
+                  {passwordError}
+                </div>
+              )}
             </Form.Group>
 
             <div className="text-end mt-2">
               <a href="#" className="text-decoration-none">Forgot password?</a>
             </div>
 
-            <Button className="w-100 mt-4 signIn" variant="primary" type="submit">
-              Sign In
+            <Button 
+              className="w-100 mt-4 signIn" 
+              variant="primary" 
+              type="submit"
+              disabled={!isFormValid || isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Signing In...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
           </Form>
         </Modal.Body>
