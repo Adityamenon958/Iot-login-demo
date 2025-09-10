@@ -1,5 +1,5 @@
-// LineChartPanel.jsx  – with 30-second auto-refresh
-import React, { useState, useEffect, useRef } from "react";
+// LineChartPanel.jsx  – with 30-second auto-refresh (optimized)
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import {
    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -20,6 +20,16 @@ const ranges = [
 const colors = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
 /* same four numbers the gauges use – later we’ll load these per-company */
 const TH = { highHigh: 50, high: 35, low: 25, lowLow: 10 };
+const MAX_POINTS = 300; // cap rendered points for faster paint
+
+// Simple stride downsampling to cap points count
+function downsampleByStride(rows, maxPoints) {
+  if (!Array.isArray(rows) || rows.length <= maxPoints) return rows;
+  const stride = Math.ceil(rows.length / maxPoints);
+  const out = [];
+  for (let i = 0; i < rows.length; i += stride) out.push(rows[i]);
+  return out;
+}
 
 export default function LineChartPanel({ uid }) {
   const [rangeKey, setRangeKey] = useState("15m");
@@ -28,10 +38,12 @@ export default function LineChartPanel({ uid }) {
   const [soloKey,  setSoloKey]  = useState(null);
   const chartRef = useRef(null);
   
+  // Compute fromDate once per range change
+  const fromDate = useMemo(() => ranges.find((r) => r.key === rangeKey).from(), [rangeKey]);
+
   /* ------------ data fetch helper ------------ */
   const fetchRows = async () => {
     if (!uid) return;
- const fromDate = ranges.find((r) => r.key === rangeKey).from();   // eval once
 
     try {
       setLoading(true);
@@ -42,41 +54,43 @@ export default function LineChartPanel({ uid }) {
           page: 1,
           limit: 500,
           sort: "desc",
-          uid: uid, 
+          uid: uid,
+          from: fromDate.toISOString(), // let backend filter if supported
         },
       });
 
       const rows = res.data.data
         .filter((doc) => doc.D)
         .map((doc) => {
-const ts = parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
-if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
- if (ts < fromDate) return null;
+          // prefer server-provided ISO date when available
+          const ts = doc.dateISO ? new Date(doc.dateISO) : parse(doc.D, "dd/MM/yyyy HH:mm:ss", new Date());
+          if (isNaN(ts)) return null; // skip invalid timestamps
+          if (ts < fromDate) return null;
 
           const row = { ts };
           if (doc.readings) {
-  Object.entries(doc.readings).forEach(([key, val]) => {
-  row[key] = val;  // ✅ Convert to °C here
-});
+            Object.entries(doc.readings).forEach(([key, val]) => {
+              row[key] = val;
+            });
 
-} else if (Array.isArray(doc.data)) {
-  doc.data.forEach((raw, i) => {
-    row[`T${i + 1}`] = raw / 10;
-  });
-}
+          } else if (Array.isArray(doc.data)) {
+            doc.data.forEach((raw, i) => {
+              row[`T${i + 1}`] = raw / 10;
+            });
+          }
 
-
-     // 🐞 Debug log – shows what each chart row looks like
-    console.log("📊 Parsed row:", row);
           return row;
         })
         .filter(Boolean)
         .reverse();                              // oldest → newest
 
+      // cap points rendered for performance
+      const capped = downsampleByStride(rows, MAX_POINTS);
+
       /* ── evaluate ONLY the latest reading ── */
       let latestVals = [];
-      if (rows.length) {
-        const newest = rows[rows.length - 1];          // newest == last
+      if (capped.length) {
+        const newest = capped[capped.length - 1];          // newest == last
         latestVals = Object.keys(newest)
           .filter(k => k !== "ts")
           .map(k => newest[k]);
@@ -89,9 +103,9 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
         low:      latestVals.some(v => v <= TH.low && v > TH.lowLow)
       });
 
-      setData(rows);
+      setData(capped);
     } catch (err) {
-      console.error("LineChart fetch err", err);
+      if (import.meta.env.DEV) console.error("LineChart fetch err", err);
       setData([]);
     } finally {
       setLoading(false);
@@ -127,8 +141,7 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
   }, []);
 
   /* ------------ helpers ------------ */
-  const seriesKeys = data[0] ? Object.keys(data[0]).filter((k) => k !== "ts") : [];
-  console.log("📈 seriesKeys:", seriesKeys);
+  const seriesKeys = useMemo(() => (data[0] ? Object.keys(data[0]).filter((k) => k !== "ts") : []), [data]);
 
   const safeFmt = (d, fmt) => (isNaN(d) ? "" : format(d, fmt));
 
@@ -222,6 +235,7 @@ if (isNaN(ts)) return null; // ⛔️ skip invalid timestamps
                     stroke={colors[idx % colors.length]}
                     strokeWidth={2}
                     dot={false}
+                    isAnimationActive={false}
                   />
                 )
             )}

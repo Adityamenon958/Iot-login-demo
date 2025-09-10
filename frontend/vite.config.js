@@ -2,7 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-export default defineConfig({
+// Strip console/debugger in production builds only (keeps logs in dev)
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     proxy: {
@@ -13,5 +14,7 @@ export default defineConfig({
       },
     },
   },
-  
-})
+  esbuild: {
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
+  },
+}))

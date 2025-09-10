@@ -10,3 +10,16 @@
   100%{opacity:1}
 }
 .blink{animation:pulse 1.2s ease-in-out infinite}
+
+/* ===== Global Typography: Use Poppins everywhere via Bootstrap variables ===== */
+:root{
+  --bs-font-sans-serif: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                        Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+  --bs-body-font-family: var(--bs-font-sans-serif);
+}
+
+/* Headings use Poppins with bolder weight */
+h1, h2, h3, h4, h5, h6{
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+}

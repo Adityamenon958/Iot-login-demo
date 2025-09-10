@@ -47,7 +47,7 @@ export default function MonthlyChart({ selectedCranes = [], start, end }) {
         setGranularity(response.data.granularity || 'monthly');
         setChartData(response.data.points || []);
       } catch (err) {
-        console.error('❌ Failed to fetch time-series stats:', err);
+        if (import.meta.env.DEV) console.error('❌ Failed to fetch time-series stats:', err);
         setError('Failed to load chart data');
       } finally {
         setLoading(false);
@@ -135,8 +135,9 @@ export default function MonthlyChart({ selectedCranes = [], start, end }) {
         />
         <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '10px' }} iconType="line" />
-          <Line type="monotone" dataKey="usageHours" stroke="#2563eb" strokeWidth={2} dot={{ fill: '#2563eb', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, stroke: '#2563eb', strokeWidth: 2 }} name="Usage Hours" />
-          <Line type="monotone" dataKey="maintenanceHours" stroke="#f97316" strokeWidth={2} dot={{ fill: '#f97316', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, stroke: '#f97316', strokeWidth: 2 }} name="Maintenance Hours" />
+          {/* Faster render: no dots/animations */}
+          <Line type="monotone" dataKey="usageHours" stroke="#2563eb" strokeWidth={2} dot={false} activeDot={false} isAnimationActive={false} name="Usage Hours" />
+          <Line type="monotone" dataKey="maintenanceHours" stroke="#f97316" strokeWidth={2} dot={false} activeDot={false} isAnimationActive={false} name="Maintenance Hours" />
       </LineChart>
     </ResponsiveContainer>
     </div>
