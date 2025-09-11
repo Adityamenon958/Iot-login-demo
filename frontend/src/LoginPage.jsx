@@ -99,9 +99,9 @@ const LoginPage = ({ selectedPlan }) => {
     return true;
   };
 
-  const validateForm = () => {
-    const isEmailValid = validateEmailField(email);
-    const isPasswordValid = validatePasswordField(password);
+  const validateForm = (emailValue = email, passwordValue = password) => {
+    const isEmailValid = validateEmailField(emailValue);
+    const isPasswordValid = validatePasswordField(passwordValue);
     const formValid = isEmailValid && isPasswordValid;
     setIsFormValid(formValid);
     return formValid;
@@ -113,8 +113,8 @@ const LoginPage = ({ selectedPlan }) => {
     const value = e.target.value.trim().toLowerCase();
     setEmail(value);
     validateEmailField(value);
-    // Re-validate form after email change
-    setTimeout(() => validateForm(), 0);
+    // ✅ Pass values directly to avoid timing issues
+    validateForm(value, password);
   };
 
   const handlePasswordChange = (e) => {
@@ -123,8 +123,8 @@ const LoginPage = ({ selectedPlan }) => {
     const value = e.target.value.trim();
     setPassword(value);
     validatePasswordField(value);
-    // Re-validate form after password change
-    setTimeout(() => validateForm(), 0);
+    // ✅ Pass values directly to avoid timing issues
+    validateForm(email, value);
   };
 
   const handleEmailLoginSubmit = async (e) => {
