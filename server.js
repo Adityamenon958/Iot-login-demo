@@ -981,35 +981,29 @@ app.post("/api/elevators/log", async (req, res) => {
     }
 
     const docs = items.map((it) => {
-      // Parse timestamp (Unix seconds to Date, like CraneLog)
-      const rawTs = it.Timestamp != null ? String(it.Timestamp) : "";
+      // Parse timestamp (Unix seconds to Date)
+      const rawTs = it.timestamp != null ? String(it.timestamp) : "";
       const tsNum = Number(rawTs);
       const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
 
-      // Parse data array
-      let parsedData = [];
+      // Validate hex data array (should be 4 hex values)
+      let hexData = [];
       if (Array.isArray(it.data)) {
-        parsedData = it.data.map((n) => Number(n) || 0);
-      } else if (typeof it.data === "string") {
-        try {
-          const asJson = JSON.parse(it.data);
-          if (Array.isArray(asJson)) parsedData = asJson.map((n) => Number(n) || 0);
-        } catch {}
+        hexData = it.data.map(val => String(val).toUpperCase()); // Convert to uppercase hex
       }
 
-      // Store data only once, matching CraneLog pattern
       return {
-        elevatorCompany: it.elevatorCompany || it.craneCompany || null,
-        DeviceID: it.DeviceID || null,
-        dataType: it.dataType || null,
-        Timestamp: tsDate,  // Single timestamp field like CraneLog
-        data: parsedData
+        elevatorCompany: it.elevatorCompany || null,
+        elevatorId: it.elevatorId || it.DeviceID || null, // Support both field names
+        location: it.location || "Unknown Location", // String location
+        timestamp: tsDate,
+        data: hexData
       };
     });
 
-    const validDocs = docs.filter((d) => d.DeviceID);
+    const validDocs = docs.filter((d) => d.elevatorId);
     if (validDocs.length === 0) {
-      return res.status(400).json({ message: "No valid items with DeviceID." });
+      return res.status(400).json({ message: "No valid items with elevatorId." });
     }
 
     const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
@@ -1023,10 +1017,11 @@ app.post("/api/elevators/log", async (req, res) => {
 // ✅ Recent logs viewer (protected via JWT cookie)
 app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
   try {
-    const { deviceId, companyName, limit = 50 } = req.query;
+    const { elevatorId, companyName, location, limit = 50 } = req.query;
     const filter = {};
-    if (deviceId) filter.DeviceID = deviceId;
+    if (elevatorId) filter.elevatorId = elevatorId;
     if (companyName) filter.elevatorCompany = companyName;
+    if (location) filter.location = new RegExp(location, 'i'); // Case-insensitive search
 
     const logs = await ElevatorEvent.find(filter)
       .sort({ createdAt: -1 })

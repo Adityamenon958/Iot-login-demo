@@ -182,7 +182,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           {/* ✅ Crane Overview - Check access for non-superadmin */}
           {(role === 'superadmin' || companyAccess.craneOverview) && (
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/crane-overview' ? styles.active : ''}`} onClick={() => navigate('/dashboard/crane-overview')}>
-             <Truck size={20} className={`${styles.navText} me-2`} />
+             <Truck size={30} className={`${styles.navText} me-2`} />
               Crane Overview
           </Button>
           )}
@@ -190,7 +190,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           {/* ✅ Elevator Overview - Check access for non-superadmin */}
           {(role === 'superadmin' || companyAccess.elevatorOverview) && (
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/elevator-overview' ? styles.active : ''}`} onClick={() => navigate('/dashboard/elevator-overview')}>
-    <PiElevatorDuotone size={20} className={`${styles.navText} me-2`} />
+    <PiElevatorDuotone size={30} className={`${styles.navText} me-2`} />
     Elevator Overview
 </Button>
           )}

@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import axios from 'axios';
-import { Col, Row, Card, Table, Form, Button, Badge, Spinner } from 'react-bootstrap';
+import { Col, Row, Card, Badge } from 'react-bootstrap';
 import styles from "./MainContent.module.css";
-import { PiElevatorDuotone } from "react-icons/pi";
+import { PiElevatorDuotone, PiCheckCircleDuotone, PiXCircleDuotone, PiWarningCircleDuotone } from "react-icons/pi";
 
 // ✅ Format helpers
 const formatDateTime = (value) => {
@@ -12,125 +11,170 @@ const formatDateTime = (value) => {
   return d.toLocaleString();
 };
 
+const formatTimeAgo = (value) => {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+};
+
 export default function ElevatorOverview() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [deviceId, setDeviceId] = useState("");
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [limit, setLimit] = useState(50);
-
-  // ✅ Fetch recent logs from backend (cookie-protected)
-  const fetchLogs = async () => {
-    try {
-      setLoading(true);
-      const params = {};
-      if (deviceId) params.deviceId = deviceId.trim();
-      if (limit) params.limit = limit;
-      const res = await axios.get("/api/elevators/recent", {
-        params,
-        withCredentials: true // ✅ required by project auth rules
-      });
-      setRows(res.data?.logs || []);
-    } catch (err) {
-      console.error("Failed to fetch elevator logs:", err);
-    } finally {
-      setLoading(false);
+  // ✅ Mock data for now - will be replaced with real API calls later
+  const [elevators] = useState([
+    {
+      id: "ELEV001",
+      company: "Gsn Soln",
+      location: "Hospital A - Floor 3",
+      status: "active",
+      lastUpdate: new Date(Date.now() - 5 * 60000), // 5 minutes ago
+      data: ["AA12", "AA10", "AB16", "AB11"]
+    },
+    {
+      id: "ELEV002", 
+      company: "Gsn Soln",
+      location: "Hospital A - Floor 5",
+      status: "inactive",
+      lastUpdate: new Date(Date.now() - 15 * 60000), // 15 minutes ago
+      data: ["AA10", "AA12", "AB15", "AB10"]
+    },
+    {
+      id: "ELEV003",
+      company: "Gsn Soln", 
+      location: "Hospital B - Floor 2",
+      status: "error",
+      lastUpdate: new Date(Date.now() - 2 * 60000), // 2 minutes ago
+      data: ["AB16", "AB11", "AA12", "AA10"]
+    },
+    {
+      id: "ELEV004",
+      company: "Gsn Soln",
+      location: "Hospital B - Floor 4", 
+      status: "active",
+      lastUpdate: new Date(Date.now() - 1 * 60000), // 1 minute ago
+      data: ["AA12", "AA10", "AB16", "AB11"]
+    },
+    {
+      id: "ELEV005",
+      company: "Gsn Soln",
+      location: "Hospital C - Floor 1",
+      status: "inactive", 
+      lastUpdate: new Date(Date.now() - 30 * 60000), // 30 minutes ago
+      data: ["AA10", "AA12", "AB15", "AB10"]
+    },
+    {
+      id: "ELEV006",
+      company: "Gsn Soln",
+      location: "Hospital C - Floor 3",
+      status: "active",
+      lastUpdate: new Date(Date.now() - 3 * 60000), // 3 minutes ago
+      data: ["AA12", "AA10", "AB16", "AB11"]
     }
+  ]);
+
+  // ✅ Calculate stats from mock data
+  const stats = useMemo(() => {
+    const active = elevators.filter(e => e.status === 'active').length;
+    const inactive = elevators.filter(e => e.status === 'inactive').length;
+    const error = elevators.filter(e => e.status === 'error').length;
+    return { active, inactive, error, total: elevators.length };
+  }, [elevators]);
+
+  const getStatusBadge = (status) => {
+    const variants = {
+      active: { bg: "success", text: "Active" },
+      inactive: { bg: "secondary", text: "Inactive" },
+      error: { bg: "danger", text: "Error" }
+    };
+    const variant = variants[status] || variants.inactive;
+    return <Badge bg={variant.bg} className="px-2 py-1">{variant.text}</Badge>;
   };
-
-  useEffect(() => {
-    fetchLogs();
-    let t;
-    if (autoRefresh) {
-      t = setInterval(fetchLogs, 5000); // poll every 5s for simple verification
-    }
-    return () => t && clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId, autoRefresh, limit]);
-
-  const total = rows.length;
-  const byDevice = useMemo(() => {
-    const map = new Map();
-    for (const r of rows) map.set(r.DeviceID, (map.get(r.DeviceID) || 0) + 1);
-    return map;
-  }, [rows]);
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
       {/* Header */}
-      <div className="mb-2">
-        <h6 className="mb-0">Elevator Ingestion Monitor</h6>
-        <p className="text-muted mb-0" style={{ fontSize: '0.65rem' }}>
-          Live view of the latest elevator payloads received from gateway
+      <div className="mb-4">
+        <h4 className="mb-1 fw-bold">Elevator Dashboard</h4>
+        <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+          Real-time monitoring of elevator systems across all locations
         </p>
       </div>
 
-      {/* Controls */}
-      <Card className="border-0 shadow-sm mb-3">
-        <Card.Body className="p-2">
-          <Form className="row g-2 align-items-center">
-            <div className="col-auto">
-              <Form.Label htmlFor="deviceId" className="mb-0" style={{ fontSize: '0.75rem' }}>
-                Filter by DeviceID
-              </Form.Label>
-              <Form.Control
-                id="deviceId"
-                size="sm"
-                placeholder="ELEV001"
-                value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-              />
-            </div>
-            <div className="col-auto">
-              <Form.Label htmlFor="limit" className="mb-0" style={{ fontSize: '0.75rem' }}>
-                Limit
-              </Form.Label>
-              <Form.Select id="limit" size="sm" value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-                {[20, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
-              </Form.Select>
-            </div>
-            <div className="col-auto">
-              <Form.Check
-                type="switch"
-                id="autorefresh"
-                label="Auto refresh"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-              />
-            </div>
-            <div className="col-auto">
-              <Button size="sm" onClick={fetchLogs} disabled={loading}>
-                {loading ? <Spinner animation="border" size="sm" /> : "Refresh"}
-              </Button>
-            </div>
-          </Form>
-        </Card.Body>
-      </Card>
-
-      {/* Summary cards */}
-      <Row className="mb-2">
-        <Col xs={6} sm={4} md={3} className="mb-2">
-          <Card className="h-100 border-0 shadow-sm" style={{ minHeight: '90px', background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" }}>
-            <Card.Body className="p-2 text-white position-relative">
-              <div className="d-flex justify-content-between align-items-start">
+      {/* Top Status Cards - Blue Theme */}
+      <Row className="mb-4">
+        <Col xs={12} md={4} className="mb-3">
+          <Card className="h-100 border-0 shadow-lg" style={{ 
+            background: "linear-gradient(135deg, #1a5f7a 0%, #4facfe 100%)",
+            minHeight: '120px',
+            borderRadius: '15px'
+          }}>
+            <Card.Body className="p-4 text-white position-relative">
+              <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <h5 className="mb-0 fw-bold">{total}</h5>
-                  <small>Rows (latest)</small>
+                  <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
+                    {stats.active}
+                  </h2>
+                  <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
+                    Active Elevators
+                  </p>
                 </div>
                 <div style={{ opacity: 0.8 }}>
-                  <PiElevatorDuotone size={40} />
+                  <PiCheckCircleDuotone size={50} />
                 </div>
               </div>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} sm={4} md={3} className="mb-2">
-          <Card className="h-100 border-0 shadow-sm" style={{ minHeight: '90px' }}>
-            <Card.Body className="p-2">
+
+        <Col xs={12} md={4} className="mb-3">
+          <Card className="h-100 border-0 shadow-lg" style={{ 
+            background: "linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%)",
+            minHeight: '120px',
+            borderRadius: '15px'
+          }}>
+            <Card.Body className="p-4 text-white position-relative">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <div className="fw-bold" style={{ fontSize: '0.85rem' }}>Devices seen</div>
-                  <div style={{ fontSize: '0.75rem' }}>{byDevice.size}</div>
+                  <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
+                    {stats.inactive}
+                  </h2>
+                  <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
+                    Inactive Elevators
+                  </p>
+                </div>
+                <div style={{ opacity: 0.8 }}>
+                  <PiXCircleDuotone size={50} />
+                </div>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={12} md={4} className="mb-3">
+          <Card className="h-100 border-0 shadow-lg" style={{ 
+            background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+            minHeight: '120px',
+            borderRadius: '15px'
+          }}>
+            <Card.Body className="p-4 text-white position-relative">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
+                    {stats.error}
+                  </h2>
+                  <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
+                    Error Status
+                  </p>
+                </div>
+                <div style={{ opacity: 0.8 }}>
+                  <PiWarningCircleDuotone size={50} />
                 </div>
               </div>
             </Card.Body>
@@ -138,49 +182,61 @@ export default function ElevatorOverview() {
         </Col>
       </Row>
 
-      {/* Table */}
-      <Card className="border-0 shadow-sm">
-        <Card.Header className="py-2 bg-white border-bottom">
-          <h6 className="mb-0" style={{ fontSize: '0.75rem' }}>Recent Logs</h6>
-        </Card.Header>
-        <Card.Body className="p-0">
-          <div className="table-responsive">
-            <Table size="sm" hover className="mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th style={{ whiteSpace: 'nowrap' }}>Time</th>
-                  <th>Company</th>
-                  <th>DeviceID</th>
-                  <th>Type</th>
-                  <th>Data</th>
-                  <th style={{ whiteSpace: 'nowrap' }}>Raw TS</th>
-                  <th style={{ whiteSpace: 'nowrap' }}>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r._id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(r.Timestamp)}</td>
-                    <td>{r.elevatorCompany || "-"}</td>
-                    <td><Badge bg="secondary">{r.DeviceID}</Badge></td>
-                    <td>{r.dataType || "-"}</td>
-                    <td><code className="small">{Array.isArray(r.data) ? JSON.stringify(r.data) : "-"}</code></td>
-                    <td>{r.Timestamp ? new Date(r.Timestamp).getTime() / 1000 : "-"}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(r.createdAt)}</td>
-                  </tr>
-                ))}
-                {rows.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={7} className="text-center text-muted py-3" style={{ fontSize: '0.8rem' }}>
-                      No data yet. Waiting for gateway…
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </Table>
-          </div>
-        </Card.Body>
-      </Card>
+      {/* Individual Elevator Cards - Grey Theme */}
+      <div className="mb-3">
+        <Row>
+          {elevators.map((elevator) => (
+            <Col xs={12} sm={6} md={4} lg={2} className="mb-3" key={elevator.id}>
+              <Card 
+                className="h-100 border-0 shadow-sm elevator-card" 
+                style={{ 
+                  borderRadius: '12px',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-5px)';
+                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+                }}
+              >
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between align-items-start mb-2">
+                    <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
+                      {elevator.id}
+                    </Badge>
+                    {getStatusBadge(elevator.status)}
+                  </div>
+                  
+                  <div className="mb-2">
+                    <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
+                      {elevator.company}
+                    </h6>
+                    <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
+                      {elevator.location}
+                    </p>
+                  </div>
+
+                  <div className="mb-2">
+                    <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                      Last Update: {formatTimeAgo(elevator.lastUpdate)}
+                    </small>
+                  </div>
+
+                  <div>
+                    <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                      Data: {elevator.data.slice(0, 2).join(', ')}...
+                    </small>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </div>
     </Col>
   );
 } 
