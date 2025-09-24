@@ -364,39 +364,14 @@ app.use(cors({
   credentials: true,
 }));
 
-// ✅ Temporary fix for malformed gateway JSON (REMOVE TOMORROW)
+// ✅ JSON parser for all routes EXCEPT elevator endpoint
 app.use((req, res, next) => {
   if (req.path === '/api/elevators/log' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString();
-    });
-    req.on('end', () => {
-      try {
-        // Fix common gateway issues
-        let fixedBody = body;
-        
-        // Fix "data" - value pattern
-        fixedBody = fixedBody.replace(/"data"\s*-\s*([^,}]+)/g, (match, values) => {
-          // Convert comma-separated values to JSON array
-          const arrayValues = values.split(',').map(v => v.trim());
-          return `"data": [${arrayValues.join(', ')}]`;
-        });
-        
-        // Parse the fixed JSON
-        req.body = JSON.parse(fixedBody);
-        next();
-      } catch (error) {
-        console.error('❌ JSON fix error:', error);
-        res.status(400).json({ message: 'Invalid JSON format' });
-      }
-    });
+    next(); // Skip JSON parsing for elevator endpoint
   } else {
-    next();
+    express.json()(req, res, next);
   }
 });
-
-app.use(express.json());
 app.use(cookieParser());
 
 
@@ -994,57 +969,62 @@ app.post("/api/crane/log", async (req, res) => {
   }
 });
 
-// ✅ Elevator ingestion (open) — accepts an array or single object in the provided format
-// Example payload:
-// [
-//   {
-//     "elevatorCompany": "Gsn Soln",
-//     "DeviceID": "ELEV001",
-//     "dataType": "floor",
-//     "Timestamp": "1757316764",
-//     "data": "[0,0,0,0,0,0,0,0]"
-//   }
-// ]
-app.post("/api/elevators/log", async (req, res) => {
-  try {
-    const body = req.body;
-    const items = Array.isArray(body) ? body : [body];
-    if (!items || items.length === 0 || typeof items[0] !== "object") {
-      return res.status(400).json({ message: "Invalid payload. Expecting array of objects." });
-    }
-
-    const docs = items.map((it) => {
-      // Parse timestamp (Unix seconds to Date)
-      const rawTs = it.timestamp != null ? String(it.timestamp) : "";
-      const tsNum = Number(rawTs);
-      const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
-
-      // Validate hex data array (should be 4 hex values)
-      let hexData = [];
-      if (Array.isArray(it.data)) {
-        hexData = it.data.map(val => String(val).toUpperCase()); // Convert to uppercase hex
+// ✅ Elevator ingestion (open) — accepts malformed JSON temporarily
+app.post("/api/elevators/log", (req, res) => {
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk.toString();
+  });
+  req.on('end', async () => {
+    try {
+      // Fix malformed JSON
+      let fixedBody = body;
+      fixedBody = fixedBody.replace(/"data"\s*-\s*([^}]+)/g, (match, values) => {
+        const arrayValues = values.split(',').map(v => v.trim());
+        return `"data": [${arrayValues.join(', ')}]`;
+      });
+      
+      // Parse the fixed JSON
+      const parsedBody = JSON.parse(fixedBody);
+      const items = Array.isArray(parsedBody) ? parsedBody : [parsedBody];
+      
+      if (!items || items.length === 0 || typeof items[0] !== "object") {
+        return res.status(400).json({ message: "Invalid payload. Expecting array of objects." });
       }
 
-      return {
-        elevatorCompany: it.elevatorCompany || null,
-        elevatorId: it.elevatorId || it.DeviceID || null, // Support both field names
-        location: it.location || "Unknown Location", // String location
-        timestamp: tsDate,
-        data: hexData
-      };
-    });
+      const docs = items.map((it) => {
+        // Parse timestamp (Unix seconds to Date)
+        const rawTs = it.timestamp != null ? String(it.timestamp) : "";
+        const tsNum = Number(rawTs);
+        const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
 
-    const validDocs = docs.filter((d) => d.elevatorId);
-    if (validDocs.length === 0) {
-      return res.status(400).json({ message: "No valid items with elevatorId." });
+        // Handle data array
+        let dataArray = [];
+        if (Array.isArray(it.data)) {
+          dataArray = it.data;
+        }
+
+        return {
+          elevatorCompany: it.elevatorCompany || null,
+          elevatorId: it.elevatorId || it.DeviceID || null,
+          location: it.location || "Unknown Location",
+          timestamp: tsDate,
+          data: dataArray
+        };
+      });
+
+      const validDocs = docs.filter((d) => d.elevatorId);
+      if (validDocs.length === 0) {
+        return res.status(400).json({ message: "No valid items with elevatorId." });
+      }
+
+      const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
+      return res.status(201).json({ ok: true, inserted: result.length });
+    } catch (err) {
+      console.error("❌ /api/elevators/log error:", err);
+      return res.status(500).json({ message: "Server error" });
     }
-
-    const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
-    return res.status(201).json({ ok: true, inserted: result.length });
-  } catch (err) {
-    console.error("❌ /api/elevators/log error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
+  });
 });
 
 // ✅ Recent logs viewer (protected via JWT cookie)
