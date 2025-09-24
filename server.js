@@ -363,6 +363,39 @@ app.use(cors({
   origin: true,
   credentials: true,
 }));
+
+// ✅ Temporary fix for malformed gateway JSON (REMOVE TOMORROW)
+app.use((req, res, next) => {
+  if (req.path === '/api/elevators/log' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        // Fix common gateway issues
+        let fixedBody = body;
+        
+        // Fix "data" - value pattern
+        fixedBody = fixedBody.replace(/"data"\s*-\s*([^,}]+)/g, (match, values) => {
+          // Convert comma-separated values to JSON array
+          const arrayValues = values.split(',').map(v => v.trim());
+          return `"data": [${arrayValues.join(', ')}]`;
+        });
+        
+        // Parse the fixed JSON
+        req.body = JSON.parse(fixedBody);
+        next();
+      } catch (error) {
+        console.error('❌ JSON fix error:', error);
+        res.status(400).json({ message: 'Invalid JSON format' });
+      }
+    });
+  } else {
+    next();
+  }
+});
+
 app.use(express.json());
 app.use(cookieParser());
 
