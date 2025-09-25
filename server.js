@@ -364,14 +364,8 @@ app.use(cors({
   credentials: true,
 }));
 
-// ✅ JSON parser for all routes EXCEPT elevator endpoint
-app.use((req, res, next) => {
-  if (req.path === '/api/elevators/log' && req.method === 'POST') {
-    next(); // Skip JSON parsing for elevator endpoint
-  } else {
-    express.json()(req, res, next);
-  }
-});
+// ✅ Standard JSON parser for all routes
+app.use(express.json());
 app.use(cookieParser());
 
 
@@ -969,62 +963,54 @@ app.post("/api/crane/log", async (req, res) => {
   }
 });
 
-// ✅ Elevator ingestion (open) — accepts malformed JSON temporarily
-app.post("/api/elevators/log", (req, res) => {
-  let body = '';
-  req.on('data', chunk => {
-    body += chunk.toString();
-  });
-  req.on('end', async () => {
-    try {
-      // Fix malformed JSON
-      let fixedBody = body;
-      fixedBody = fixedBody.replace(/"data"\s*-\s*([^}]+)/g, (match, values) => {
-        const arrayValues = values.split(',').map(v => v.trim());
-        return `"data": [${arrayValues.join(', ')}]`;
-      });
-      
-      // Parse the fixed JSON
-      const parsedBody = JSON.parse(fixedBody);
-      const items = Array.isArray(parsedBody) ? parsedBody : [parsedBody];
-      
-      if (!items || items.length === 0 || typeof items[0] !== "object") {
-        return res.status(400).json({ message: "Invalid payload. Expecting array of objects." });
-      }
+// ✅ Elevator data ingestion endpoint
+app.post("/api/elevators/log", async (req, res) => {
+  try {
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    
+    // ✅ Validate and map data
+    const docs = items.map((it) => {
+      // Parse timestamp (Unix seconds to Date)
+      const rawTs = it.timestamp != null ? String(it.timestamp) : "";
+      const tsNum = Number(rawTs);
+      const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
 
-      const docs = items.map((it) => {
-        // Parse timestamp (Unix seconds to Date)
-        const rawTs = it.timestamp != null ? String(it.timestamp) : "";
-        const tsNum = Number(rawTs);
-        const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
-
-        // Handle data array
-        let dataArray = [];
-        if (Array.isArray(it.data)) {
-          dataArray = it.data;
+      // Handle data array - can be array or stringified array
+      let dataArray = [];
+      if (Array.isArray(it.data)) {
+        dataArray = it.data;
+      } else if (typeof it.data === 'string') {
+        try {
+          // Try to parse stringified array like "[6161,34321,0,0]"
+          dataArray = JSON.parse(it.data);
+        } catch {
+          // Fallback: treat as comma-separated string
+          dataArray = it.data.split(',').map(v => v.trim());
         }
-
-        return {
-          elevatorCompany: it.elevatorCompany || null,
-          elevatorId: it.elevatorId || it.DeviceID || null,
-          location: it.location || "Unknown Location",
-          timestamp: tsDate,
-          data: dataArray
-        };
-      });
-
-      const validDocs = docs.filter((d) => d.elevatorId);
-      if (validDocs.length === 0) {
-        return res.status(400).json({ message: "No valid items with elevatorId." });
       }
 
-      const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
-      return res.status(201).json({ ok: true, inserted: result.length });
-    } catch (err) {
-      console.error("❌ /api/elevators/log error:", err);
-      return res.status(500).json({ message: "Server error" });
+      return {
+        elevatorCompany: it.elevatorCompany || null,
+        elevatorId: it.elevatorId || it.DeviceID || null,
+        location: it.location || "Unknown Location",
+        timestamp: tsDate,
+        data: dataArray
+      };
+    });
+
+    // ✅ Filter valid documents
+    const validDocs = docs.filter((d) => d.elevatorId);
+    if (validDocs.length === 0) {
+      return res.status(400).json({ message: "No valid items with elevatorId." });
     }
-  });
+
+    // ✅ Insert into database
+    const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
+    return res.status(201).json({ ok: true, inserted: result.length });
+  } catch (err) {
+    console.error("❌ /api/elevators/log error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
 });
 
 // ✅ Recent logs viewer (protected via JWT cookie)
