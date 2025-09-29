@@ -1013,20 +1013,44 @@ app.post("/api/elevators/log", async (req, res) => {
   }
 });
 
-// ✅ Recent logs viewer (protected via JWT cookie)
+// ✅ Recent logs viewer (protected via JWT cookie) - Returns latest log per elevator
 app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
   try {
     const { elevatorId, companyName, location, limit = 50 } = req.query;
-    const filter = {};
-    if (elevatorId) filter.elevatorId = elevatorId;
-    if (companyName) filter.elevatorCompany = companyName;
-    if (location) filter.location = new RegExp(location, 'i'); // Case-insensitive search
-
-    const logs = await ElevatorEvent.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(Math.min(Number(limit) || 50, 200))
-      .lean();
-
+    
+    // Build filter for aggregation
+    const matchFilter = {};
+    if (elevatorId) matchFilter.elevatorId = elevatorId;
+    if (companyName) matchFilter.elevatorCompany = companyName;
+    if (location) matchFilter.location = new RegExp(location, 'i');
+    
+    // MongoDB aggregation pipeline to get latest log per elevator
+    const pipeline = [
+      // Match documents based on filters
+      { $match: matchFilter },
+      
+      // Sort by elevatorId and timestamp (newest first)
+      { $sort: { elevatorId: 1, timestamp: -1 } },
+      
+      // Group by elevatorId and get the latest document
+      { 
+        $group: { 
+          _id: "$elevatorId", 
+          latestLog: { $first: "$$ROOT" }
+        }
+      },
+      
+      // Replace root with the latest log document
+      { $replaceRoot: { newRoot: "$latestLog" } },
+      
+      // Sort by timestamp (newest first) for final result
+      { $sort: { timestamp: -1 } },
+      
+      // Apply limit
+      { $limit: Math.min(Number(limit) || 50, 200) }
+    ];
+    
+    const logs = await ElevatorEvent.aggregate(pipeline);
     res.json({ logs });
   } catch (err) {
     console.error("❌ /api/elevators/recent error:", err);
