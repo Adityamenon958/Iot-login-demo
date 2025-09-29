@@ -64,7 +64,10 @@ const processElevatorData = (dataArray) => {
       primaryStatus: [],
       serviceStatus: [],
       powerStatus: [],
-      overallStatus: 'unknown'
+      overallStatus: 'unknown',
+      priorityScore: 0,
+      priorityColor: 'gray',
+      priorityStatus: 'Unknown'
     };
   }
 
@@ -117,18 +120,101 @@ const processElevatorData = (dataArray) => {
   if (reg66L[1] === '1') powerStatus.push('Standby');            // bit6
   if (reg66L[0] === '1') powerStatus.push('Standby');            // bit7
 
-  // Determine overall status
-  let overallStatus = 'normal';
-  if (primaryStatus.includes('Comprehensive Fault') || primaryStatus.includes('Door Open')) {
+  // ✅ Calculate Priority Score based on your exact requirements
+  let maxScore = 0;
+  let criticalStatus = '';
+
+  // Critical/Emergency (Red) - Score 6
+  const criticalStatuses = [
+    'Comprehensive Fault', 'Overload', 'Earthquake', 'OEPS', 
+    'Fire Exclusive', 'Fire Return', 'Fire Return In Place'
+  ];
+  const criticalFound = [...primaryStatus, ...serviceStatus, ...powerStatus]
+    .filter(status => criticalStatuses.includes(status));
+  if (criticalFound.length > 0) {
+    maxScore = Math.max(maxScore, 6);
+    criticalStatus = criticalFound[0];
+  }
+
+  // Check for communication fault (Comm Normal = 0 means abnormal)
+  if (serviceStatus.includes('Comm Normal') === false && reg66H[6] === '0') {
+    maxScore = Math.max(maxScore, 6);
+    criticalStatus = 'Comm Fault';
+  }
+
+  // Check for out of service (In Service = 0)
+  if (serviceStatus.includes('In Service') === false && reg66H[7] === '0') {
+    maxScore = Math.max(maxScore, 0); // Gray for out of service
+    criticalStatus = 'Out of Service';
+  }
+
+  // Maintenance/Inspection (Orange) - Score 4
+  const maintenanceStatuses = ['Maintenance ON', 'Inspection'];
+  const maintenanceFound = [...primaryStatus, ...serviceStatus]
+    .filter(status => maintenanceStatuses.includes(status));
+  if (maintenanceFound.length > 0 && maxScore < 6) {
+    maxScore = Math.max(maxScore, 4);
+    criticalStatus = maintenanceFound[0];
+  }
+
+  // Warning (Yellow) - Score 3
+  const warningStatuses = ['Door Open'];
+  const warningFound = [...primaryStatus]
+    .filter(status => warningStatuses.includes(status));
+  if (warningFound.length > 0 && maxScore < 4) {
+    maxScore = Math.max(maxScore, 3);
+    criticalStatus = warningFound[0];
+  }
+
+  // Normal/Running (Green) - Score 1
+  const normalStatuses = ['In Service', 'Automatic', 'Down', 'Up', 'Car Walking', 'Normal Power', 'Safety Circuit'];
+  const normalFound = [...primaryStatus, ...serviceStatus, ...powerStatus]
+    .filter(status => normalStatuses.includes(status));
+  if (normalFound.length > 0 && maxScore < 3) {
+    maxScore = Math.max(maxScore, 1);
+    criticalStatus = normalFound[0];
+  }
+
+  // Info/Mode (Blue) - Score 0
+  const infoStatuses = ['Attendant', 'Independent'];
+  const infoFound = [...primaryStatus]
+    .filter(status => infoStatuses.includes(status));
+  if (infoFound.length > 0 && maxScore < 1) {
+    maxScore = Math.max(maxScore, 0);
+    criticalStatus = infoFound[0];
+  }
+
+  // Determine color and status based on priority score
+  let priorityColor = 'gray';
+  let priorityStatus = 'Unknown';
+  let overallStatus = 'unknown';
+
+  if (maxScore >= 6) {
+    priorityColor = 'red';
+    priorityStatus = 'Critical';
     overallStatus = 'error';
-  } else if (primaryStatus.includes('Inspection') || serviceStatus.includes('Maintenance ON')) {
+  } else if (maxScore === 4) {
+    priorityColor = 'orange';
+    priorityStatus = 'Maintenance';
     overallStatus = 'warning';
-  } else if (primaryStatus.includes('Independent') || primaryStatus.includes('Fire Exclusive')) {
-    overallStatus = 'special';
-  } else if (primaryStatus.length === 0 && serviceStatus.includes('In Service')) {
+  } else if (maxScore === 3) {
+    priorityColor = 'yellow';
+    priorityStatus = 'Warning';
+    overallStatus = 'warning';
+  } else if (maxScore === 1) {
+    priorityColor = 'green';
+    priorityStatus = 'Normal';
     overallStatus = 'active';
-  } else {
-    overallStatus = 'inactive';
+  } else if (maxScore === 0) {
+    if (criticalStatus === 'Out of Service') {
+      priorityColor = 'gray';
+      priorityStatus = 'Out of Service';
+      overallStatus = 'inactive';
+    } else {
+      priorityColor = 'blue';
+      priorityStatus = 'Info';
+      overallStatus = 'special';
+    }
   }
 
   return {
@@ -136,7 +222,11 @@ const processElevatorData = (dataArray) => {
     primaryStatus,
     serviceStatus,
     powerStatus,
-    overallStatus
+    overallStatus,
+    priorityScore: maxScore,
+    priorityColor,
+    priorityStatus,
+    criticalStatus
   };
 };
 
@@ -322,91 +412,156 @@ export default function ElevatorOverview() {
       {!loading && !error && (
         <div className="mb-3">
           <Row>
-            {elevators.map((elevator) => (
-              <Col xs={12} sm={6} md={4} lg={2} className="mb-3" key={elevator.id}>
-                <Card 
-                  className="h-100 border-0 shadow-sm elevator-card" 
-                  style={{ 
-                    borderRadius: '12px',
-                    transition: 'all 0.3s ease',
-                    cursor: 'pointer',
-                    backgroundColor: '#f5f5f5'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-5px)';
-                    e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-                  }}
-                >
-                  <Card.Body className="p-3">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
-                        {elevator.id}
-                      </Badge>
-                      {getStatusBadge(elevator.overallStatus)}
-                    </div>
-                    
-                    <div className="mb-2">
-                      <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
-                        {elevator.company}
-                      </h6>
-                      <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
-                        {elevator.location}
-                      </p>
-                    </div>
+            {elevators.map((elevator) => {
+              // ✅ Get color mapping based on priority
+              const getPriorityColor = (color) => {
+                const colorMap = {
+                  'red': '#dc3545',      // Critical/Emergency
+                  'orange': '#fd7e14',   // Maintenance/Inspection  
+                  'yellow': '#ffc107',   // Warning
+                  'green': '#198754',    // Normal/Running
+                  'blue': '#0d6efd',     // Info/Mode
+                  'gray': '#6c757d'      // Standby/Out of Service
+                };
+                return colorMap[color] || '#6c757d';
+              };
 
-                    {/* Floor Display */}
-                    <div className="mb-2">
-                      <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
-                        Floor: {elevator.floor}
-                      </small>
-                    </div>
+              const borderColor = getPriorityColor(elevator.priorityColor);
+              const statusIcon = elevator.priorityScore >= 6 ? '🔴' : 
+                               elevator.priorityScore === 4 ? '🟠' :
+                               elevator.priorityScore === 3 ? '🟡' :
+                               elevator.priorityScore === 1 ? '🟢' :
+                               elevator.priorityScore === 0 && elevator.priorityColor === 'blue' ? '🔵' : '⚪';
 
-                    {/* Primary Status */}
-                    {elevator.primaryStatus.length > 0 && (
+              // ✅ Get background fade color based on priority
+              const getBackgroundFade = (color) => {
+                const fadeMap = {
+                  'red': 'rgba(220, 53, 69, 0.25)',      // Critical/Emergency - much darker red
+                  'orange': 'rgba(253, 126, 20, 0.25)',   // Maintenance/Inspection - much darker orange
+                  'yellow': 'rgba(255, 193, 7, 0.25)',    // Warning - much darker yellow
+                  'green': 'rgba(25, 135, 84, 0.25)',     // Normal/Running - much darker green
+                  'blue': 'rgba(13, 110, 253, 0.25)',     // Info/Mode - much darker blue
+                  'gray': 'rgba(108, 117, 125, 0.25)'     // Standby/Out of Service - much darker gray
+                };
+                return fadeMap[color] || 'rgba(108, 117, 125, 0.25)';
+              };
+
+              // ✅ Get colored shadow based on priority
+              const getColoredShadow = (color) => {
+                const shadowMap = {
+                  'red': '0 4px 15px rgba(220, 53, 69, 0.3), 0 2px 8px rgba(220, 53, 69, 0.2)',      // Red shadow for Critical
+                  'orange': '0 4px 15px rgba(253, 126, 20, 0.3), 0 2px 8px rgba(253, 126, 20, 0.2)',   // Orange shadow for Maintenance
+                  'yellow': '0 4px 15px rgba(255, 193, 7, 0.3), 0 2px 8px rgba(255, 193, 7, 0.2)',    // Yellow shadow for Warning
+                  'green': '0 4px 15px rgba(25, 135, 84, 0.3), 0 2px 8px rgba(25, 135, 84, 0.2)',     // Green shadow for Normal
+                  'blue': '0 4px 15px rgba(13, 110, 253, 0.3), 0 2px 8px rgba(13, 110, 253, 0.2)',     // Blue shadow for Info
+                  'gray': '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)'     // Gray shadow for Out of Service
+                };
+                return shadowMap[color] || '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)';
+              };
+
+              const backgroundFade = getBackgroundFade(elevator.priorityColor);
+              const coloredShadow = getColoredShadow(elevator.priorityColor);
+
+              return (
+                <Col xs={12} sm={6} md={4} lg={2} className="mb-3" key={elevator.id}>
+                  <Card 
+                    className="h-100 border-0 elevator-card position-relative" 
+                    style={{ 
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      cursor: 'pointer',
+                      backgroundColor: '#f5f5f5',
+                      borderLeft: `4px solid ${borderColor}`, // ✅ Left border color
+                      background: `linear-gradient(to right, ${backgroundFade} 0%, ${backgroundFade} 20%, #f5f5f5 50%, #f5f5f5 100%)`, // ✅ Left gradient fade
+                      boxShadow: coloredShadow // ✅ Colored shadow based on status
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-5px)';
+                      e.currentTarget.style.boxShadow = `${coloredShadow}, 0 8px 25px rgba(0,0,0,0.15)`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = coloredShadow;
+                    }}
+                  >
+                    <Card.Body className="p-3">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
+                          {elevator.id}
+                        </Badge>
+                        {/* ✅ Status Badge with Priority Color */}
+                        <Badge 
+                          style={{ 
+                            backgroundColor: borderColor,
+                            color: 'white',
+                            fontSize: '0.65rem',
+                            fontWeight: '600'
+                          }}
+                          className="px-2 py-1"
+                        >
+                          {statusIcon} {elevator.priorityStatus}
+                        </Badge>
+                  </div>
+                      
+                      <div className="mb-2">
+                        <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
+                          {elevator.company}
+                  </h6>
+                        <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
+                          {elevator.location}
+                    </p>
+                  </div>
+
+                      {/* Floor Display */}
+                      <div className="mb-2">
+                        <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
+                          Floor: {elevator.floor}
+                        </small>
+                  </div>
+
+                      {/* Primary Status */}
+                      {elevator.primaryStatus.length > 0 && (
+                        <div className="mb-2">
+                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                            Status: {elevator.primaryStatus.join(', ')}
+                          </small>
+                  </div>
+                      )}
+
+                      {/* Service Status */}
+                      {elevator.serviceStatus.length > 0 && (
+                        <div className="mb-2">
+                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                            Service: {elevator.serviceStatus.join(', ')}
+                          </small>
+                  </div>
+                      )}
+
+                      {/* Power Status */}
+                      {elevator.powerStatus.length > 0 && (
+                        <div className="mb-2">
+                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                            Power: {elevator.powerStatus.join(', ')}
+                          </small>
+                  </div>
+                      )}
+
                       <div className="mb-2">
                         <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                          Status: {elevator.primaryStatus.join(', ')}
+                          Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
                         </small>
-                      </div>
-                    )}
+                  </div>
 
-                    {/* Service Status */}
-                    {elevator.serviceStatus.length > 0 && (
-                      <div className="mb-2">
+                      <div>
                         <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                          Service: {elevator.serviceStatus.join(', ')}
+                          Raw Data: {elevator.data ? elevator.data.slice(0, 2).join(', ') : 'N/A'}...
                         </small>
-                      </div>
-                    )}
-
-                    {/* Power Status */}
-                    {elevator.powerStatus.length > 0 && (
-                      <div className="mb-2">
-                        <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                          Power: {elevator.powerStatus.join(', ')}
-                        </small>
-                      </div>
-                    )}
-
-                    <div className="mb-2">
-                      <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                        Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
-                      </small>
-                    </div>
-
-                    <div>
-                      <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                        Raw Data: {elevator.data ? elevator.data.slice(0, 2).join(', ') : 'N/A'}...
-                      </small>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-            ))}
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+              );
+            })}
           </Row>
         </div>
       )}
