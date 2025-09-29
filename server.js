@@ -965,50 +965,92 @@ app.post("/api/crane/log", async (req, res) => {
 
 // ✅ Elevator data ingestion endpoint
 app.post("/api/elevators/log", async (req, res) => {
+  const requestId = Date.now() + Math.random().toString(36).substr(2, 9);
+  
   try {
+    console.log(`\n🚀 [${requestId}] Gateway hit /api/elevators/log`);
+    console.log(`📥 [${requestId}] Raw request body:`, JSON.stringify(req.body, null, 2));
+    
     const items = Array.isArray(req.body) ? req.body : [req.body];
+    console.log(`📊 [${requestId}] Processing ${items.length} item(s)`);
     
     // ✅ Validate and map data
-    const docs = items.map((it) => {
+    const docs = items.map((it, index) => {
+      console.log(`\n🔍 [${requestId}] Processing item ${index + 1}:`, {
+        elevatorCompany: it.elevatorCompany,
+        elevatorId: it.elevatorId || it.DeviceID,
+        location: it.location,
+        timestamp: it.timestamp,
+        data: it.data
+      });
+      
       // Parse timestamp (Unix seconds to Date)
       const rawTs = it.timestamp != null ? String(it.timestamp) : "";
       const tsNum = Number(rawTs);
       const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
+      console.log(`⏰ [${requestId}] Timestamp: ${rawTs} → ${tsDate.toISOString()}`);
 
       // Handle data array - can be array or stringified array
       let dataArray = [];
       if (Array.isArray(it.data)) {
         dataArray = it.data;
+        console.log(`📋 [${requestId}] Data is already array:`, dataArray);
       } else if (typeof it.data === 'string') {
         try {
           // Try to parse stringified array like "[6161,34321,0,0]"
           dataArray = JSON.parse(it.data);
+          console.log(`📋 [${requestId}] Data parsed from string:`, dataArray);
         } catch {
           // Fallback: treat as comma-separated string
           dataArray = it.data.split(',').map(v => v.trim());
+          console.log(`📋 [${requestId}] Data parsed as comma-separated:`, dataArray);
         }
       }
 
-      return {
+      const processedDoc = {
         elevatorCompany: it.elevatorCompany || null,
         elevatorId: it.elevatorId || it.DeviceID || null,
         location: it.location || "Unknown Location",
         timestamp: tsDate,
         data: dataArray
       };
+      
+      console.log(`✅ [${requestId}] Processed document:`, {
+        elevatorCompany: processedDoc.elevatorCompany,
+        elevatorId: processedDoc.elevatorId,
+        location: processedDoc.location,
+        timestamp: processedDoc.timestamp.toISOString(),
+        data: processedDoc.data
+      });
+      
+      return processedDoc;
     });
 
     // ✅ Filter valid documents
     const validDocs = docs.filter((d) => d.elevatorId);
+    console.log(`\n🔍 [${requestId}] Validation results:`);
+    console.log(`📊 [${requestId}] Total items: ${docs.length}`);
+    console.log(`✅ [${requestId}] Valid items: ${validDocs.length}`);
+    console.log(`❌ [${requestId}] Invalid items: ${docs.length - validDocs.length}`);
+    
     if (validDocs.length === 0) {
+      console.log(`❌ [${requestId}] No valid items found - returning 400`);
       return res.status(400).json({ message: "No valid items with elevatorId." });
     }
 
     // ✅ Insert into database
+    console.log(`\n💾 [${requestId}] Inserting ${validDocs.length} document(s) into database...`);
     const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
+    console.log(`✅ [${requestId}] Successfully inserted ${result.length} document(s)`);
+    console.log(`🎉 [${requestId}] Request completed successfully\n`);
+    
     return res.status(201).json({ ok: true, inserted: result.length });
   } catch (err) {
-    console.error("❌ /api/elevators/log error:", err);
+    console.error(`\n❌ [${requestId}] /api/elevators/log error:`, err);
+    console.error(`❌ [${requestId}] Error details:`, {
+      message: err.message,
+      stack: err.stack?.split('\n').slice(0, 3).join('\n')
+    });
     return res.status(500).json({ message: "Server error" });
   }
 });
