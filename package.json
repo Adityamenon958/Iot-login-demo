@@ -4,8 +4,7 @@
     "main": "server.js",
     "scripts": {
         "start": "node server.js",
-        "build": "npm install --prefix frontend && npm run build --prefix frontend",
-        "postinstall": "npm run build"
+        "build": "npm install --prefix frontend && npm run build --prefix frontend"
     },
     "dependencies": {
         "cookie-parser": "^1.4.7",
