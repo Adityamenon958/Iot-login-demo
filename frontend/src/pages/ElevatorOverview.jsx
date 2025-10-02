@@ -222,8 +222,10 @@ export default function ElevatorOverview() {
       });
       
       if (response.data && response.data.logs) {
+        console.log('🔍 API Response:', response.data);
         // Process each elevator's data
         const processedElevators = response.data.logs.map(log => {
+          console.log('🔍 Processing elevator:', log.elevatorId, 'Working Hours:', log.workingHours);
           const processedData = processElevatorData(log.data);
           return {
             id: log.elevatorId,
@@ -232,6 +234,7 @@ export default function ElevatorOverview() {
             timestamp: log.timestamp,
             createdAt: log.createdAt,
             data: log.data,
+            workingHours: log.workingHours, // ✅ Pass through working hours from backend
             ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus
           };
         });
@@ -487,6 +490,21 @@ export default function ElevatorOverview() {
                             {elevator.serviceStatus.includes('In Service') ? 'In Service' : 'Out of Service'}
                           </span>
                         </div>
+
+                        {/* ✅ In Maintenance Tag based on Reg 66H bit2 */}
+                        {elevator.serviceStatus.includes('Maintenance ON') && (
+                          <div className="mb-1">
+                            <span 
+                              style={{ 
+                                fontSize: '0.8rem',
+                                fontWeight: '600',
+                                color: '#fd7e14' // Orange color for maintenance
+                              }}
+                            >
+                              In Maintenance
+                            </span>
+                          </div>
+                        )}
                   </div>
 
                       {/* Floor Display */}
@@ -496,32 +514,25 @@ export default function ElevatorOverview() {
                         </small>
                   </div>
 
-                      {/* Primary Status */}
-                      {elevator.primaryStatus.length > 0 && (
-                        <div className="mb-2">
-                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                            Status: {elevator.primaryStatus.join(', ')}
-                          </small>
-                  </div>
+                      {/* ✅ Working Hours Display */}
+                      {elevator.workingHours && (
+                        <>
+                          <div className="mb-1">
+                            <small className="fw-bold text-info" style={{ fontSize: '0.75rem' }}>
+                              Total Working: {elevator.workingHours.formatted}
+                            </small>
+                          </div>
+                          {elevator.workingHours.currentSession && (
+                            <div className="mb-1">
+                              <small className="fw-bold text-success" style={{ fontSize: '0.75rem' }}>
+                                Current Session: {elevator.workingHours.currentSession.formatted} ({elevator.workingHours.currentSession.start})
+                              </small>
+                            </div>
+                          )}
+                        </>
                       )}
 
-                      {/* Service Status */}
-                      {elevator.serviceStatus.length > 0 && (
-                        <div className="mb-2">
-                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                            Service: {elevator.serviceStatus.join(', ')}
-                          </small>
-                  </div>
-                      )}
-
-                      {/* Power Status */}
-                      {elevator.powerStatus.length > 0 && (
-                        <div className="mb-2">
-                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                            Power: {elevator.powerStatus.join(', ')}
-                          </small>
-                  </div>
-                      )}
+                      {/* ✅ Temporarily removed: Primary Status, Service Status, Power Status (for future popup) */}
 
                       <div className="mb-2">
                         <small className="text-muted" style={{ fontSize: '0.7rem' }}>
@@ -529,11 +540,7 @@ export default function ElevatorOverview() {
                         </small>
                   </div>
 
-                      <div>
-                        <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                          Raw Data: {elevator.data ? elevator.data.slice(0, 2).join(', ') : 'N/A'}...
-                        </small>
-                  </div>
+                      {/* ✅ Temporarily removed: Raw Data (for future popup) */}
                 </Card.Body>
               </Card>
             </Col>

@@ -1093,7 +1093,134 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
     ];
     
     const logs = await ElevatorEvent.aggregate(pipeline);
-    res.json({ logs });
+    
+    // ✅ Calculate working hours for each elevator
+    const logsWithWorkingHours = await Promise.all(logs.map(async (log) => {
+      try {
+        // Get all logs for this elevator, sorted by timestamp
+        const allLogs = await ElevatorEvent.find({ elevatorId: log.elevatorId }).sort({ timestamp: 1 });
+        
+        let totalWorkingMs = 0;
+        let lastWorkingTime = null;
+        let currentWorkingStart = null;
+        let currentSessionStart = null;
+        let currentSessionDuration = 0;
+        let firstWorkingLog = null;
+        let sessionCount = 0;
+
+        for (let i = 0; i < allLogs.length; i++) {
+          const currentLog = allLogs[i];
+          const nextLog = allLogs[i + 1];
+
+          // Parse Reg66H bit0 (In Service status)
+          const reg66 = parseInt(currentLog.data[1]) || 0;
+          const reg66Binary = reg66.toString(2).padStart(16, '0');
+          const reg66H = reg66Binary.substring(0, 8);
+          const isWorking = reg66H[7] === '1'; // bit0 = rightmost character
+
+          if (isWorking) {
+            // Start of working session
+            if (currentWorkingStart === null) {
+              currentWorkingStart = new Date(currentLog.timestamp);
+              currentSessionStart = new Date(currentLog.timestamp);
+              firstWorkingLog = currentLog;
+              sessionCount++;
+            }
+            lastWorkingTime = new Date(currentLog.timestamp);
+
+            // If this is the last log or next log is not working, end the session
+            if (!nextLog) {
+              // Last log - consider it as current working session
+              const now = new Date();
+              const sessionDuration = now - currentWorkingStart;
+              totalWorkingMs += sessionDuration;
+              currentSessionDuration = sessionDuration;
+              currentWorkingStart = null;
+            } else {
+              // Check if next log is also working
+              const nextReg66 = parseInt(nextLog.data[1]) || 0;
+              const nextReg66Binary = nextReg66.toString(2).padStart(16, '0');
+              const nextReg66H = nextReg66Binary.substring(0, 8);
+              const nextIsWorking = nextReg66H[7] === '1';
+
+              if (!nextIsWorking) {
+                // End of working session
+                const sessionEnd = new Date(nextLog.timestamp);
+                const sessionDuration = sessionEnd - currentWorkingStart;
+                totalWorkingMs += sessionDuration;
+                currentWorkingStart = null;
+                currentSessionStart = null;
+              }
+            }
+          } else {
+            // Not working - reset current working start
+            currentWorkingStart = null;
+            currentSessionStart = null;
+          }
+        }
+
+        // Convert milliseconds to hours
+        const totalWorkingHours = totalWorkingMs / (1000 * 60 * 60);
+        const currentSessionHours = currentSessionDuration / (1000 * 60 * 60);
+
+        // Format total working hours (days, hours, minutes)
+        const days = Math.floor(totalWorkingHours / 24);
+        const hours = Math.floor(totalWorkingHours % 24);
+        const minutes = Math.floor((totalWorkingHours % 1) * 60);
+        let workingHoursText = '';
+        if (days > 0) workingHoursText += `${days}d `;
+        if (hours > 0) workingHoursText += `${hours}h `;
+        if (minutes > 0) workingHoursText += `${minutes}m`;
+        if (workingHoursText === '') workingHoursText = '0m';
+
+        // Format current session hours (days, hours, minutes)
+        const sessDays = Math.floor(currentSessionHours / 24);
+        const sessHours = Math.floor(currentSessionHours % 24);
+        const sessMinutes = Math.floor((currentSessionHours % 1) * 60);
+        let currentSessionText = '';
+        if (sessDays > 0) currentSessionText += `${sessDays}d `;
+        if (sessHours > 0) currentSessionText += `${sessHours}h `;
+        if (sessMinutes > 0) currentSessionText += `${sessMinutes}m`;
+        if (currentSessionText === '') currentSessionText = '0m';
+
+        // Format session start time
+        let sessionStartText = 'Not Working';
+        if (currentSessionStart) {
+          sessionStartText = currentSessionStart.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+        }
+
+        return {
+          ...log,
+          workingHours: {
+            total: totalWorkingHours,
+            formatted: workingHoursText.trim(),
+            currentSession: currentSessionStart ? {
+              start: sessionStartText,
+              duration: currentSessionHours,
+              formatted: currentSessionText.trim()
+            } : null
+          }
+        };
+      } catch (err) {
+        console.error(`❌ Error calculating working hours for ${log.elevatorId}:`, err);
+        return {
+          ...log,
+          workingHours: {
+            total: 0,
+            formatted: '0m',
+            currentSession: null
+          }
+        };
+      }
+    }));
+
+    res.json({ logs: logsWithWorkingHours });
   } catch (err) {
     console.error("❌ /api/elevators/recent error:", err);
     res.status(500).json({ message: "Server error" });
