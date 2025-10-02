@@ -120,16 +120,16 @@ const processElevatorData = (dataArray) => {
   if (reg66L[1] === '1') powerStatus.push('Standby');            // bit6
   if (reg66L[0] === '1') powerStatus.push('Standby');            // bit7
 
-  // ✅ Calculate Priority Score based on your exact requirements
+  // ✅ Calculate Priority Score based on Reg 66H and Reg 66L only (Reg 65L removed from priority)
   let maxScore = 0;
   let criticalStatus = '';
 
   // Critical/Emergency (Red) - Score 6
   const criticalStatuses = [
-    'Comprehensive Fault', 'Overload', 'Earthquake', 'OEPS', 
-    'Fire Exclusive', 'Fire Return', 'Fire Return In Place'
+    'Overload', 'Earthquake', 'OEPS', 
+    'Fire Return', 'Fire Return In Place'
   ];
-  const criticalFound = [...primaryStatus, ...serviceStatus, ...powerStatus]
+  const criticalFound = [...serviceStatus, ...powerStatus]
     .filter(status => criticalStatuses.includes(status));
   if (criticalFound.length > 0) {
     maxScore = Math.max(maxScore, 6);
@@ -149,40 +149,26 @@ const processElevatorData = (dataArray) => {
   }
 
   // Maintenance/Inspection (Orange) - Score 4
-  const maintenanceStatuses = ['Maintenance ON', 'Inspection'];
-  const maintenanceFound = [...primaryStatus, ...serviceStatus]
+  const maintenanceStatuses = ['Maintenance ON'];
+  const maintenanceFound = [...serviceStatus]
     .filter(status => maintenanceStatuses.includes(status));
   if (maintenanceFound.length > 0 && maxScore < 6) {
     maxScore = Math.max(maxScore, 4);
     criticalStatus = maintenanceFound[0];
   }
 
-  // Warning (Yellow) - Score 3
-  const warningStatuses = ['Door Open'];
-  const warningFound = [...primaryStatus]
-    .filter(status => warningStatuses.includes(status));
-  if (warningFound.length > 0 && maxScore < 4) {
-    maxScore = Math.max(maxScore, 3);
-    criticalStatus = warningFound[0];
-  }
+  // Warning (Yellow) - Score 3 - Removed (Reg 65L bits no longer used in priority)
 
   // Normal/Running (Green) - Score 1
-  const normalStatuses = ['In Service', 'Automatic', 'Down', 'Up', 'Car Walking', 'Normal Power', 'Safety Circuit'];
-  const normalFound = [...primaryStatus, ...serviceStatus, ...powerStatus]
+  const normalStatuses = ['In Service', 'Automatic', 'Car Walking', 'Normal Power', 'Safety Circuit'];
+  const normalFound = [...serviceStatus, ...powerStatus]
     .filter(status => normalStatuses.includes(status));
-  if (normalFound.length > 0 && maxScore < 3) {
+  if (normalFound.length > 0 && maxScore < 4) {
     maxScore = Math.max(maxScore, 1);
     criticalStatus = normalFound[0];
   }
 
-  // Info/Mode (Blue) - Score 0
-  const infoStatuses = ['Attendant', 'Independent'];
-  const infoFound = [...primaryStatus]
-    .filter(status => infoStatuses.includes(status));
-  if (infoFound.length > 0 && maxScore < 1) {
-    maxScore = Math.max(maxScore, 0);
-    criticalStatus = infoFound[0];
-  }
+  // Info/Mode (Blue) - Score 0 - Removed (Reg 65L bits no longer used in priority)
 
   // Determine color and status based on priority score
   let priorityColor = 'gray';
@@ -197,24 +183,14 @@ const processElevatorData = (dataArray) => {
     priorityColor = 'orange';
     priorityStatus = 'Maintenance';
     overallStatus = 'warning';
-  } else if (maxScore === 3) {
-    priorityColor = 'yellow';
-    priorityStatus = 'Warning';
-    overallStatus = 'warning';
   } else if (maxScore === 1) {
     priorityColor = 'green';
     priorityStatus = 'Normal';
     overallStatus = 'active';
-  } else if (maxScore === 0) {
-    if (criticalStatus === 'Out of Service') {
-      priorityColor = 'gray';
-      priorityStatus = 'Out of Service';
-      overallStatus = 'inactive';
-    } else {
-      priorityColor = 'blue';
-      priorityStatus = 'Info';
-      overallStatus = 'special';
-    }
+  } else {
+    priorityColor = 'gray';
+    priorityStatus = 'Out of Service';
+    overallStatus = 'inactive';
   }
 
   return {
@@ -489,18 +465,7 @@ export default function ElevatorOverview() {
                         <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
                           {elevator.id}
                         </Badge>
-                        {/* ✅ Status Badge with Priority Color */}
-                        <Badge 
-                          style={{ 
-                            backgroundColor: borderColor,
-                            color: 'white',
-                            fontSize: '0.65rem',
-                            fontWeight: '600'
-                          }}
-                          className="px-2 py-1"
-                        >
-                          {statusIcon} {elevator.priorityStatus}
-                        </Badge>
+                        {/* ✅ Status Badge Removed - Card colors still work based on priority */}
                   </div>
                       
                       <div className="mb-2">
@@ -510,6 +475,18 @@ export default function ElevatorOverview() {
                         <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
                           {elevator.location}
                     </p>
+                        {/* ✅ In Service / Out of Service Tag based on Reg 66H bit0 */}
+                        <div className="mb-1">
+                          <span 
+                            style={{ 
+                              fontSize: '0.8rem',
+                              fontWeight: '600',
+                              color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
+                            }}
+                          >
+                            {elevator.serviceStatus.includes('In Service') ? 'In Service' : 'Out of Service'}
+                          </span>
+                        </div>
                   </div>
 
                       {/* Floor Display */}
