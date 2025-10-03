@@ -235,6 +235,7 @@ export default function ElevatorOverview() {
             createdAt: log.createdAt,
             data: log.data,
             workingHours: log.workingHours, // ✅ Pass through working hours from backend
+            maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
             ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus
           };
         });
@@ -463,7 +464,7 @@ export default function ElevatorOverview() {
                       e.currentTarget.style.boxShadow = coloredShadow;
                     }}
                   >
-                    <Card.Body className="p-3">
+                     <Card.Body className="p-2">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
                           {elevator.id}
@@ -471,74 +472,77 @@ export default function ElevatorOverview() {
                         {/* ✅ Status Badge Removed - Card colors still work based on priority */}
                   </div>
                       
-                      <div className="mb-2">
-                        <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
-                          {elevator.company}
-                  </h6>
-                        <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
-                          {elevator.location}
-                    </p>
-                        {/* ✅ In Service / Out of Service Tag based on Reg 66H bit0 */}
-                        <div className="mb-1">
-                          <span 
-                            style={{ 
-                              fontSize: '0.8rem',
-                              fontWeight: '600',
-                              color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
-                            }}
-                          >
-                            {elevator.serviceStatus.includes('In Service') ? 'In Service' : 'Out of Service'}
-                          </span>
-                        </div>
+                       <div className="mb-2">
+                         <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
+                           {elevator.company}
+                         </h6>
+                         <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
+                           {elevator.location}
+                         </p>
+                       </div>
 
-                        {/* ✅ In Maintenance Tag based on Reg 66H bit2 */}
-                        {elevator.serviceStatus.includes('Maintenance ON') && (
-                          <div className="mb-1">
-                            <span 
-                              style={{ 
-                                fontSize: '0.8rem',
-                                fontWeight: '600',
-                                color: '#fd7e14' // Orange color for maintenance
-                              }}
-                            >
-                              In Maintenance
-                            </span>
-                          </div>
-                        )}
-                  </div>
+                       {/* Floor Display */}
+                       <div className="mb-2">
+                         <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
+                           Floor: {elevator.floor}
+                         </small>
+                       </div>
 
-                      {/* Floor Display */}
-                      <div className="mb-2">
-                        <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
-                          Floor: {elevator.floor}
-                        </small>
-                  </div>
+                       {/* In Service / Out of Service */}
+                       <div className="mb-1">
+                         <small className="fw-bold" style={{ 
+                           fontSize: '0.8rem',
+                           color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
+                         }}>
+                           {elevator.serviceStatus.includes('In Service') ? 'In Service' : 'Out of Service'}
+                         </small>
+                       </div>
 
-                      {/* ✅ Working Hours Display */}
-                      {elevator.workingHours && (
-                        <>
-                          <div className="mb-1">
-                            <small className="fw-bold text-info" style={{ fontSize: '0.75rem' }}>
-                              Total Working: {elevator.workingHours.formatted}
-                            </small>
-                          </div>
-                          {elevator.workingHours.currentSession && (
-                            <div className="mb-1">
-                              <small className="fw-bold text-success" style={{ fontSize: '0.75rem' }}>
-                                Current Session: {elevator.workingHours.currentSession.formatted} ({elevator.workingHours.currentSession.start})
-                              </small>
-                            </div>
-                          )}
-                        </>
-                      )}
+                       {/* Working Hours Display */}
+                       {elevator.workingHours && (
+                         <>
+                           <div className="mb-1">
+                             <small className="fw-bold text-info" style={{ fontSize: '0.75rem' }}>
+                               Total Working: {elevator.workingHours.formatted}
+                             </small>
+                           </div>
+                           {elevator.workingHours.currentSession && (
+                             <div className="mb-1">
+                               <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#28a745' }}>
+                                 Current Session: {elevator.workingHours.currentSession.formatted} ({elevator.workingHours.currentSession.start})
+                               </small>
+                             </div>
+                           )}
+                         </>
+                       )}
 
-                      {/* ✅ Temporarily removed: Primary Status, Service Status, Power Status (for future popup) */}
+                       {/* Maintenance Status and Hours */}
+                       {elevator.serviceStatus.includes('Maintenance ON') && (
+                         <>
+                           <div className="mb-1">
+                             <small className="fw-bold" style={{ 
+                               fontSize: '0.8rem',
+                               color: '#fd7e14'
+                             }}>
+                               In Maintenance
+                             </small>
+                           </div>
+                           {elevator.maintenanceHours && elevator.maintenanceHours.currentSession && (
+                             <div className="mb-1">
+                               <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#fd7e14' }}>
+                                 Current Maintenance: {elevator.maintenanceHours.currentSession.formatted} ({elevator.maintenanceHours.currentSession.start})
+                               </small>
+                             </div>
+                           )}
+                         </>
+                       )}
 
-                      <div className="mb-2">
-                        <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                          Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
-                        </small>
-                  </div>
+                       {/* Last Update */}
+                       <div className="mt-2">
+                         <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                           Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
+                         </small>
+                       </div>
 
                       {/* ✅ Temporarily removed: Raw Data (for future popup) */}
                 </Card.Body>

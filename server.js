@@ -1110,15 +1110,22 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
         let firstWorkingLog = null;
         let sessionCount = 0;
 
+        // ✅ Maintenance session tracking variables
+        let currentMaintenanceStart = null;
+        let totalMaintenanceMs = 0;
+        let currentMaintenanceDuration = 0;
+        let maintenanceSessionCount = 0;
+
         for (let i = 0; i < allLogs.length; i++) {
           const currentLog = allLogs[i];
           const nextLog = allLogs[i + 1];
 
-          // Parse Reg66H bit0 (In Service status)
+          // Parse Reg66H bit0 (In Service status) and bit2 (Maintenance ON)
           const reg66 = parseInt(currentLog.data[1]) || 0;
           const reg66Binary = reg66.toString(2).padStart(16, '0');
           const reg66H = reg66Binary.substring(0, 8);
           const isWorking = reg66H[7] === '1'; // bit0 = rightmost character
+          const isMaintenance = reg66H[5] === '1'; // bit2 = Maintenance ON
 
           if (isWorking) {
             // Start of working session
@@ -1127,10 +1134,7 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
               currentSessionStart = new Date(currentLog.timestamp);
               firstWorkingLog = currentLog;
               sessionCount++;
-              console.log(`🚀 SESSION ${sessionCount} STARTED:`);
-              console.log(` Log #${i + 1} - UTC: ${currentLog.timestamp}`);
-              console.log(` Local: ${new Date(currentLog.timestamp).toLocaleString()}`);
-              console.log(` Data[1]: ${currentLog.data[1]} → Reg66H: ${reg66H} → Bit0: ${reg66H[7]}`);
+              // Working session logs removed for cleaner maintenance analysis
             }
             lastWorkingTime = new Date(currentLog.timestamp);
 
@@ -1141,10 +1145,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
               const sessionDuration = now - currentWorkingStart;
               totalWorkingMs += sessionDuration;
               currentSessionDuration = sessionDuration;
-              console.log(` 📅 CURRENT SESSION (last log):`);
-              console.log(` Started: ${currentWorkingStart.toLocaleString()}`);
-              console.log(` Now: ${now.toLocaleString()}`);
-              console.log(` Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
               currentWorkingStart = null;
             } else {
               // Check if next log is also working
@@ -1158,11 +1158,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
                 const sessionEnd = new Date(nextLog.timestamp);
                 const sessionDuration = sessionEnd - currentWorkingStart;
                 totalWorkingMs += sessionDuration;
-                console.log(` ⏹️ SESSION ${sessionCount} ENDED:`);
-                console.log(` Started: ${currentWorkingStart.toLocaleString()}`);
-                console.log(` Ended: ${sessionEnd.toLocaleString()}`);
-                console.log(` Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
-                console.log(` Next Log: ${nextLog.timestamp} (NOT WORKING)`);
                 currentWorkingStart = null;
                 currentSessionStart = null;
               }
@@ -1172,11 +1167,60 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
             currentWorkingStart = null;
             currentSessionStart = null;
           }
+
+          // ✅ Maintenance session tracking (mirror working logic)
+          if (isMaintenance) {
+            // Start of maintenance session
+            if (currentMaintenanceStart === null) {
+              currentMaintenanceStart = new Date(currentLog.timestamp);
+              maintenanceSessionCount++;
+              console.log(`🔧 MAINTENANCE SESSION ${maintenanceSessionCount} STARTED for ${log.elevatorId}`);
+              console.log(` 📅 Log #${i + 1} - UTC: ${currentLog.timestamp}`);
+              console.log(` 📅 Local: ${new Date(currentLog.timestamp).toLocaleString()}`);
+              console.log(` 📅 Data[1]: ${currentLog.data[1]} → Reg66H: ${reg66H} → Bit2: ${reg66H[5]}`);
+            }
+
+            // If this is the last log or next log is not in maintenance, end the session
+            if (!nextLog) {
+              // Last log - consider it as current maintenance session
+              const now = new Date();
+              const sessionDuration = now - currentMaintenanceStart;
+              totalMaintenanceMs += sessionDuration;
+              currentMaintenanceDuration = sessionDuration;
+              console.log(` 📅 CURRENT MAINTENANCE SESSION (last log):`);
+              console.log(` Started: ${currentMaintenanceStart.toLocaleString()}`);
+              console.log(` Now: ${now.toLocaleString()}`);
+              console.log(` Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
+            } else {
+              // Check if next log is also in maintenance
+              const nextReg66 = parseInt(nextLog.data[1]) || 0;
+              const nextReg66Binary = nextReg66.toString(2).padStart(16, '0');
+              const nextReg66H = nextReg66Binary.substring(0, 8);
+              const nextIsMaintenance = nextReg66H[5] === '1';
+
+              if (!nextIsMaintenance) {
+                // End of maintenance session
+                const sessionEnd = new Date(nextLog.timestamp);
+                const sessionDuration = sessionEnd - currentMaintenanceStart;
+                totalMaintenanceMs += sessionDuration;
+                console.log(` ⏹️ MAINTENANCE SESSION ${maintenanceSessionCount} ENDED for ${log.elevatorId}`);
+                console.log(` 📅 Started: ${currentMaintenanceStart.toLocaleString()}`);
+                console.log(` 📅 Ended: ${sessionEnd.toLocaleString()}`);
+                console.log(` 📅 Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
+                console.log(` 📅 Next Log: ${nextLog.timestamp} (NOT IN MAINTENANCE)`);
+                currentMaintenanceStart = null;
+              }
+            }
+          } else {
+            // Not in maintenance - reset current maintenance start
+            currentMaintenanceStart = null;
+          }
         }
 
         // Convert milliseconds to hours
         const totalWorkingHours = totalWorkingMs / (1000 * 60 * 60);
         const currentSessionHours = currentSessionDuration / (1000 * 60 * 60);
+        const currentMaintenanceHours = currentMaintenanceDuration / (1000 * 60 * 60);
 
         // Format total working hours (days, hours, minutes)
         const days = Math.floor(totalWorkingHours / 24);
@@ -1212,17 +1256,37 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
           console.log(` 📅 CURRENT SESSION START (IST): ${sessionStartText}`);
         }
 
-        console.log(`\n✅ [${log.elevatorId}] FINAL RESULTS:`);
-        console.log(` Total Working Hours: ${totalWorkingHours.toFixed(2)}h (${workingHoursText.trim()})`);
-        console.log(` Session Start: ${sessionStartText}`);
-        if (firstWorkingLog) {
-          console.log(` First Working Log UTC: ${firstWorkingLog.timestamp}`);
-          console.log(` First Working Log Local: ${new Date(firstWorkingLog.timestamp).toLocaleString()}`);
-        }
-        console.log(` Current Session Start: ${currentSessionStart}`);
-        console.log(` Last Working Time: ${lastWorkingTime}`);
+        // ✅ Format maintenance session hours (days, hours, minutes)
+        const maintDays = Math.floor(currentMaintenanceHours / 24);
+        const maintHours = Math.floor(currentMaintenanceHours % 24);
+        const maintMinutes = Math.floor((currentMaintenanceHours % 1) * 60);
+        let maintenanceSessionText = '';
+        if (maintDays > 0) maintenanceSessionText += `${maintDays}d `;
+        if (maintHours > 0) maintenanceSessionText += `${maintHours}h `;
+        if (maintMinutes > 0) maintenanceSessionText += `${maintMinutes}m`;
+        if (maintenanceSessionText === '') maintenanceSessionText = '0m';
 
-        return {
+        // ✅ Format maintenance session start time - Force IST timezone
+        let maintenanceStartText = 'Not in Maintenance';
+        if (currentMaintenanceStart) {
+          maintenanceStartText = currentMaintenanceStart.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'Asia/Kolkata'  // ✅ Force IST timezone display
+          });
+          console.log(` 📅 CURRENT MAINTENANCE SESSION START (IST): ${maintenanceStartText}`);
+        }
+
+        console.log(`\n✅ [${log.elevatorId}] MAINTENANCE ANALYSIS:`);
+        console.log(` 🔧 MAINTENANCE SESSIONS: ${maintenanceSessionCount}`);
+        console.log(` 🔧 CURRENT MAINTENANCE START: ${currentMaintenanceStart}`);
+        console.log(` 🔧 MAINTENANCE DURATION: ${currentMaintenanceHours.toFixed(2)}h (${maintenanceSessionText.trim()})`);
+        console.log(` 🔧 MAINTENANCE START TEXT: ${maintenanceStartText}`);
+
+        const response = {
           ...log,
           workingHours: {
             total: totalWorkingHours,
@@ -1232,8 +1296,20 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
               duration: currentSessionHours,
               formatted: currentSessionText.trim()
             } : null
-          }
+          },
+          maintenanceHours: currentMaintenanceStart ? {
+            currentSession: {
+              start: maintenanceStartText,
+              duration: currentMaintenanceHours,
+              formatted: maintenanceSessionText.trim()
+            }
+          } : null
         };
+        
+        // ✅ DEBUG: Log what's being returned to frontend
+        console.log(`🚀 [${log.elevatorId}] MAINTENANCE DATA TO FRONTEND:`, JSON.stringify(response.maintenanceHours, null, 2));
+        
+        return response;
       } catch (err) {
         console.error(`❌ Error calculating working hours for ${log.elevatorId}:`, err);
         return {
@@ -1242,7 +1318,8 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
             total: 0,
             formatted: '0m',
             currentSession: null
-          }
+          },
+          maintenanceHours: null
         };
       }
     }));
