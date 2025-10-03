@@ -1100,6 +1100,8 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
         // Get all logs for this elevator, sorted by timestamp
         const allLogs = await ElevatorEvent.find({ elevatorId: log.elevatorId }).sort({ timestamp: 1 });
         
+        console.log(`\n🔍 [${log.elevatorId}] DEBUGGING - Total logs: ${allLogs.length}`);
+        
         let totalWorkingMs = 0;
         let lastWorkingTime = null;
         let currentWorkingStart = null;
@@ -1125,6 +1127,10 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
               currentSessionStart = new Date(currentLog.timestamp);
               firstWorkingLog = currentLog;
               sessionCount++;
+              console.log(`🚀 SESSION ${sessionCount} STARTED:`);
+              console.log(` Log #${i + 1} - UTC: ${currentLog.timestamp}`);
+              console.log(` Local: ${new Date(currentLog.timestamp).toLocaleString()}`);
+              console.log(` Data[1]: ${currentLog.data[1]} → Reg66H: ${reg66H} → Bit0: ${reg66H[7]}`);
             }
             lastWorkingTime = new Date(currentLog.timestamp);
 
@@ -1135,6 +1141,10 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
               const sessionDuration = now - currentWorkingStart;
               totalWorkingMs += sessionDuration;
               currentSessionDuration = sessionDuration;
+              console.log(` 📅 CURRENT SESSION (last log):`);
+              console.log(` Started: ${currentWorkingStart.toLocaleString()}`);
+              console.log(` Now: ${now.toLocaleString()}`);
+              console.log(` Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
               currentWorkingStart = null;
             } else {
               // Check if next log is also working
@@ -1148,6 +1158,11 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
                 const sessionEnd = new Date(nextLog.timestamp);
                 const sessionDuration = sessionEnd - currentWorkingStart;
                 totalWorkingMs += sessionDuration;
+                console.log(` ⏹️ SESSION ${sessionCount} ENDED:`);
+                console.log(` Started: ${currentWorkingStart.toLocaleString()}`);
+                console.log(` Ended: ${sessionEnd.toLocaleString()}`);
+                console.log(` Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
+                console.log(` Next Log: ${nextLog.timestamp} (NOT WORKING)`);
                 currentWorkingStart = null;
                 currentSessionStart = null;
               }
@@ -1183,7 +1198,7 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
         if (sessMinutes > 0) currentSessionText += `${sessMinutes}m`;
         if (currentSessionText === '') currentSessionText = '0m';
 
-        // Format session start time
+        // Format session start time - Force IST timezone
         let sessionStartText = 'Not Working';
         if (currentSessionStart) {
           sessionStartText = currentSessionStart.toLocaleString('en-US', {
@@ -1191,9 +1206,21 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
-            hour12: true
+            hour12: true,
+            timeZone: 'Asia/Kolkata'  // ✅ Force IST timezone display
           });
+          console.log(` 📅 CURRENT SESSION START (IST): ${sessionStartText}`);
         }
+
+        console.log(`\n✅ [${log.elevatorId}] FINAL RESULTS:`);
+        console.log(` Total Working Hours: ${totalWorkingHours.toFixed(2)}h (${workingHoursText.trim()})`);
+        console.log(` Session Start: ${sessionStartText}`);
+        if (firstWorkingLog) {
+          console.log(` First Working Log UTC: ${firstWorkingLog.timestamp}`);
+          console.log(` First Working Log Local: ${new Date(firstWorkingLog.timestamp).toLocaleString()}`);
+        }
+        console.log(` Current Session Start: ${currentSessionStart}`);
+        console.log(` Last Working Time: ${lastWorkingTime}`);
 
         return {
           ...log,
