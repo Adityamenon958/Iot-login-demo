@@ -222,10 +222,20 @@ export default function ElevatorOverview() {
   // ✅ State for time range filter
   const [timeRange, setTimeRange] = useState('24'); // hours
 
+  // ✅ Background refresh states
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isIndividualRefreshing, setIsIndividualRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(null);
+
   // ✅ Fetch data for historical logs table (ALL LOGS with pagination)
-  const fetchElevatorData = async () => {
+  const fetchElevatorData = async (isBackgroundRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isBackgroundRefresh) {
+        setLoading(true); // Only show full spinner on initial load
+      } else {
+        setIsRefreshing(true); // Show subtle indicator for background refresh
+      }
+      
       const response = await axios.get('/api/elevators/all-logs', {
         withCredentials: true,
         params: { 
@@ -256,20 +266,32 @@ export default function ElevatorOverview() {
         
         setElevators(processedElevators);
         setError(null);
+        setLastRefreshTime(new Date());
       }
     } catch (err) {
       console.error('Error fetching historical elevator data:', err);
-      setError('Failed to load historical elevator data');
+      if (!isBackgroundRefresh) {
+        setError('Failed to load historical elevator data');
+      }
+      // Don't show error for background refresh - keep existing data
     } finally {
-      setLoading(false);
+      if (!isBackgroundRefresh) {
+        setLoading(false);
+      } else {
+        setIsRefreshing(false);
+      }
     }
   };
 
   // ✅ Fetch data for individual elevator cards (latest status per elevator)
-  const fetchIndividualElevatorData = async () => {
+  const fetchIndividualElevatorData = async (isBackgroundRefresh = false) => {
     try {
-      setIndividualCardsLoading(true);
-      setIndividualCardsError(null);
+      if (!isBackgroundRefresh) {
+        setIndividualCardsLoading(true);
+        setIndividualCardsError(null);
+      } else {
+        setIsIndividualRefreshing(true);
+      }
       
       const response = await axios.get('/api/elevators/recent', {
         withCredentials: true,
@@ -299,27 +321,40 @@ export default function ElevatorOverview() {
       }
     } catch (err) {
       console.error('❌ Error fetching individual elevator data:', err);
-      setIndividualCardsError('Failed to load individual elevator data');
+      if (!isBackgroundRefresh) {
+        setIndividualCardsError('Failed to load individual elevator data');
+      }
+      // Don't show error for background refresh - keep existing data
     } finally {
-      setIndividualCardsLoading(false);
+      if (!isBackgroundRefresh) {
+        setIndividualCardsLoading(false);
+      } else {
+        setIsIndividualRefreshing(false);
+      }
     }
   };
 
   // ✅ Fetch historical logs data on component mount and set up auto-refresh
   useEffect(() => {
-    fetchElevatorData();
+    fetchElevatorData(false); // Initial load with spinner
     
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchElevatorData, 30000);
+    // Auto-refresh every 30 seconds with background refresh
+    const interval = setInterval(() => {
+      fetchElevatorData(true); // Background refresh
+    }, 30000);
+    
     return () => clearInterval(interval);
   }, [timeRange]); // Re-fetch when time range changes
 
   // ✅ Fetch individual elevator data on component mount and set up auto-refresh
   useEffect(() => {
-    fetchIndividualElevatorData();
+    fetchIndividualElevatorData(false); // Initial load with spinner
     
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchIndividualElevatorData, 30000);
+    // Auto-refresh every 30 seconds with background refresh
+    const interval = setInterval(() => {
+      fetchIndividualElevatorData(true); // Background refresh
+    }, 30000);
+    
     return () => clearInterval(interval);
   }, []); // No dependencies - runs once on mount
 
@@ -359,6 +394,34 @@ export default function ElevatorOverview() {
     return <Badge bg={variant.bg} className="px-2 py-1">{variant.text}</Badge>;
   };
 
+  // ✅ Helper function to format time ago
+  const formatTimeAgo = (date) => {
+    if (!date) return '';
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - new Date(date)) / 1000);
+    
+    if (diffInSeconds < 60) return 'just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
+
+  // ✅ Subtle refresh indicator component
+  const RefreshIndicator = ({ isRefreshing, lastRefreshTime }) => {
+    if (!isRefreshing && !lastRefreshTime) return null;
+    
+    return (
+      <div className="d-flex align-items-center gap-2" style={{ fontSize: '0.8rem' }}>
+        {isRefreshing && (
+          <Spinner animation="border" size="sm" variant="primary" />
+        )}
+        <span className="text-muted">
+          {isRefreshing ? 'Refreshing...' : `Last updated: ${formatTimeAgo(lastRefreshTime)}`}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
       {/* Header */}
@@ -370,7 +433,7 @@ export default function ElevatorOverview() {
       </div>
 
       {/* Top Status Cards - Blue Theme */}
-      <Row className="mb-4">
+      <Row className="mb-0">
         <Col xs={12} md={4} className="mb-3">
           <ElevatorTooltip elevators={stats.activeList} title="Active Elevators">
             <Card className="h-100 border-0 shadow-lg" style={{ 
@@ -491,9 +554,15 @@ export default function ElevatorOverview() {
       )}
       {!individualCardsLoading && !individualCardsError && individualElevators.length > 0 && (
         <div className="mb-4">
-          <h6 className="mb-3 fw-bold" style={{ fontSize: '0.95rem' }}>
-            Individual Elevator Status
-          </h6>
+          <div className="d-flex justify-content-between align-items-center mb-0">
+            <h6 className="mb-0 fw-bold" style={{ fontSize: '0.95rem' }}>
+              Individual Elevator Status
+            </h6>
+            <RefreshIndicator 
+              isRefreshing={isIndividualRefreshing}
+              lastRefreshTime={lastRefreshTime}
+            />
+          </div>
           
           {/* Horizontal scroll container */}
           <div 
@@ -503,6 +572,7 @@ export default function ElevatorOverview() {
               whiteSpace: 'nowrap',
               scrollbarWidth: 'thin',
               scrollbarColor: '#4facfe #f1f3f5',
+              paddingTop: '15px',
               paddingBottom: '10px',
               marginBottom: '10px'
             }}
@@ -511,7 +581,7 @@ export default function ElevatorOverview() {
               style={{ 
                 display: 'inline-flex',
                 gap: '12px',
-                minHeight: '280px'
+                minHeight: '290px'
               }}
             >
               {individualElevators.map((elevator) => {
@@ -577,7 +647,8 @@ export default function ElevatorOverview() {
                         backgroundColor: '#f5f5f5',
                         borderLeft: `4px solid ${borderColor}`,
                         background: `linear-gradient(to right, ${backgroundFade} 0%, ${backgroundFade} 20%, #f5f5f5 50%, #f5f5f5 100%)`,
-                        boxShadow: coloredShadow
+                        boxShadow: coloredShadow,
+                        maxHeight: '280px'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-5px)';
@@ -589,30 +660,30 @@ export default function ElevatorOverview() {
                       }}
                     >
                       <Card.Body className="p-2">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div className="d-flex justify-content-between align-items-start mb-1">
                           <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
                             {elevator.id}
                           </Badge>
                         </div>
                         
-                        <div className="mb-2">
-                          <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
+                        <div className="mb-1">
+                          <h6 className="mb-0 fw-bold" style={{ fontSize: '0.85rem' }}>
                             {elevator.company}
                           </h6>
-                          <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
+                          <p className="mb-0 text-muted" style={{ fontSize: '0.75rem' }}>
                             {elevator.location}
                           </p>
                         </div>
 
                         {/* Floor Display */}
-                        <div className="mb-2">
+                        <div className="mb-1">
                           <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
                             Floor: {elevator.floor}
                           </small>
                         </div>
 
                         {/* In Service / Out of Service */}
-                        <div className="mb-1">
+                        <div className="mb-0">
                           <small className="fw-bold" style={{ 
                             fontSize: '0.8rem',
                             color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
@@ -624,15 +695,18 @@ export default function ElevatorOverview() {
                         {/* Working Hours Display */}
                         {elevator.workingHours && (
                           <>
-                            <div className="mb-1">
+                            <div className="mb-0">
                               <small className="fw-bold text-info" style={{ fontSize: '0.75rem' }}>
                                 Total Working: {elevator.workingHours.formatted}
                               </small>
                             </div>
                             {elevator.workingHours.currentSession && (
-                              <div className="mb-1">
-                                <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#28a745' }}>
-                                  Current Session: {elevator.workingHours.currentSession.formatted} ({elevator.workingHours.currentSession.start})
+                              <div className="mb-0">
+                                <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#28a745', display: 'block' }}>
+                                  Current Session: {elevator.workingHours.currentSession.formatted}
+                                </small>
+                                <small style={{ fontSize: '0.6rem', color: '#666', display: 'block' }}>
+                                  ({elevator.workingHours.currentSession.start})
                                 </small>
                               </div>
                             )}
@@ -642,7 +716,7 @@ export default function ElevatorOverview() {
                         {/* Maintenance Status and Hours */}
                         {elevator.serviceStatus.includes('Maintenance ON') && (
                           <>
-                            <div className="mb-1">
+                            <div className="mb-0">
                               <small className="fw-bold" style={{ 
                                 fontSize: '0.8rem',
                                 color: '#fd7e14'
@@ -651,9 +725,12 @@ export default function ElevatorOverview() {
                               </small>
                             </div>
                             {elevator.maintenanceHours && elevator.maintenanceHours.currentSession && (
-                              <div className="mb-1">
-                                <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#fd7e14' }}>
-                                  Current Maintenance: {elevator.maintenanceHours.currentSession.formatted} ({elevator.maintenanceHours.currentSession.start})
+                              <div className="mb-0">
+                                <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#fd7e14', display: 'block' }}>
+                                  Current Maintenance: {elevator.maintenanceHours.currentSession.formatted}
+                                </small>
+                                <small style={{ fontSize: '0.6rem', color: '#666', display: 'block' }}>
+                                  ({elevator.maintenanceHours.currentSession.start})
                                 </small>
                               </div>
                             )}
@@ -661,7 +738,7 @@ export default function ElevatorOverview() {
                         )}
 
                         {/* Last Update */}
-                        <div className="mt-2">
+                        <div className="mt-1">
                           <small className="text-muted" style={{ fontSize: '0.7rem' }}>
                             Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
                           </small>
@@ -689,6 +766,8 @@ export default function ElevatorOverview() {
           elevators={elevators} 
           timeRange={timeRange}
           setTimeRange={setTimeRange}
+          isRefreshing={isRefreshing}
+          lastRefreshTime={lastRefreshTime}
         />
       )}
 

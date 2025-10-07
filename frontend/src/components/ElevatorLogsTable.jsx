@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Card, Form, Badge, Button, Row, Col } from 'react-bootstrap';
+import { Table, Card, Form, Badge, Button, Row, Col, Spinner } from 'react-bootstrap';
 import styles from './ElevatorLogsTable.module.css';
 
 // ✅ Format date and time for display
@@ -29,7 +29,7 @@ const getUniqueStatuses = (elevators) => {
   return [...new Set(statuses)].filter(Boolean).sort();
 };
 
-export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange }) {
+export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, isRefreshing, lastRefreshTime }) {
   // ✅ State for search, filters, sorting, pagination
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -41,6 +41,34 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange }
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
+
+  // ✅ Helper function to format time ago
+  const formatTimeAgo = (date) => {
+    if (!date) return '';
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - new Date(date)) / 1000);
+    
+    if (diffInSeconds < 60) return 'just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
+
+  // ✅ Subtle refresh indicator component
+  const RefreshIndicator = ({ isRefreshing, lastRefreshTime }) => {
+    if (!isRefreshing && !lastRefreshTime) return null;
+    
+    return (
+      <div className="d-flex align-items-center gap-2" style={{ fontSize: '0.8rem' }}>
+        {isRefreshing && (
+          <Spinner animation="border" size="sm" variant="primary" />
+        )}
+        <span className="text-muted">
+          {isRefreshing ? 'Refreshing...' : `Last updated: ${formatTimeAgo(lastRefreshTime)}`}
+        </span>
+      </div>
+    );
+  };
 
   // ✅ Transform elevator data for table
   const tableData = useMemo(() => {
@@ -210,14 +238,25 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange }
             </h6>
           </Col>
           <Col xs={12} md={6} className="mt-2 mt-md-0">
-            <Form.Control
-              type="text"
-              placeholder="🔍 Search all columns..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className={styles.searchInput}
-              size="sm"
-            />
+            <div className="d-flex justify-content-between align-items-center" style={{
+              minHeight: '32px',
+              paddingTop: '4px',
+              paddingBottom: '4px'
+            }}>
+              <Form.Control
+                type="text"
+                placeholder="🔍 Search all columns..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className={styles.searchInput}
+                size="sm"
+                style={{ maxWidth: '300px' }}
+              />
+              <RefreshIndicator 
+                isRefreshing={isRefreshing}
+                lastRefreshTime={lastRefreshTime}
+              />
+            </div>
           </Col>
         </Row>
       </Card.Header>
@@ -387,12 +426,12 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange }
                     <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{row.floor}</td>
                     <td style={{ textAlign: 'center' }}>
                       <Badge bg={row.inService ? 'success' : 'danger'} style={{ fontSize: '0.75rem' }}>
-                        {row.inService ? '✅ Yes' : '❌ No'}
+                        {row.inService ? ' Yes' : '❌ No'}
                       </Badge>
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <Badge bg={row.inMaintenance ? 'warning' : 'secondary'} style={{ fontSize: '0.75rem' }}>
-                        {row.inMaintenance ? '🔧 Yes' : '—'}
+                        {row.inMaintenance ? ' Yes' : '—'}
                       </Badge>
                     </td>
                     <td>
