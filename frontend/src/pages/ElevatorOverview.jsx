@@ -262,9 +262,15 @@ export default function ElevatorOverview() {
 
   // ✅ Calculate stats from real data
   const stats = useMemo(() => {
-    const active = elevators.filter(e => e.overallStatus === 'active').length;
-    const inactive = elevators.filter(e => e.overallStatus === 'inactive').length;
+    // ✅ Active = In Service bit is active (independent of priority scoring)
+    const active = elevators.filter(e => e.serviceStatus.includes('In Service')).length;
+    
+    // ✅ Inactive = In Service bit is NOT active (independent of priority scoring)
+    const inactive = elevators.filter(e => !e.serviceStatus.includes('In Service')).length;
+    
+    // ✅ Error = Priority-based (unchanged - shows critical issues)
     const error = elevators.filter(e => e.overallStatus === 'error').length;
+    
     return { active, inactive, error, total: elevators.length };
   }, [elevators]);
 
