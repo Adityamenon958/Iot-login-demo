@@ -3,6 +3,7 @@ import { Col, Row, Card, Badge, Spinner } from 'react-bootstrap';
 import axios from 'axios';
 import styles from "./MainContent.module.css";
 import { PiElevatorDuotone, PiCheckCircleDuotone, PiXCircleDuotone, PiWarningCircleDuotone } from "react-icons/pi";
+import ElevatorTooltip from '../components/ElevatorTooltip';
 
 // ✅ Format helpers
 const formatDateTime = (value) => {
@@ -263,15 +264,23 @@ export default function ElevatorOverview() {
   // ✅ Calculate stats from real data
   const stats = useMemo(() => {
     // ✅ Active = In Service bit is active (independent of priority scoring)
-    const active = elevators.filter(e => e.serviceStatus.includes('In Service')).length;
+    const activeList = elevators.filter(e => e.serviceStatus.includes('In Service'));
     
     // ✅ Inactive = In Service bit is NOT active (independent of priority scoring)
-    const inactive = elevators.filter(e => !e.serviceStatus.includes('In Service')).length;
+    const inactiveList = elevators.filter(e => !e.serviceStatus.includes('In Service'));
     
     // ✅ Error = Priority-based (unchanged - shows critical issues)
-    const error = elevators.filter(e => e.overallStatus === 'error').length;
+    const errorList = elevators.filter(e => e.overallStatus === 'error');
     
-    return { active, inactive, error, total: elevators.length };
+    return { 
+      active: activeList.length,
+      activeList,
+      inactive: inactiveList.length,
+      inactiveList,
+      error: errorList.length,
+      errorList,
+      total: elevators.length 
+    };
   }, [elevators]);
 
   const getStatusBadge = (overallStatus) => {
@@ -301,75 +310,81 @@ export default function ElevatorOverview() {
       {/* Top Status Cards - Blue Theme */}
       <Row className="mb-4">
         <Col xs={12} md={4} className="mb-3">
-          <Card className="h-100 border-0 shadow-lg" style={{ 
-            background: "linear-gradient(135deg, #1a5f7a 0%, #4facfe 100%)",
-            minHeight: '120px',
-            borderRadius: '15px'
-          }}>
-            <Card.Body className="p-4 text-white position-relative">
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
-                    {stats.active}
-                  </h2>
-                  <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
-                    Active Elevators
-                  </p>
+          <ElevatorTooltip elevators={stats.activeList} title="Active Elevators">
+            <Card className="h-100 border-0 shadow-lg" style={{ 
+              background: "linear-gradient(135deg, #1a5f7a 0%, #4facfe 100%)",
+              minHeight: '120px',
+              borderRadius: '15px'
+            }}>
+              <Card.Body className="p-4 text-white position-relative">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
+                      {stats.active}
+                    </h2>
+                    <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
+                      Active Elevators
+                    </p>
+                  </div>
+                  <div style={{ opacity: 0.8 }}>
+                    <PiCheckCircleDuotone size={50} />
+                  </div>
                 </div>
-                <div style={{ opacity: 0.8 }}>
-                  <PiCheckCircleDuotone size={50} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
+              </Card.Body>
+            </Card>
+          </ElevatorTooltip>
         </Col>
 
         <Col xs={12} md={4} className="mb-3">
-          <Card className="h-100 border-0 shadow-lg" style={{ 
-            background: "linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%)",
-            minHeight: '120px',
-            borderRadius: '15px'
-          }}>
-            <Card.Body className="p-4 text-white position-relative">
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
-                    {stats.inactive}
-                  </h2>
-                  <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
-                    Inactive Elevators
-                  </p>
+          <ElevatorTooltip elevators={stats.inactiveList} title="Inactive Elevators">
+            <Card className="h-100 border-0 shadow-lg" style={{ 
+              background: "linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%)",
+              minHeight: '120px',
+              borderRadius: '15px'
+            }}>
+              <Card.Body className="p-4 text-white position-relative">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
+                      {stats.inactive}
+                    </h2>
+                    <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
+                      Inactive Elevators
+                    </p>
+                  </div>
+                  <div style={{ opacity: 0.8 }}>
+                    <PiXCircleDuotone size={50} />
+                  </div>
                 </div>
-                <div style={{ opacity: 0.8 }}>
-                  <PiXCircleDuotone size={50} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
+              </Card.Body>
+            </Card>
+          </ElevatorTooltip>
         </Col>
 
         <Col xs={12} md={4} className="mb-3">
-          <Card className="h-100 border-0 shadow-lg" style={{ 
-            background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-            minHeight: '120px',
-            borderRadius: '15px'
-          }}>
-            <Card.Body className="p-4 text-white position-relative">
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
-                    {stats.error}
-                  </h2>
-                  <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
-                    Error Status
-                  </p>
+          <ElevatorTooltip elevators={stats.errorList} title="Error Status">
+            <Card className="h-100 border-0 shadow-lg" style={{ 
+              background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+              minHeight: '120px',
+              borderRadius: '15px'
+            }}>
+              <Card.Body className="p-4 text-white position-relative">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h2 className="mb-1 fw-bold" style={{ fontSize: '2.5rem' }}>
+                      {stats.error}
+                    </h2>
+                    <p className="mb-0 fw-medium" style={{ fontSize: '1rem', opacity: 0.9 }}>
+                      Error Status
+                    </p>
+                  </div>
+                  <div style={{ opacity: 0.8 }}>
+                    <PiWarningCircleDuotone size={50} />
+                  </div>
                 </div>
-                <div style={{ opacity: 0.8 }}>
-                  <PiWarningCircleDuotone size={50} />
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
+              </Card.Body>
+            </Card>
+          </ElevatorTooltip>
         </Col>
       </Row>
 
