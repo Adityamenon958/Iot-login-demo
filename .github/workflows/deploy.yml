@@ -9,31 +9,39 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # Make sure npm installs devDependencies during the workflow build
     env:
+      # ensure devDependencies are installed during this workflow
       NPM_CONFIG_PRODUCTION: "false"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install backend dependencies (clean)
+      - name: Install backend dependencies (root)
         run: npm ci
 
-      - name: Install frontend dev dependencies & build
-        working-directory: frontend
+      - name: Build frontend (install dev deps & build)
+        working-directory: ./frontend
         run: |
-          # install exactly what's in package-lock, including dev deps (vite, etc.)
           npm ci --include=dev
           npm run build
-        # when this step finishes the built frontend should be in frontend/dist (or your configured output)
 
-      - name: Deploy to Azure Web App
+      - name: Remove frontend node_modules to reduce package size
+        run: |
+          rm -rf frontend/node_modules || true
+
+      # Optional: create a small listing so you can confirm dist exists in logs
+      - name: List built frontend
+        run: |
+          echo "Frontend dist contents:"
+          ls -la frontend/dist || true
+
+      - name: Deploy to Azure Web App (ZIP deploy)
         uses: azure/webapps-deploy@v2
         with:
           app-name: Gsn-Iot-Dashboard
