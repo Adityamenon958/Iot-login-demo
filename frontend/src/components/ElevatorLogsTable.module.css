@@ -1,0 +1,189 @@
+/* ✅ Table Card Container */
+.tableCard {
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+/* ✅ Search Input */
+.searchInput {
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.searchInput:focus {
+  border-color: #4facfe;
+  box-shadow: 0 0 0 0.2rem rgba(79, 172, 254, 0.25);
+}
+
+/* ✅ Filter Row */
+.filterRow {
+  padding: 15px 20px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.filterSelect {
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+}
+
+.filterSelect:focus {
+  border-color: #4facfe;
+  box-shadow: 0 0 0 0.2rem rgba(79, 172, 254, 0.15);
+}
+
+/* ✅ Table Wrapper */
+.tableWrapper {
+  overflow-x: auto;
+  max-height: 600px;
+}
+
+/* ✅ Custom Table Styling */
+.customTable {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+}
+
+.customTable thead th {
+  background-color: #f8f9fa;
+  color: #495057;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-bottom: 2px solid #dee2e6;
+  padding: 12px 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.customTable tbody td {
+  font-size: 0.85rem;
+  padding: 10px;
+  vertical-align: middle;
+}
+
+.customTable tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.customTable tbody tr:hover {
+  background-color: #f1f3f5;
+  cursor: default;
+}
+
+/* ✅ Sortable Column */
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.sortable:hover {
+  background-color: #e9ecef !important;
+}
+
+.sortable:active {
+  background-color: #dee2e6 !important;
+}
+
+/* ✅ Pagination Wrapper */
+.paginationWrapper {
+  padding: 15px 20px;
+  background-color: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+}
+
+.paginationControls {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.pageButton {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.pageInfo {
+  font-size: 0.85rem;
+  color: #495057;
+  margin: 0 10px;
+  font-weight: 500;
+}
+
+.rowsSelect {
+  font-size: 0.85rem;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+/* ✅ Responsive Adjustments */
+@media (max-width: 768px) {
+  .filterRow {
+    padding: 10px 15px;
+  }
+
+  .customTable thead th,
+  .customTable tbody td {
+    font-size: 0.75rem;
+    padding: 8px 6px;
+  }
+
+  .paginationWrapper {
+    padding: 10px 15px;
+  }
+
+  .paginationControls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pageButton {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+  }
+
+  .pageInfo {
+    font-size: 0.75rem;
+    margin: 0 5px;
+  }
+}
+
+/* ✅ Scrollbar Styling */
+.tableWrapper::-webkit-scrollbar {
+  height: 8px;
+}
+
+.tableWrapper::-webkit-scrollbar-track {
+  background: #f1f3f5;
+  border-radius: 4px;
+}
+
+.tableWrapper::-webkit-scrollbar-thumb {
+  background: #4facfe;
+  border-radius: 4px;
+}
+
+.tableWrapper::-webkit-scrollbar-thumb:hover {
+  background: #3a8fd9;
+}
+
+/* ✅ Badge Styling Overrides */
+.customTable .badge {
+  font-weight: 500;
+  padding: 4px 8px;
+}
+
+/* ✅ Empty State */
+.customTable tbody td.text-center {
+  padding: 40px 20px;
+  font-size: 1rem;
+}
+

@@ -4,6 +4,7 @@ import axios from 'axios';
 import styles from "./MainContent.module.css";
 import { PiElevatorDuotone, PiCheckCircleDuotone, PiXCircleDuotone, PiWarningCircleDuotone } from "react-icons/pi";
 import ElevatorTooltip from '../components/ElevatorTooltip';
+import ElevatorLogsTable from '../components/ElevatorLogsTable';
 
 // ✅ Format helpers
 const formatDateTime = (value) => {
@@ -208,22 +209,34 @@ const processElevatorData = (dataArray) => {
 };
 
 export default function ElevatorOverview() {
-  // ✅ State for real data
+  // ✅ State for historical logs table (ALL logs)
   const [elevators, setElevators] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // ✅ Fetch real data from API
+  // ✅ State for individual elevator cards (latest status per elevator)
+  const [individualElevators, setIndividualElevators] = useState([]);
+  const [individualCardsLoading, setIndividualCardsLoading] = useState(true);
+  const [individualCardsError, setIndividualCardsError] = useState(null);
+
+  // ✅ State for time range filter
+  const [timeRange, setTimeRange] = useState('24'); // hours
+
+  // ✅ Fetch data for historical logs table (ALL LOGS with pagination)
   const fetchElevatorData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/elevators/recent', {
+      const response = await axios.get('/api/elevators/all-logs', {
         withCredentials: true,
-        params: { limit: 50 }
+        params: { 
+          limit: 500,           // Fetch 500 logs
+          offset: 0,            // Start from beginning
+          hours: timeRange      // Time range filter
+        }
       });
       
       if (response.data && response.data.logs) {
-        console.log('🔍 API Response:', response.data);
+        console.log('🔍 API Response (Historical Logs):', response.data);
         // Process each elevator's data
         const processedElevators = response.data.logs.map(log => {
           console.log('🔍 Processing elevator:', log.elevatorId, 'Working Hours:', log.workingHours);
@@ -245,32 +258,81 @@ export default function ElevatorOverview() {
         setError(null);
       }
     } catch (err) {
-      console.error('Error fetching elevator data:', err);
-      setError('Failed to load elevator data');
+      console.error('Error fetching historical elevator data:', err);
+      setError('Failed to load historical elevator data');
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Fetch data on component mount and set up auto-refresh
+  // ✅ Fetch data for individual elevator cards (latest status per elevator)
+  const fetchIndividualElevatorData = async () => {
+    try {
+      setIndividualCardsLoading(true);
+      setIndividualCardsError(null);
+      
+      const response = await axios.get('/api/elevators/recent', {
+        withCredentials: true,
+        params: { limit: 50 }
+      });
+      
+      if (response.data && response.data.logs) {
+        console.log('🔍 API Response (Individual Cards):', response.data);
+        // Process each elevator's data (same logic as before)
+        const processedElevators = response.data.logs.map(log => {
+          console.log('🔍 Processing individual elevator:', log.elevatorId, 'Working Hours:', log.workingHours);
+          const processedData = processElevatorData(log.data);
+          return {
+            id: log.elevatorId,
+            company: log.elevatorCompany,
+            location: log.location,
+            timestamp: log.timestamp,
+            createdAt: log.createdAt,
+            data: log.data,
+            workingHours: log.workingHours, // ✅ Pass through working hours from backend
+            maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
+            ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus
+          };
+        });
+        
+        setIndividualElevators(processedElevators);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching individual elevator data:', err);
+      setIndividualCardsError('Failed to load individual elevator data');
+    } finally {
+      setIndividualCardsLoading(false);
+    }
+  };
+
+  // ✅ Fetch historical logs data on component mount and set up auto-refresh
   useEffect(() => {
     fetchElevatorData();
     
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchElevatorData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [timeRange]); // Re-fetch when time range changes
 
-  // ✅ Calculate stats from real data
+  // ✅ Fetch individual elevator data on component mount and set up auto-refresh
+  useEffect(() => {
+    fetchIndividualElevatorData();
+    
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchIndividualElevatorData, 30000);
+    return () => clearInterval(interval);
+  }, []); // No dependencies - runs once on mount
+
+  // ✅ Calculate stats from individual elevator data (latest status per elevator)
   const stats = useMemo(() => {
     // ✅ Active = In Service bit is active (independent of priority scoring)
-    const activeList = elevators.filter(e => e.serviceStatus.includes('In Service'));
+    const activeList = individualElevators.filter(e => e.serviceStatus.includes('In Service'));
     
     // ✅ Inactive = In Service bit is NOT active (independent of priority scoring)
-    const inactiveList = elevators.filter(e => !e.serviceStatus.includes('In Service'));
+    const inactiveList = individualElevators.filter(e => !e.serviceStatus.includes('In Service'));
     
     // ✅ Error = Priority-based (unchanged - shows critical issues)
-    const errorList = elevators.filter(e => e.overallStatus === 'error');
+    const errorList = individualElevators.filter(e => e.overallStatus === 'error');
     
     return { 
       active: activeList.length,
@@ -279,9 +341,9 @@ export default function ElevatorOverview() {
       inactiveList,
       error: errorList.length,
       errorList,
-      total: elevators.length 
+      total: individualElevators.length 
     };
-  }, [elevators]);
+  }, [individualElevators]); // ✅ Use individualElevators for stats
 
   const getStatusBadge = (overallStatus) => {
     const variants = {
@@ -409,170 +471,225 @@ export default function ElevatorOverview() {
         </div>
       )}
 
-      {/* Individual Elevator Cards */}
-      {!loading && !error && (
-        <div className="mb-3">
-          <Row>
-            {elevators.map((elevator) => {
-              // ✅ Get color mapping based on priority
-              const getPriorityColor = (color) => {
-                const colorMap = {
-                  'red': '#dc3545',      // Critical/Emergency
-                  'orange': '#fd7e14',   // Maintenance/Inspection  
-                  'yellow': '#ffc107',   // Warning
-                  'green': '#198754',    // Normal/Running
-                  'blue': '#0d6efd',     // Info/Mode
-                  'gray': '#6c757d'      // Standby/Out of Service
+      {/* Individual Elevator Cards - SINGLE ROW WITH HORIZONTAL SCROLL */}
+      {individualCardsLoading && (
+        <div className="text-center my-4">
+          <Spinner animation="border" variant="primary" />
+          <p className="mt-2 text-muted">Loading individual elevator statuses...</p>
+        </div>
+      )}
+      {individualCardsError && (
+        <div className="alert alert-danger" role="alert">
+          <strong>Error:</strong> {individualCardsError}
+          <button 
+            className="btn btn-sm btn-outline-danger ms-2" 
+            onClick={fetchIndividualElevatorData}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {!individualCardsLoading && !individualCardsError && individualElevators.length > 0 && (
+        <div className="mb-4">
+          <h6 className="mb-3 fw-bold" style={{ fontSize: '0.95rem' }}>
+            Individual Elevator Status
+          </h6>
+          
+          {/* Horizontal scroll container */}
+          <div 
+            style={{ 
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              whiteSpace: 'nowrap',
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#4facfe #f1f3f5',
+              paddingBottom: '10px',
+              marginBottom: '10px'
+            }}
+          >
+            <div 
+              style={{ 
+                display: 'inline-flex',
+                gap: '12px',
+                minHeight: '280px'
+              }}
+            >
+              {individualElevators.map((elevator) => {
+                // ✅ Get color mapping based on priority
+                const getPriorityColor = (color) => {
+                  const colorMap = {
+                    'red': '#dc3545',      // Critical/Emergency
+                    'orange': '#fd7e14',   // Maintenance/Inspection  
+                    'yellow': '#ffc107',   // Warning
+                    'green': '#198754',    // Normal/Running
+                    'blue': '#0d6efd',     // Info/Mode
+                    'gray': '#6c757d'      // Standby/Out of Service
+                  };
+                  return colorMap[color] || '#6c757d';
                 };
-                return colorMap[color] || '#6c757d';
-              };
 
-              const borderColor = getPriorityColor(elevator.priorityColor);
-              const statusIcon = elevator.priorityScore >= 6 ? '🔴' : 
-                               elevator.priorityScore === 4 ? '🟠' :
-                               elevator.priorityScore === 3 ? '🟡' :
-                               elevator.priorityScore === 1 ? '🟢' :
-                               elevator.priorityScore === 0 && elevator.priorityColor === 'blue' ? '🔵' : '⚪';
+                const borderColor = getPriorityColor(elevator.priorityColor);
 
-              // ✅ Get background fade color based on priority
-              const getBackgroundFade = (color) => {
-                const fadeMap = {
-                  'red': 'rgba(220, 53, 69, 0.25)',      // Critical/Emergency - much darker red
-                  'orange': 'rgba(253, 126, 20, 0.25)',   // Maintenance/Inspection - much darker orange
-                  'yellow': 'rgba(255, 193, 7, 0.25)',    // Warning - much darker yellow
-                  'green': 'rgba(25, 135, 84, 0.25)',     // Normal/Running - much darker green
-                  'blue': 'rgba(13, 110, 253, 0.25)',     // Info/Mode - much darker blue
-                  'gray': 'rgba(108, 117, 125, 0.25)'     // Standby/Out of Service - much darker gray
+                // ✅ Get background fade color based on priority
+                const getBackgroundFade = (color) => {
+                  const fadeMap = {
+                    'red': 'rgba(220, 53, 69, 0.25)',      // Critical/Emergency
+                    'orange': 'rgba(253, 126, 20, 0.25)',   // Maintenance/Inspection
+                    'yellow': 'rgba(255, 193, 7, 0.25)',    // Warning
+                    'green': 'rgba(25, 135, 84, 0.25)',     // Normal/Running
+                    'blue': 'rgba(13, 110, 253, 0.25)',     // Info/Mode
+                    'gray': 'rgba(108, 117, 125, 0.25)'     // Standby/Out of Service
+                  };
+                  return fadeMap[color] || 'rgba(108, 117, 125, 0.25)';
                 };
-                return fadeMap[color] || 'rgba(108, 117, 125, 0.25)';
-              };
 
-              // ✅ Get colored shadow based on priority
-              const getColoredShadow = (color) => {
-                const shadowMap = {
-                  'red': '0 4px 15px rgba(220, 53, 69, 0.3), 0 2px 8px rgba(220, 53, 69, 0.2)',      // Red shadow for Critical
-                  'orange': '0 4px 15px rgba(253, 126, 20, 0.3), 0 2px 8px rgba(253, 126, 20, 0.2)',   // Orange shadow for Maintenance
-                  'yellow': '0 4px 15px rgba(255, 193, 7, 0.3), 0 2px 8px rgba(255, 193, 7, 0.2)',    // Yellow shadow for Warning
-                  'green': '0 4px 15px rgba(25, 135, 84, 0.3), 0 2px 8px rgba(25, 135, 84, 0.2)',     // Green shadow for Normal
-                  'blue': '0 4px 15px rgba(13, 110, 253, 0.3), 0 2px 8px rgba(13, 110, 253, 0.2)',     // Blue shadow for Info
-                  'gray': '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)'     // Gray shadow for Out of Service
+                // ✅ Get colored shadow based on priority
+                const getColoredShadow = (color) => {
+                  const shadowMap = {
+                    'red': '0 4px 15px rgba(220, 53, 69, 0.3), 0 2px 8px rgba(220, 53, 69, 0.2)',
+                    'orange': '0 4px 15px rgba(253, 126, 20, 0.3), 0 2px 8px rgba(253, 126, 20, 0.2)',
+                    'yellow': '0 4px 15px rgba(255, 193, 7, 0.3), 0 2px 8px rgba(255, 193, 7, 0.2)',
+                    'green': '0 4px 15px rgba(25, 135, 84, 0.3), 0 2px 8px rgba(25, 135, 84, 0.2)',
+                    'blue': '0 4px 15px rgba(13, 110, 253, 0.3), 0 2px 8px rgba(13, 110, 253, 0.2)',
+                    'gray': '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)'
+                  };
+                  return shadowMap[color] || '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)';
                 };
-                return shadowMap[color] || '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)';
-              };
 
-              const backgroundFade = getBackgroundFade(elevator.priorityColor);
-              const coloredShadow = getColoredShadow(elevator.priorityColor);
+                const backgroundFade = getBackgroundFade(elevator.priorityColor);
+                const coloredShadow = getColoredShadow(elevator.priorityColor);
 
-              return (
-                <Col xs={12} sm={6} md={4} lg={2} className="mb-3" key={elevator.id}>
-                  <Card 
-                    className="h-100 border-0 elevator-card position-relative" 
+                return (
+                  <div 
+                    key={elevator.id}
                     style={{ 
-                      borderRadius: '12px',
-                      transition: 'all 0.3s ease',
-                      cursor: 'pointer',
-                      backgroundColor: '#f5f5f5',
-                      borderLeft: `4px solid ${borderColor}`, // ✅ Left border color
-                      background: `linear-gradient(to right, ${backgroundFade} 0%, ${backgroundFade} 20%, #f5f5f5 50%, #f5f5f5 100%)`, // ✅ Left gradient fade
-                      boxShadow: coloredShadow // ✅ Colored shadow based on status
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-5px)';
-                      e.currentTarget.style.boxShadow = `${coloredShadow}, 0 8px 25px rgba(0,0,0,0.15)`;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = coloredShadow;
+                      flex: '0 0 auto',
+                      width: '220px',
+                      display: 'inline-block'
                     }}
                   >
-                     <Card.Body className="p-2">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
-                          {elevator.id}
-                        </Badge>
-                        {/* ✅ Status Badge Removed - Card colors still work based on priority */}
+                    <Card 
+                      className="h-100 border-0 elevator-card position-relative" 
+                      style={{ 
+                        borderRadius: '12px',
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer',
+                        backgroundColor: '#f5f5f5',
+                        borderLeft: `4px solid ${borderColor}`,
+                        background: `linear-gradient(to right, ${backgroundFade} 0%, ${backgroundFade} 20%, #f5f5f5 50%, #f5f5f5 100%)`,
+                        boxShadow: coloredShadow
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-5px)';
+                        e.currentTarget.style.boxShadow = `${coloredShadow}, 0 8px 25px rgba(0,0,0,0.15)`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = coloredShadow;
+                      }}
+                    >
+                      <Card.Body className="p-2">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
+                            {elevator.id}
+                          </Badge>
+                        </div>
+                        
+                        <div className="mb-2">
+                          <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
+                            {elevator.company}
+                          </h6>
+                          <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
+                            {elevator.location}
+                          </p>
+                        </div>
+
+                        {/* Floor Display */}
+                        <div className="mb-2">
+                          <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
+                            Floor: {elevator.floor}
+                          </small>
+                        </div>
+
+                        {/* In Service / Out of Service */}
+                        <div className="mb-1">
+                          <small className="fw-bold" style={{ 
+                            fontSize: '0.8rem',
+                            color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
+                          }}>
+                            {elevator.serviceStatus.includes('In Service') ? 'In Service' : 'Out of Service'}
+                          </small>
+                        </div>
+
+                        {/* Working Hours Display */}
+                        {elevator.workingHours && (
+                          <>
+                            <div className="mb-1">
+                              <small className="fw-bold text-info" style={{ fontSize: '0.75rem' }}>
+                                Total Working: {elevator.workingHours.formatted}
+                              </small>
+                            </div>
+                            {elevator.workingHours.currentSession && (
+                              <div className="mb-1">
+                                <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#28a745' }}>
+                                  Current Session: {elevator.workingHours.currentSession.formatted} ({elevator.workingHours.currentSession.start})
+                                </small>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Maintenance Status and Hours */}
+                        {elevator.serviceStatus.includes('Maintenance ON') && (
+                          <>
+                            <div className="mb-1">
+                              <small className="fw-bold" style={{ 
+                                fontSize: '0.8rem',
+                                color: '#fd7e14'
+                              }}>
+                                In Maintenance
+                              </small>
+                            </div>
+                            {elevator.maintenanceHours && elevator.maintenanceHours.currentSession && (
+                              <div className="mb-1">
+                                <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#fd7e14' }}>
+                                  Current Maintenance: {elevator.maintenanceHours.currentSession.formatted} ({elevator.maintenanceHours.currentSession.start})
+                                </small>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Last Update */}
+                        <div className="mt-2">
+                          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                            Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
+                          </small>
+                        </div>
+                      </Card.Body>
+                    </Card>
                   </div>
-                      
-                       <div className="mb-2">
-                         <h6 className="mb-1 fw-bold" style={{ fontSize: '0.85rem' }}>
-                           {elevator.company}
-                         </h6>
-                         <p className="mb-1 text-muted" style={{ fontSize: '0.75rem' }}>
-                           {elevator.location}
-                         </p>
-                       </div>
-
-                       {/* Floor Display */}
-                       <div className="mb-2">
-                         <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
-                           Floor: {elevator.floor}
-                         </small>
-                       </div>
-
-                       {/* In Service / Out of Service */}
-                       <div className="mb-1">
-                         <small className="fw-bold" style={{ 
-                           fontSize: '0.8rem',
-                           color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
-                         }}>
-                           {elevator.serviceStatus.includes('In Service') ? 'In Service' : 'Out of Service'}
-                         </small>
-                       </div>
-
-                       {/* Working Hours Display */}
-                       {elevator.workingHours && (
-                         <>
-                           <div className="mb-1">
-                             <small className="fw-bold text-info" style={{ fontSize: '0.75rem' }}>
-                               Total Working: {elevator.workingHours.formatted}
-                             </small>
-                           </div>
-                           {elevator.workingHours.currentSession && (
-                             <div className="mb-1">
-                               <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#28a745' }}>
-                                 Current Session: {elevator.workingHours.currentSession.formatted} ({elevator.workingHours.currentSession.start})
-                               </small>
-                             </div>
-                           )}
-                         </>
-                       )}
-
-                       {/* Maintenance Status and Hours */}
-                       {elevator.serviceStatus.includes('Maintenance ON') && (
-                         <>
-                           <div className="mb-1">
-                             <small className="fw-bold" style={{ 
-                               fontSize: '0.8rem',
-                               color: '#fd7e14'
-                             }}>
-                               In Maintenance
-                             </small>
-                           </div>
-                           {elevator.maintenanceHours && elevator.maintenanceHours.currentSession && (
-                             <div className="mb-1">
-                               <small className="fw-bold" style={{ fontSize: '0.75rem', color: '#fd7e14' }}>
-                                 Current Maintenance: {elevator.maintenanceHours.currentSession.formatted} ({elevator.maintenanceHours.currentSession.start})
-                               </small>
-                             </div>
-                           )}
-                         </>
-                       )}
-
-                       {/* Last Update */}
-                       <div className="mt-2">
-                         <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                           Last Update: {formatTimeAgo(elevator.timestamp || elevator.createdAt)}
-                         </small>
-                       </div>
-
-                      {/* ✅ Temporarily removed: Raw Data (for future popup) */}
-                </Card.Body>
-              </Card>
-            </Col>
-              );
-            })}
-          </Row>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* Scroll hint */}
+          {individualElevators.length > 5 && (
+            <small className="text-muted d-block text-center" style={{ fontSize: '0.75rem' }}>
+              ← Scroll horizontally to see all elevators →
+            </small>
+          )}
         </div>
+      )}
+
+      {/* Elevator Logs Table */}
+      {!loading && !error && elevators.length > 0 && (
+        <ElevatorLogsTable 
+          elevators={elevators} 
+          timeRange={timeRange}
+          setTimeRange={setTimeRange}
+        />
       )}
 
       {/* No Data State */}
