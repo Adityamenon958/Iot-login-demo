@@ -14,27 +14,28 @@ jobs:
       NPM_CONFIG_PRODUCTION: "false"
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
 
-    - name: Install backend dependencies
-      run: npm ci
+      - name: Install backend dependencies (clean)
+        run: npm ci
 
-    - name: Build frontend
-      run: |
-        cd frontend
-        npm ci
-        npm run build
-        cd ..
+      - name: Install frontend dev dependencies & build
+        working-directory: frontend
+        run: |
+          # install exactly what's in package-lock, including dev deps (vite, etc.)
+          npm ci --include=dev
+          npm run build
+        # when this step finishes the built frontend should be in frontend/dist (or your configured output)
 
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: Gsn-Iot-Dashboard
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: .
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: Gsn-Iot-Dashboard
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
