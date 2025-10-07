@@ -288,7 +288,7 @@ export default function ElevatorOverview() {
       <div className="mb-4">
         <h4 className="mb-1 fw-bold">Elevator Dashboard</h4>
          <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
-           Periodic monitoring of elevator systems across all locations
+           Periodic monitoring of elevator systems
          </p>
       </div>
 

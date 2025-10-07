@@ -9,6 +9,10 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    # Make sure npm installs devDependencies during the workflow build
+    env:
+      NPM_CONFIG_PRODUCTION: "false"
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -19,18 +23,18 @@ jobs:
         node-version: '20'
 
     - name: Install backend dependencies
-      run: npm install
+      run: npm ci
 
     - name: Build frontend
       run: |
         cd frontend
-        npm install
+        npm ci
         npm run build
         cd ..
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
       with:
-        app-name: Gsn-Iot-Dashboard # 👈 REPLACE if needed
+        app-name: Gsn-Iot-Dashboard
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: .
