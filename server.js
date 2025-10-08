@@ -1342,7 +1342,7 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ NEW: All logs viewer with pagination (protected via JWT cookie) - Returns ALL historical logs
+// ✅ OPTIMIZED: All logs viewer with aggregation (no N+1 issue)
 app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
   // ✅ TEMPORARY: Disable elevator table API for testing
   const ELEVATOR_TABLE_DISABLED = process.env.ELEVATOR_TABLE_DISABLED === 'true';
@@ -1355,11 +1355,14 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     });
   }
   
+  const requestId = Math.random().toString(36).slice(2, 9);
+  const startTime = Date.now();
+  
   try {
     const { 
       elevatorId, 
       location, 
-      limit = 500, 
+      limit = 50,  // ✅ Changed default from 500 to 50
       offset = 0, 
       hours = 24 
     } = req.query;
@@ -1368,7 +1371,7 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     const userRole = req.user.role;
     const userCompany = req.user.companyName;
     
-    console.log(`📊 /api/elevators/all-logs - User: ${req.user.email}, Role: ${userRole}, Company: ${userCompany}`);
+    console.log(`📊 [${requestId}] /api/elevators/all-logs - User: ${req.user.email}, Role: ${userRole}, Company: ${userCompany}`);
     
     // ✅ Build filter
     const filter = {};
@@ -1377,207 +1380,91 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     if (userRole !== 'superadmin') {
       // Regular users and admins only see their company's data
       filter.elevatorCompany = userCompany;
-      console.log(`🔒 Filtering by company: ${userCompany}`);
+      console.log(`🔒 [${requestId}] Filtering by company: ${userCompany}`);
     } else {
-      console.log(`🔓 Superadmin: Showing all companies`);
+      console.log(`🔓 [${requestId}] Superadmin: Showing all companies`);
     }
     
     // Time range filter (last X hours)
     if (hours) {
       const hoursAgo = new Date(Date.now() - parseInt(hours) * 60 * 60 * 1000);
       filter.timestamp = { $gte: hoursAgo };
-      console.log(`⏰ Filtering last ${hours} hours (since ${hoursAgo.toISOString()})`);
+      console.log(`⏰ [${requestId}] Filtering last ${hours} hours (since ${hoursAgo.toISOString()})`);
     }
     
     // Optional: Filter by specific elevator
     if (elevatorId) {
       filter.elevatorId = elevatorId;
-      console.log(`🏢 Filtering by elevator: ${elevatorId}`);
+      console.log(`🏢 [${requestId}] Filtering by elevator: ${elevatorId}`);
     }
     
     // Optional: Filter by location
     if (location) {
       filter.location = new RegExp(location, 'i');
-      console.log(`📍 Filtering by location: ${location}`);
+      console.log(`📍 [${requestId}] Filtering by location: ${location}`);
     }
     
-    console.log(`🔍 Final filter:`, JSON.stringify(filter));
+    console.log(`🔍 [${requestId}] Final filter:`, JSON.stringify(filter));
     
     // ✅ Get total count (for pagination info)
-    const total = await ElevatorEvent.countDocuments(filter);
-    console.log(`📊 Total logs matching filter: ${total}`);
+    const countStartTime = Date.now();
+    const total = await ElevatorEvent.countDocuments(filter).maxTimeMS(10000);
+    console.log(`📊 [${requestId}] Total logs matching filter: ${total} (took ${Date.now() - countStartTime}ms)`);
     
-    // ✅ Fetch ALL logs with pagination (no grouping!)
+    // ✅ Fetch limited logs with .lean() for performance
+    const fetchStartTime = Date.now();
     const logs = await ElevatorEvent.find(filter)
       .sort({ timestamp: -1 })  // Newest first
       .skip(parseInt(offset))
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean()  // ✅ Return plain JS objects (faster than Mongoose documents)
+      .maxTimeMS(10000);
     
-    console.log(`📦 Fetched ${logs.length} logs (offset: ${offset}, limit: ${limit})`);
+    console.log(`📦 [${requestId}] Fetched ${logs.length} logs (took ${Date.now() - fetchStartTime}ms)`);
     
-    // ✅ Calculate working hours for each log
-    // Note: This is simplified - we calculate for each log individually
-    // For better performance with large datasets, consider caching or pre-calculating
-    const logsWithWorkingHours = await Promise.all(logs.map(async (log) => {
+    if (logs.length === 0) {
+      console.log(`✅ [${requestId}] No logs found, returning empty array`);
+      return res.json({ 
+        logs: [], 
+        total, 
+        limit: parseInt(limit), 
+        offset: parseInt(offset),
+        timing: Date.now() - startTime
+      });
+    }
+    
+    // ✅ OPTIMIZATION: Get unique elevator IDs from the fetched logs
+    const elevatorIds = [...new Set(logs.map(l => l.elevatorId))];
+    console.log(`🏢 [${requestId}] Found ${elevatorIds.length} unique elevators in fetched logs: ${elevatorIds.join(', ')}`);
+    
+    // ✅ OPTIMIZATION: ONE aggregation query to get all logs grouped by elevator
+    const aggStartTime = Date.now();
+    const groupedLogs = await ElevatorEvent.aggregate([
+      { $match: { elevatorId: { $in: elevatorIds } } },
+      { $sort: { elevatorId: 1, timestamp: 1 } },  // Sort by elevator then timestamp
+      { $group: { 
+        _id: "$elevatorId", 
+        allLogs: { $push: "$$ROOT" } 
+      }}
+    ]).allowDiskUse(true).option({ maxTimeMS: 20000 });
+    
+    console.log(`📊 [${requestId}] Aggregation completed for ${groupedLogs.length} elevators (took ${Date.now() - aggStartTime}ms)`);
+    
+    // ✅ Calculate working hours once per elevator and store in map
+    const calcStartTime = Date.now();
+    const workingHoursMap = {};
+    
+    for (const group of groupedLogs) {
+      const elevatorIdKey = group._id;
+      const allLogsForElevator = group.allLogs;
+      
       try {
-        // Get all logs for this elevator to calculate working hours
-        const allLogs = await ElevatorEvent.find({ 
-          elevatorId: log.elevatorId 
-        }).sort({ timestamp: 1 });
-        
-        let totalWorkingMs = 0;
-        let currentWorkingStart = null;
-        let currentSessionStart = null;
-        let currentSessionDuration = 0;
-        let currentMaintenanceStart = null;
-        let currentMaintenanceDuration = 0;
-
-        for (let i = 0; i < allLogs.length; i++) {
-          const currentLog = allLogs[i];
-          const nextLog = allLogs[i + 1];
-
-          // Parse Reg66H bit0 (In Service) and bit2 (Maintenance ON)
-          const reg66 = parseInt(currentLog.data[1]) || 0;
-          const reg66Binary = reg66.toString(2).padStart(16, '0');
-          const reg66H = reg66Binary.substring(0, 8);
-          const isWorking = reg66H[7] === '1';
-          const isMaintenance = reg66H[5] === '1';
-
-          // Working hours calculation
-          if (isWorking) {
-            if (currentWorkingStart === null) {
-              currentWorkingStart = new Date(currentLog.timestamp);
-              currentSessionStart = new Date(currentLog.timestamp);
-            }
-
-            if (!nextLog) {
-              const now = new Date();
-              const sessionDuration = now - currentWorkingStart;
-              totalWorkingMs += sessionDuration;
-              currentSessionDuration = sessionDuration;
-            } else {
-              const nextReg66 = parseInt(nextLog.data[1]) || 0;
-              const nextReg66Binary = nextReg66.toString(2).padStart(16, '0');
-              const nextReg66H = nextReg66Binary.substring(0, 8);
-              const nextIsWorking = nextReg66H[7] === '1';
-
-              if (!nextIsWorking) {
-                const sessionEnd = new Date(nextLog.timestamp);
-                const sessionDuration = sessionEnd - currentWorkingStart;
-                totalWorkingMs += sessionDuration;
-                currentWorkingStart = null;
-                currentSessionStart = null;
-              }
-            }
-          } else {
-            currentWorkingStart = null;
-            currentSessionStart = null;
-          }
-
-          // Maintenance hours calculation
-          if (isMaintenance) {
-            if (currentMaintenanceStart === null) {
-              currentMaintenanceStart = new Date(currentLog.timestamp);
-            }
-
-            if (!nextLog) {
-              const now = new Date();
-              const sessionDuration = now - currentMaintenanceStart;
-              currentMaintenanceDuration = sessionDuration;
-            } else {
-              const nextReg66 = parseInt(nextLog.data[1]) || 0;
-              const nextReg66Binary = nextReg66.toString(2).padStart(16, '0');
-              const nextReg66H = nextReg66Binary.substring(0, 8);
-              const nextIsMaintenance = nextReg66H[5] === '1';
-
-              if (!nextIsMaintenance) {
-                currentMaintenanceStart = null;
-              }
-            }
-          } else {
-            currentMaintenanceStart = null;
-          }
-        }
-
-        // Format working hours
-        const totalWorkingHours = totalWorkingMs / (1000 * 60 * 60);
-        const currentSessionHours = currentSessionDuration / (1000 * 60 * 60);
-        const currentMaintenanceHours = currentMaintenanceDuration / (1000 * 60 * 60);
-
-        const days = Math.floor(totalWorkingHours / 24);
-        const hours = Math.floor(totalWorkingHours % 24);
-        const minutes = Math.floor((totalWorkingHours % 1) * 60);
-        let workingHoursText = '';
-        if (days > 0) workingHoursText += `${days}d `;
-        if (hours > 0) workingHoursText += `${hours}h `;
-        if (minutes > 0) workingHoursText += `${minutes}m`;
-        if (workingHoursText === '') workingHoursText = '0m';
-
-        const sessDays = Math.floor(currentSessionHours / 24);
-        const sessHours = Math.floor(currentSessionHours % 24);
-        const sessMinutes = Math.floor((currentSessionHours % 1) * 60);
-        let currentSessionText = '';
-        if (sessDays > 0) currentSessionText += `${sessDays}d `;
-        if (sessHours > 0) currentSessionText += `${sessHours}h `;
-        if (sessMinutes > 0) currentSessionText += `${sessMinutes}m`;
-        if (currentSessionText === '') currentSessionText = '0m';
-
-        let sessionStartText = 'Not Working';
-        if (currentSessionStart) {
-          sessionStartText = currentSessionStart.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'Asia/Kolkata'
-          });
-        }
-
-        const maintDays = Math.floor(currentMaintenanceHours / 24);
-        const maintHours = Math.floor(currentMaintenanceHours % 24);
-        const maintMinutes = Math.floor((currentMaintenanceHours % 1) * 60);
-        let maintenanceSessionText = '';
-        if (maintDays > 0) maintenanceSessionText += `${maintDays}d `;
-        if (maintHours > 0) maintenanceSessionText += `${maintHours}h `;
-        if (maintMinutes > 0) maintenanceSessionText += `${maintMinutes}m`;
-        if (maintenanceSessionText === '') maintenanceSessionText = '0m';
-
-        let maintenanceStartText = 'Not in Maintenance';
-        if (currentMaintenanceStart) {
-          maintenanceStartText = currentMaintenanceStart.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'Asia/Kolkata'
-          });
-        }
-
-        return {
-          ...log.toObject(),
-          workingHours: {
-            total: totalWorkingHours,
-            formatted: workingHoursText.trim(),
-            currentSession: currentSessionStart ? {
-              start: sessionStartText,
-              duration: currentSessionHours,
-              formatted: currentSessionText.trim()
-            } : null
-          },
-          maintenanceHours: currentMaintenanceStart ? {
-            currentSession: {
-              start: maintenanceStartText,
-              duration: currentMaintenanceHours,
-              formatted: maintenanceSessionText.trim()
-            }
-          } : null
-        };
+        // ✅ Call helper function with all logs for this elevator
+        const calculatedHours = calculateElevatorWorkingHours(allLogsForElevator);
+        workingHoursMap[elevatorIdKey] = calculatedHours;
       } catch (err) {
-        console.error(`❌ Error calculating hours for ${log.elevatorId}:`, err);
-        return {
-          ...log.toObject(),
+        console.error(`❌ [${requestId}] Error calculating hours for ${elevatorIdKey}:`, err);
+        workingHoursMap[elevatorIdKey] = {
           workingHours: {
             total: 0,
             formatted: '0m',
@@ -1586,27 +1473,203 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
           maintenanceHours: null
         };
       }
-    }));
+    }
+    
+    console.log(`⏱️ [${requestId}] Calculated working hours for ${Object.keys(workingHoursMap).length} elevators (took ${Date.now() - calcStartTime}ms)`);
+    
+    // ✅ Map calculated hours back to the original logs
+    const logsWithWorkingHours = logs.map(log => {
+      const hours = workingHoursMap[log.elevatorId] || {
+        workingHours: {
+          total: 0,
+          formatted: '0m',
+          currentSession: null
+        },
+        maintenanceHours: null
+      };
+      
+      return {
+        ...log,
+        workingHours: hours.workingHours,
+        maintenanceHours: hours.maintenanceHours
+      };
+    });
     
     // ✅ Return with pagination metadata
     const hasMore = (parseInt(offset) + logs.length) < total;
+    const totalTime = Date.now() - startTime;
     
-    console.log(`✅ Returning ${logsWithWorkingHours.length} logs with working hours`);
-    console.log(`📊 Pagination: offset=${offset}, limit=${limit}, total=${total}, hasMore=${hasMore}`);
+    console.log(`✅ [${requestId}] Returning ${logsWithWorkingHours.length} logs with working hours`);
+    console.log(`📊 [${requestId}] Pagination: offset=${offset}, limit=${limit}, total=${total}, hasMore=${hasMore}`);
+    console.log(`⚡ [${requestId}] Total request time: ${totalTime}ms`);
     
     res.json({ 
-      logs: logsWithWorkingHours,
-      total,
-      offset: parseInt(offset),
-      limit: parseInt(limit),
-      hasMore
+      logs: logsWithWorkingHours, 
+      total, 
+      limit: parseInt(limit), 
+      offset: parseInt(offset), 
+      hasMore,
+      timing: totalTime
     });
     
   } catch (err) {
-    console.error("❌ /api/elevators/all-logs error:", err);
+    console.error(`❌ [${requestId}] /api/elevators/all-logs error:`, err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+
+// ✅ HELPER FUNCTION: Calculate working hours for an elevator given all its logs
+// This is extracted from the original logic to be reusable
+function calculateElevatorWorkingHours(allLogs) {
+  let totalWorkingMs = 0;
+  let currentWorkingStart = null;
+  let currentSessionStart = null;
+  let currentSessionDuration = 0;
+  let currentMaintenanceStart = null;
+  let currentMaintenanceDuration = 0;
+
+  for (let i = 0; i < allLogs.length; i++) {
+    const currentLog = allLogs[i];
+    const nextLog = allLogs[i + 1];
+
+    // Parse Reg66H bit0 (In Service) and bit2 (Maintenance ON)
+    const reg66 = parseInt(currentLog.data[1]) || 0;
+    const reg66Binary = reg66.toString(2).padStart(16, '0');
+    const reg66H = reg66Binary.substring(0, 8);
+    const isWorking = reg66H[7] === '1';
+    const isMaintenance = reg66H[5] === '1';
+
+    // Working hours calculation
+    if (isWorking) {
+      if (currentWorkingStart === null) {
+        currentWorkingStart = new Date(currentLog.timestamp);
+        currentSessionStart = new Date(currentLog.timestamp);
+      }
+
+      if (!nextLog) {
+        const now = new Date();
+        const sessionDuration = now - currentWorkingStart;
+        totalWorkingMs += sessionDuration;
+        currentSessionDuration = sessionDuration;
+      } else {
+        const nextReg66 = parseInt(nextLog.data[1]) || 0;
+        const nextReg66Binary = nextReg66.toString(2).padStart(16, '0');
+        const nextReg66H = nextReg66Binary.substring(0, 8);
+        const nextIsWorking = nextReg66H[7] === '1';
+
+        if (!nextIsWorking) {
+          const sessionEnd = new Date(nextLog.timestamp);
+          const sessionDuration = sessionEnd - currentWorkingStart;
+          totalWorkingMs += sessionDuration;
+          currentWorkingStart = null;
+          currentSessionStart = null;
+        }
+      }
+    } else {
+      currentWorkingStart = null;
+      currentSessionStart = null;
+    }
+
+    // Maintenance hours calculation
+    if (isMaintenance) {
+      if (currentMaintenanceStart === null) {
+        currentMaintenanceStart = new Date(currentLog.timestamp);
+      }
+
+      if (!nextLog) {
+        const now = new Date();
+        const sessionDuration = now - currentMaintenanceStart;
+        currentMaintenanceDuration = sessionDuration;
+      } else {
+        const nextReg66 = parseInt(nextLog.data[1]) || 0;
+        const nextReg66Binary = nextReg66.toString(2).padStart(16, '0');
+        const nextReg66H = nextReg66Binary.substring(0, 8);
+        const nextIsMaintenance = nextReg66H[5] === '1';
+
+        if (!nextIsMaintenance) {
+          currentMaintenanceStart = null;
+        }
+      }
+    } else {
+      currentMaintenanceStart = null;
+    }
+  }
+
+  // Format working hours
+  const totalWorkingHours = totalWorkingMs / (1000 * 60 * 60);
+  const currentSessionHours = currentSessionDuration / (1000 * 60 * 60);
+  const currentMaintenanceHours = currentMaintenanceDuration / (1000 * 60 * 60);
+
+  const days = Math.floor(totalWorkingHours / 24);
+  const hours = Math.floor(totalWorkingHours % 24);
+  const minutes = Math.floor((totalWorkingHours % 1) * 60);
+  let workingHoursText = '';
+  if (days > 0) workingHoursText += `${days}d `;
+  if (hours > 0) workingHoursText += `${hours}h `;
+  if (minutes > 0) workingHoursText += `${minutes}m`;
+  if (workingHoursText === '') workingHoursText = '0m';
+
+  const sessDays = Math.floor(currentSessionHours / 24);
+  const sessHours = Math.floor(currentSessionHours % 24);
+  const sessMinutes = Math.floor((currentSessionHours % 1) * 60);
+  let currentSessionText = '';
+  if (sessDays > 0) currentSessionText += `${sessDays}d `;
+  if (sessHours > 0) currentSessionText += `${sessHours}h `;
+  if (sessMinutes > 0) currentSessionText += `${sessMinutes}m`;
+  if (currentSessionText === '') currentSessionText = '0m';
+
+  let sessionStartText = 'Not Working';
+  if (currentSessionStart) {
+    sessionStartText = currentSessionStart.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  }
+
+  const maintDays = Math.floor(currentMaintenanceHours / 24);
+  const maintHours = Math.floor(currentMaintenanceHours % 24);
+  const maintMinutes = Math.floor((currentMaintenanceHours % 1) * 60);
+  let maintenanceSessionText = '';
+  if (maintDays > 0) maintenanceSessionText += `${maintDays}d `;
+  if (maintHours > 0) maintenanceSessionText += `${maintHours}h `;
+  if (maintMinutes > 0) maintenanceSessionText += `${maintMinutes}m`;
+  if (maintenanceSessionText === '') maintenanceSessionText = '0m';
+
+  let maintenanceStartText = 'Not in Maintenance';
+  if (currentMaintenanceStart) {
+    maintenanceStartText = currentMaintenanceStart.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  }
+
+  return {
+    workingHours: {
+      total: totalWorkingHours,
+      formatted: workingHoursText.trim(),
+      currentSession: currentSessionStart ? {
+        start: sessionStartText,
+        duration: currentSessionHours,
+        formatted: currentSessionText.trim()
+      } : null
+    },
+    maintenanceHours: currentMaintenanceStart ? {
+      currentSession: {
+        start: maintenanceStartText,
+        duration: currentMaintenanceHours,
+        formatted: maintenanceSessionText.trim()
+      }
+    } : null
+  };
+}
 
 // ✅ Helper function to transform new format to old format
 function transformNewFormatToOld(dataArray) {
