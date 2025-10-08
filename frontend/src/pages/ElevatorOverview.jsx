@@ -239,7 +239,7 @@ export default function ElevatorOverview() {
       const response = await axios.get('/api/elevators/all-logs', {
         withCredentials: true,
         params: { 
-          limit: 500,           // Fetch 500 logs
+          limit: 50,            // Fetch 50 logs (reduced from 500 for performance testing)
           offset: 0,            // Start from beginning
           hours: timeRange      // Time range filter
         }
