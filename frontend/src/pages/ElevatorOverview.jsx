@@ -556,7 +556,7 @@ export default function ElevatorOverview() {
         <div className="mb-4">
           <div className="d-flex justify-content-between align-items-center mb-0">
             <h6 className="mb-0 fw-bold" style={{ fontSize: '0.95rem' }}>
-              Individual Elevator Status
+              Elevator Status
             </h6>
             <RefreshIndicator 
               isRefreshing={isIndividualRefreshing}
