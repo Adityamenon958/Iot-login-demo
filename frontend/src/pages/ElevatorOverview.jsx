@@ -69,7 +69,22 @@ const processElevatorData = (dataArray) => {
       overallStatus: 'unknown',
       priorityScore: 0,
       priorityColor: 'gray',
-      priorityStatus: 'Unknown'
+      priorityStatus: 'Unknown',
+      // ✅ Add default register bits for empty data
+      registerBits: {
+        reg65L: {
+          bits: ['0', '0', '0', '0', '0', '0', '0', '0'],
+          labels: ['Door Open', 'Attendant', 'Independent', 'Fire Exclusive', 'Inspection', 'Comprehensive Fault', 'Down', 'Up']
+        },
+        reg66H: {
+          bits: ['0', '0', '0', '0', '0', '0', '0', '0'],
+          labels: ['In Service', 'Comm Normal', 'Maintenance ON', 'Overload', 'Automatic', 'Car Walking', 'Earthquake', 'Safety Circuit']
+        },
+        reg66L: {
+          bits: ['0', '0', '0', '0', '0', '0', '0', '0'],
+          labels: ['Fire Return', 'Fire Return In Place', 'Standby', 'Normal Power', 'OEPS', 'Standby', 'Standby', 'Standby']
+        }
+      }
     };
   }
 
@@ -113,6 +128,7 @@ const processElevatorData = (dataArray) => {
   // 66L - Power status flags (bit0 = rightmost character)
   const powerStatus = [];
   const reg66L = reg66Split.low;
+  
   if (reg66L[7] === '1') powerStatus.push('Fire Return');        // bit0
   if (reg66L[6] === '1') powerStatus.push('Fire Return In Place'); // bit1
   if (reg66L[5] === '1') powerStatus.push('Standby');            // bit2
@@ -195,6 +211,23 @@ const processElevatorData = (dataArray) => {
     overallStatus = 'inactive';
   }
 
+  // ✅ Debug: Check register bits before return
+  const registerBits = {
+    reg65L: {
+      bits: reg65L.split(''), // ['0','1','0','1',...]
+      labels: ['Door Open', 'Attendant', 'Independent', 'Fire Exclusive', 'Inspection', 'Comprehensive Fault', 'Down', 'Up']
+    },
+    reg66H: {
+      bits: reg66H.split(''),
+      labels: ['In Service', 'Comm Normal', 'Maintenance ON', 'Overload', 'Automatic', 'Car Walking', 'Earthquake', 'Safety Circuit']
+    },
+    reg66L: {
+      bits: reg66L.split(''),
+      labels: ['Fire Return', 'Fire Return In Place', 'Standby', 'Normal Power', 'OEPS', 'Standby', 'Standby', 'Standby']
+    }
+  };
+  
+  
   return {
     floor,
     primaryStatus,
@@ -204,7 +237,9 @@ const processElevatorData = (dataArray) => {
     priorityScore: maxScore,
     priorityColor,
     priorityStatus,
-    criticalStatus
+    criticalStatus,
+    // ✅ Register bits data for visualization
+    registerBits
   };
 };
 
@@ -246,10 +281,8 @@ export default function ElevatorOverview() {
       });
       
       if (response.data && response.data.logs) {
-        console.log('🔍 API Response (Historical Logs):', response.data);
         // Process each elevator's data
         const processedElevators = response.data.logs.map(log => {
-          console.log('🔍 Processing elevator:', log.elevatorId, 'Working Hours:', log.workingHours);
           const processedData = processElevatorData(log.data);
           return {
             id: log.elevatorId,
@@ -260,7 +293,7 @@ export default function ElevatorOverview() {
             data: log.data,
             workingHours: log.workingHours, // ✅ Pass through working hours from backend
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
-            ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus
+            ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus, registerBits
           };
         });
         
@@ -299,10 +332,8 @@ export default function ElevatorOverview() {
       });
       
       if (response.data && response.data.logs) {
-        console.log('🔍 API Response (Individual Cards):', response.data);
         // Process each elevator's data (same logic as before)
         const processedElevators = response.data.logs.map(log => {
-          console.log('🔍 Processing individual elevator:', log.elevatorId, 'Working Hours:', log.workingHours);
           const processedData = processElevatorData(log.data);
           return {
             id: log.elevatorId,

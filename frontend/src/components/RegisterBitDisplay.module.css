@@ -1,0 +1,50 @@
+.registerBits {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+}
+
+.registerLabel {
+  font-weight: bold;
+  font-size: 0.7rem;
+  color: #333;
+  margin-right: 4px;
+  min-width: 30px;
+}
+
+.bitsContainer {
+  display: flex;
+  gap: 2px;
+}
+
+.bitBox {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.bitBox:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.bitActive {
+  background-color: #28a745;
+  color: white;
+  border-color: #1e7e34;
+}
+
+.bitInactive {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  border-color: #dee2e6;
+}

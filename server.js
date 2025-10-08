@@ -980,41 +980,27 @@ app.post("/api/elevators/log", async (req, res) => {
   
   try {
     console.log(`\n🚀 [${requestId}] Gateway hit /api/elevators/log`);
-    console.log(`📥 [${requestId}] Raw request body:`, JSON.stringify(req.body, null, 2));
     
     const items = Array.isArray(req.body) ? req.body : [req.body];
-    console.log(`📊 [${requestId}] Processing ${items.length} item(s)`);
     
     // ✅ Validate and map data
     const docs = items.map((it, index) => {
-      console.log(`\n🔍 [${requestId}] Processing item ${index + 1}:`, {
-        elevatorCompany: it.elevatorCompany,
-        elevatorId: it.elevatorId || it.DeviceID,
-        location: it.location,
-        timestamp: it.timestamp,
-        data: it.data
-      });
-      
       // Parse timestamp (Unix seconds to Date)
       const rawTs = it.timestamp != null ? String(it.timestamp) : "";
       const tsNum = Number(rawTs);
       const tsDate = Number.isFinite(tsNum) && tsNum > 1000000000 ? new Date(tsNum * 1000) : new Date();
-      console.log(`⏰ [${requestId}] Timestamp: ${rawTs} → ${tsDate.toISOString()}`);
 
       // Handle data array - can be array or stringified array
       let dataArray = [];
       if (Array.isArray(it.data)) {
         dataArray = it.data;
-        console.log(`📋 [${requestId}] Data is already array:`, dataArray);
       } else if (typeof it.data === 'string') {
         try {
           // Try to parse stringified array like "[6161,34321,0,0]"
           dataArray = JSON.parse(it.data);
-          console.log(`📋 [${requestId}] Data parsed from string:`, dataArray);
         } catch {
           // Fallback: treat as comma-separated string
           dataArray = it.data.split(',').map(v => v.trim());
-          console.log(`📋 [${requestId}] Data parsed as comma-separated:`, dataArray);
         }
       }
 
@@ -1026,34 +1012,18 @@ app.post("/api/elevators/log", async (req, res) => {
         data: dataArray
       };
       
-      console.log(`✅ [${requestId}] Processed document:`, {
-        elevatorCompany: processedDoc.elevatorCompany,
-        elevatorId: processedDoc.elevatorId,
-        location: processedDoc.location,
-        timestamp: processedDoc.timestamp.toISOString(),
-        data: processedDoc.data
-      });
-      
       return processedDoc;
     });
 
     // ✅ Filter valid documents
     const validDocs = docs.filter((d) => d.elevatorId);
-    console.log(`\n🔍 [${requestId}] Validation results:`);
-    console.log(`📊 [${requestId}] Total items: ${docs.length}`);
-    console.log(`✅ [${requestId}] Valid items: ${validDocs.length}`);
-    console.log(`❌ [${requestId}] Invalid items: ${docs.length - validDocs.length}`);
     
     if (validDocs.length === 0) {
-      console.log(`❌ [${requestId}] No valid items found - returning 400`);
       return res.status(400).json({ message: "No valid items with elevatorId." });
     }
 
     // ✅ Insert into database
-    console.log(`\n💾 [${requestId}] Inserting ${validDocs.length} document(s) into database...`);
     const result = await ElevatorEvent.insertMany(validDocs, { ordered: false });
-    console.log(`✅ [${requestId}] Successfully inserted ${result.length} document(s)`);
-    console.log(`🎉 [${requestId}] Request completed successfully\n`);
     
     return res.status(201).json({ ok: true, inserted: result.length });
   } catch (err) {
@@ -1111,7 +1081,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
         // Get all logs for this elevator, sorted by timestamp
         const allLogs = await ElevatorEvent.find({ elevatorId: log.elevatorId }).sort({ timestamp: 1 });
         
-        console.log(`\n🔍 [${log.elevatorId}] DEBUGGING - Total logs: ${allLogs.length}`);
         
         let totalWorkingMs = 0;
         let lastWorkingTime = null;
@@ -1185,10 +1154,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
             if (currentMaintenanceStart === null) {
               currentMaintenanceStart = new Date(currentLog.timestamp);
               maintenanceSessionCount++;
-              console.log(`🔧 MAINTENANCE SESSION ${maintenanceSessionCount} STARTED for ${log.elevatorId}`);
-              console.log(` 📅 Log #${i + 1} - UTC: ${currentLog.timestamp}`);
-              console.log(` 📅 Local: ${new Date(currentLog.timestamp).toLocaleString()}`);
-              console.log(` 📅 Data[1]: ${currentLog.data[1]} → Reg66H: ${reg66H} → Bit2: ${reg66H[5]}`);
             }
 
             // If this is the last log or next log is not in maintenance, end the session
@@ -1198,10 +1163,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
               const sessionDuration = now - currentMaintenanceStart;
               totalMaintenanceMs += sessionDuration;
               currentMaintenanceDuration = sessionDuration;
-              console.log(` 📅 CURRENT MAINTENANCE SESSION (last log):`);
-              console.log(` Started: ${currentMaintenanceStart.toLocaleString()}`);
-              console.log(` Now: ${now.toLocaleString()}`);
-              console.log(` Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
             } else {
               // Check if next log is also in maintenance
               const nextReg66 = parseInt(nextLog.data[1]) || 0;
@@ -1214,11 +1175,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
                 const sessionEnd = new Date(nextLog.timestamp);
                 const sessionDuration = sessionEnd - currentMaintenanceStart;
                 totalMaintenanceMs += sessionDuration;
-                console.log(` ⏹️ MAINTENANCE SESSION ${maintenanceSessionCount} ENDED for ${log.elevatorId}`);
-                console.log(` 📅 Started: ${currentMaintenanceStart.toLocaleString()}`);
-                console.log(` 📅 Ended: ${sessionEnd.toLocaleString()}`);
-                console.log(` 📅 Duration: ${(sessionDuration / (1000 * 60 * 60)).toFixed(2)}h`);
-                console.log(` 📅 Next Log: ${nextLog.timestamp} (NOT IN MAINTENANCE)`);
                 currentMaintenanceStart = null;
               }
             }
@@ -1264,7 +1220,6 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
             hour12: true,
             timeZone: 'Asia/Kolkata'  // ✅ Force IST timezone display
           });
-          console.log(` 📅 CURRENT SESSION START (IST): ${sessionStartText}`);
         }
 
         // ✅ Format maintenance session hours (days, hours, minutes)
@@ -1288,14 +1243,8 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
             hour12: true,
             timeZone: 'Asia/Kolkata'  // ✅ Force IST timezone display
           });
-          console.log(` 📅 CURRENT MAINTENANCE SESSION START (IST): ${maintenanceStartText}`);
         }
 
-        console.log(`\n✅ [${log.elevatorId}] MAINTENANCE ANALYSIS:`);
-        console.log(` 🔧 MAINTENANCE SESSIONS: ${maintenanceSessionCount}`);
-        console.log(` 🔧 CURRENT MAINTENANCE START: ${currentMaintenanceStart}`);
-        console.log(` 🔧 MAINTENANCE DURATION: ${currentMaintenanceHours.toFixed(2)}h (${maintenanceSessionText.trim()})`);
-        console.log(` 🔧 MAINTENANCE START TEXT: ${maintenanceStartText}`);
 
         const response = {
           ...log,

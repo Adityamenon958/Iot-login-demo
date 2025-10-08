@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Table, Card, Form, Badge, Button, Row, Col, Spinner } from 'react-bootstrap';
 import styles from './ElevatorLogsTable.module.css';
+import RegisterBitDisplay from './RegisterBitDisplay';
 
 // ✅ Format date and time for display
 const formatDateTime = (value) => {
@@ -84,7 +85,8 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
       inMaintenance: elevator.serviceStatus.includes('Maintenance ON'),
       errorCode: elevator.criticalStatus || elevator.priorityStatus || 'Normal',
       priorityColor: elevator.priorityColor,
-      priorityScore: elevator.priorityScore
+      priorityScore: elevator.priorityScore,
+      registerBits: elevator.registerBits // ✅ FIX: Include registerBits
     }));
   }, [elevators]);
 
@@ -403,12 +405,15 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
                 <th onClick={() => handleSort('errorCode')} className={styles.sortable}>
                   Status / Error{getSortIndicator('errorCode')}
                 </th>
+                <th style={{ textAlign: 'center', minWidth: '200px' }}>
+                  Register Bits
+                </th>
               </tr>
             </thead>
             <tbody>
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="text-center text-muted py-4">
+                  <td colSpan="9" className="text-center text-muted py-4">
                     No elevator logs found
                   </td>
                 </tr>
@@ -438,6 +443,24 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
                       <Badge bg={getStatusBadgeColor(row.priorityColor)} style={{ fontSize: '0.75rem' }}>
                         {row.errorCode}
                       </Badge>
+                    </td>
+                    <td style={{ verticalAlign: 'top', padding: '4px' }}>
+                      {row.registerBits && row.registerBits.reg65L && (
+                        <>
+                          <RegisterBitDisplay 
+                            registerData={row.registerBits.reg65L} 
+                            registerName="65L" 
+                          />
+                          <RegisterBitDisplay 
+                            registerData={row.registerBits.reg66H} 
+                            registerName="66H" 
+                          />
+                          <RegisterBitDisplay 
+                            registerData={row.registerBits.reg66L} 
+                            registerName="66L" 
+                          />
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))
