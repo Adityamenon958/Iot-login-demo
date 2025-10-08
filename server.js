@@ -967,6 +967,17 @@ app.post("/api/crane/log", async (req, res) => {
 app.post("/api/elevators/log", async (req, res) => {
   const requestId = Date.now() + Math.random().toString(36).substr(2, 9);
   
+  // ✅ TEMPORARY: Stop receiving elevator data
+  const ELEVATOR_DATA_DISABLED = process.env.ELEVATOR_DATA_DISABLED === 'true';
+  
+  if (ELEVATOR_DATA_DISABLED) {
+    console.log(`⏸️ [${requestId}] ELEVATOR DATA TEMPORARILY DISABLED - Rejecting request`);
+    return res.status(503).json({ 
+      message: "Elevator data collection temporarily disabled",
+      requestId: requestId
+    });
+  }
+  
   try {
     console.log(`\n🚀 [${requestId}] Gateway hit /api/elevators/log`);
     console.log(`📥 [${requestId}] Raw request body:`, JSON.stringify(req.body, null, 2));
