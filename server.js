@@ -1344,6 +1344,17 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
 
 // ✅ NEW: All logs viewer with pagination (protected via JWT cookie) - Returns ALL historical logs
 app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
+  // ✅ TEMPORARY: Disable elevator table API for testing
+  const ELEVATOR_TABLE_DISABLED = process.env.ELEVATOR_TABLE_DISABLED === 'true';
+  
+  if (ELEVATOR_TABLE_DISABLED) {
+    console.log(`⏸️ ELEVATOR TABLE API TEMPORARILY DISABLED - Rejecting /api/elevators/all-logs request`);
+    return res.status(503).json({ 
+      message: "Elevator table API temporarily disabled for testing",
+      disabled: true
+    });
+  }
+  
   try {
     const { 
       elevatorId, 
