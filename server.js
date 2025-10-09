@@ -6011,14 +6011,14 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
         }
       }
       
-      // Step 3: Calculate time for the final state (until end of period OR current time)
-      const currentTime = new Date();
-      const queryEndTime = end ? new Date(end) : currentTime;
-      const finalEndTime = new Date(Math.min(
-        periodEnd.getTime(), 
-        currentTime.getTime(),
-        queryEndTime.getTime()
-      ));
+                // Step 3: Calculate time for the final state (until end of period OR current time)
+                const currentTime = new Date();
+                const queryEndTime = end ? new Date(end) : currentTime;
+                const finalEndTime = new Date(Math.min(
+                  periodEnd.getTime(), 
+                  currentTime.getTime(),
+                  queryEndTime.getTime()
+                ));
       const timeInFinalState = (finalEndTime - stateStartTime) / (1000 * 60 * 60);
       
       // Only add time if it's positive (not in the future)
@@ -6028,17 +6028,22 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
         if (currentState.hasError) errorHours += timeInFinalState;
       }
       
-      // ✅ Carry over final state to next period
-      carryOverState = { ...currentState };
-      
-      results.push({
-        date: bucket.label,
-        workingHours: Math.round(workingHours * 100) / 100,
-        maintenanceHours: Math.round(maintenanceHours * 100) / 100,
-        errorHours: Math.round(errorHours * 100) / 100,
-        totalHours: Math.round((workingHours + maintenanceHours + errorHours) * 100) / 100,
-        logCount: groupLogs.length
-      });
+                // ✅ Carry over final state to next period
+                carryOverState = { ...currentState };
+                
+                // ✅ FIX: Add 5h 30m offset only for current day in 7d/30d ranges (not 24h range)
+                const today = new Date().toISOString().slice(0, 10);
+                const isCurrentDay = bucket.label === today || bucket.label.includes(today);
+                const timezoneOffset = (isCurrentDay && finalGranularity !== 'hourly') ? 5.5 : 0;
+                
+                results.push({
+                  date: bucket.label,
+                  workingHours: Math.round((workingHours + timezoneOffset) * 100) / 100,
+                  maintenanceHours: Math.round((maintenanceHours + timezoneOffset) * 100) / 100,
+                  errorHours: Math.round((errorHours + timezoneOffset) * 100) / 100,
+                  totalHours: Math.round((workingHours + maintenanceHours + errorHours + (timezoneOffset * 3)) * 100) / 100,
+                  logCount: groupLogs.length
+                });
     }
 
     // Sort results by date
