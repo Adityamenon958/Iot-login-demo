@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Col, Row, Card, Badge, Spinner } from 'react-bootstrap';
+import { Col, Row, Card, Badge, Spinner, Form } from 'react-bootstrap';
 import axios from 'axios';
 import styles from "./MainContent.module.css";
 import { PiElevatorDuotone, PiCheckCircleDuotone, PiXCircleDuotone, PiWarningCircleDuotone } from "react-icons/pi";
@@ -806,9 +806,21 @@ export default function ElevatorOverview() {
             
             {/* Right: Line Chart (40%) */}
             <Col xs={12} lg={5}>
-              {/* Chart Time Range Selector */}
+              {/* Elevator Selector and Time Range in Single Line */}
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <small className="text-muted">Chart Time Range:</small>
+                <Form.Select 
+                  size="sm" 
+                  value={selectedElevator || ''} 
+                  onChange={(e) => setSelectedElevator(e.target.value)}
+                  style={{ width: '120px' }}
+                >
+                  {individualElevators.map(elevator => (
+                    <option key={elevator.id} value={elevator.id}>
+                      {elevator.id}
+                    </option>
+                  ))}
+                </Form.Select>
+                
                 <div className="btn-group" role="group">
                   <input
                     type="radio"
