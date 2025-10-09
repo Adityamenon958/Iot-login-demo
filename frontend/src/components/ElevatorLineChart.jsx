@@ -42,7 +42,7 @@ const ElevatorLineChart = ({ selectedElevator, timeRange }) => {
         setLoading(true);
         setError(null);
 
-        // Calculate date range based on timeRange
+        // Calculate date range based on timeRange (using UTC consistently)
         const now = new Date();
         const hoursAgo = parseInt(timeRange) || 24;
         const start = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
@@ -51,8 +51,8 @@ const ElevatorLineChart = ({ selectedElevator, timeRange }) => {
           withCredentials: true,
           params: {
             elevatorId: selectedElevator,
-            start: start.toISOString(),
-            end: now.toISOString(),
+            start: start.toISOString(), // UTC format
+            end: now.toISOString(),     // UTC format
             granularity: 'auto'
           }
         });
@@ -72,32 +72,44 @@ const ElevatorLineChart = ({ selectedElevator, timeRange }) => {
           if (point.date.includes('T') || point.date.includes(' ')) {
             // Full datetime format
             date = new Date(point.date);
-          } else if (point.date.includes('-W')) {
-            // Weekly format (2025-W4) - convert to date range
-            const [year, weekStr] = point.date.split('-W');
-            const week = parseInt(weekStr);
-            
-            // Calculate the start of the week (Monday)
-            const jan1 = new Date(year, 0, 1);
-            const jan1Day = jan1.getDay();
-            const daysToFirstMonday = jan1Day === 0 ? 1 : 8 - jan1Day; // Adjust for Monday start
-            const firstMonday = new Date(jan1.getTime() + daysToFirstMonday * 24 * 60 * 60 * 1000);
-            
-            // Calculate the start of the specified week
-            const weekStart = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
-            const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000); // +6 days
-            
-            // Format as date range
-            const startStr = weekStart.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric'
-            });
-            const endStr = weekEnd.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric'
-            });
-            
-            return `${startStr} - ${endStr}`;
+          } else if (point.date.includes('Week of')) {
+            // Weekly format from backend: "Week of Oct 06" - convert to date range
+            const weekMatch = point.date.match(/Week of (\w+) (\d+)/);
+            if (weekMatch) {
+              const [, monthStr, dayStr] = weekMatch;
+              const monthMap = {
+                'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+              };
+              const month = monthMap[monthStr];
+              const day = parseInt(dayStr);
+              const currentYear = new Date().getFullYear();
+              
+              const weekStart = new Date(currentYear, month, day);
+              const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000); // +6 days
+              
+              // Cap the week end to not exceed current date
+              const currentDate = new Date();
+              const cappedWeekEnd = new Date(Math.min(weekEnd.getTime(), currentDate.getTime()));
+              
+              // Format as date range
+              const startStr = weekStart.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+              });
+              const endStr = cappedWeekEnd.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+              });
+              
+              // If the week end is the same as start (partial week), just show the start date
+              if (weekStart.toDateString() === cappedWeekEnd.toDateString()) {
+                return startStr;
+              }
+              
+              return `${startStr} - ${endStr}`;
+            }
+            return point.date; // Fallback to original string
           } else if (point.date.includes('-')) {
             // Date-only format (YYYY-MM-DD) - add time to make it valid
             date = new Date(point.date + 'T00:00:00');

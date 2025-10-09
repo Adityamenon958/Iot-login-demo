@@ -5784,6 +5784,19 @@ const split16BitTo8Bit = (binary16) => {
   };
 };
 
+// ✅ Helper function for ISO week calculation
+const getISOWeek = (date) => {
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target) / 604800000); // 604800000 = 7 * 24 * 3600 * 1000
+};
+
 // ✅ GET: Elevator time-series stats for line chart (working/maintenance hours over time)
 app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) => {
   try {
@@ -5799,11 +5812,11 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
       elevatorId: elevatorId
     };
     
-    // Add time range filter
+    // Add time range filter (ensure UTC handling)
     if (start && end) {
       baseFilter.timestamp = {
-        $gte: new Date(start),
-        $lte: new Date(end)
+        $gte: new Date(start), // start is already in UTC format from toISOString()
+        $lte: new Date(end)    // end is already in UTC format from toISOString()
       };
     } else {
       // Default to last 7 days if no range specified
@@ -5816,10 +5829,12 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
     if (finalGranularity === 'auto') {
       const daysDiff = start && end ? 
         (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24) : 7;
-        if (daysDiff <= 2) finalGranularity = 'hourly';
+      if (daysDiff <= 2) finalGranularity = 'hourly';
       else if (daysDiff <= 14) finalGranularity = 'daily';
       else finalGranularity = 'weekly';
     }
+    
+    console.log(`🔍 [DEBUG] 30-day fix: elevatorId=${elevatorId}, start=${start}, end=${end}, granularity=${finalGranularity}`);
     
     // Fetch all logs for the elevator in the time range
     const logs = await ElevatorEvent.find(baseFilter)
@@ -5836,30 +5851,53 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
       });
     }
 
-    // Group logs by time period based on granularity
-    const timeGroups = {};
+    // ✅ Create time buckets using the SAME approach as crane timeseries
+    const buckets = [];
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const rangeDays = Math.max(1, Math.ceil((new Date(end) - new Date(start)) / msPerDay));
     
-    for (const log of logs) {
-      const date = new Date(log.timestamp);
-      let timeKey;
-      
-      if (finalGranularity === 'hourly') {
-        // Group by hour: 2025-10-09T14:00:00.000Z
-        timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toISOString();
-      } else if (finalGranularity === 'daily') {
-        // Group by day: 2025-10-09
-        timeKey = date.toISOString().slice(0, 10);
-      } else {
-        // Group by week: 2025-W41
-        const week = Math.ceil(date.getDate() / 7);
-        timeKey = `${date.getFullYear()}-W${week}`;
+    if (finalGranularity === 'hourly') {
+      // Hourly buckets - use UTC to avoid timezone issues
+      let cursor = new Date(start);
+      while (cursor <= new Date(end)) {
+        const hourStart = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate(), cursor.getUTCHours()));
+        const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+        buckets.push({
+          start: hourStart,
+          end: hourEnd > new Date(end) ? new Date(end) : hourEnd,
+          label: hourStart.toISOString()
+        });
+        cursor = new Date(hourStart.getTime() + 60 * 60 * 1000);
       }
-      
-      if (!timeGroups[timeKey]) {
-        timeGroups[timeKey] = [];
+    } else if (finalGranularity === 'daily') {
+      // Daily buckets - use UTC to avoid timezone issues
+      let cursor = new Date(start);
+      while (cursor <= new Date(end)) {
+        const dayStart = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()));
+        const dayEnd = new Date(dayStart.getTime() + msPerDay);
+        buckets.push({
+          start: dayStart,
+          end: dayEnd > new Date(end) ? new Date(end) : dayEnd,
+          label: dayStart.toISOString().slice(0, 10)
+        });
+        cursor = new Date(dayStart.getTime() + msPerDay);
       }
-      timeGroups[timeKey].push(log);
+    } else {
+      // Weekly buckets - use UTC to avoid timezone issues
+      let cursor = new Date(start);
+      while (cursor <= new Date(end)) {
+        const weekStart = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()));
+        const weekEnd = new Date(weekStart.getTime() + 7 * msPerDay);
+        buckets.push({
+          start: weekStart,
+          end: weekEnd > new Date(end) ? new Date(end) : weekEnd,
+          label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+        });
+        cursor = new Date(weekStart.getTime() + 7 * msPerDay);
+      }
     }
+    
+    console.log(`🔍 [DEBUG] Created ${buckets.length} buckets for ${finalGranularity} granularity`);
 
     // ✅ OPTIMIZATION: Get initial state ONCE before the entire query range (not per period)
     let globalInitialState = { isWorking: false, isMaintenance: false, hasError: false };
@@ -5898,44 +5936,23 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
       }
     }
 
-    // Calculate hours for each time group using CORRECT period-based logic
+    // Calculate hours for each bucket using CORRECT period-based logic
     const results = [];
-    
-    // Sort time periods chronologically
-    const sortedTimeKeys = Object.keys(timeGroups).sort((a, b) => new Date(a) - new Date(b));
     
     // Track state across periods
     let carryOverState = { ...globalInitialState };
     
-    for (const timeKey of sortedTimeKeys) {
-      const groupLogs = timeGroups[timeKey];
-      groupLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    for (const bucket of buckets) {
+      const periodStart = bucket.start;
+      const periodEnd = bucket.end;
       
-      // Define time period boundaries
-      let periodStart, periodEnd;
-      if (finalGranularity === 'hourly') {
-        const periodDate = new Date(timeKey);
-        periodStart = periodDate;
-        periodEnd = new Date(periodDate.getTime() + 60 * 60 * 1000); // +1 hour
-      } else if (finalGranularity === 'daily') {
-        const periodDate = new Date(timeKey + 'T00:00:00');
-        periodStart = periodDate;
-        periodEnd = new Date(periodDate.getTime() + 24 * 60 * 60 * 1000); // +24 hours
-      } else {
-        // Weekly - Parse week string like "2025-W4"
-        const [year, weekStr] = timeKey.split('-W');
-        const week = parseInt(weekStr);
-        
-        // Calculate the start of the week (Monday)
-        const jan1 = new Date(year, 0, 1);
-        const jan1Day = jan1.getDay();
-        const daysToFirstMonday = jan1Day === 0 ? 1 : 8 - jan1Day; // Adjust for Monday start
-        const firstMonday = new Date(jan1.getTime() + daysToFirstMonday * 24 * 60 * 60 * 1000);
-        
-        // Calculate the start of the specified week
-        periodStart = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
-        periodEnd = new Date(periodStart.getTime() + 7 * 24 * 60 * 60 * 1000); // +7 days
-      }
+      // Get logs that fall within this bucket's time range
+      const groupLogs = logs.filter(log => {
+        const logTime = new Date(log.timestamp);
+        return logTime >= periodStart && logTime < periodEnd;
+      });
+      
+      groupLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       
       // ✅ CORRECT LOGIC: Track state changes within the time period
       let workingHours = 0;
@@ -5994,19 +6011,28 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
         }
       }
       
-      // Step 3: Calculate time for the final state (until end of period)
-      const finalEndTime = new Date(Math.min(periodEnd.getTime(), new Date().getTime()));
+      // Step 3: Calculate time for the final state (until end of period OR current time)
+      const currentTime = new Date();
+      const queryEndTime = end ? new Date(end) : currentTime;
+      const finalEndTime = new Date(Math.min(
+        periodEnd.getTime(), 
+        currentTime.getTime(),
+        queryEndTime.getTime()
+      ));
       const timeInFinalState = (finalEndTime - stateStartTime) / (1000 * 60 * 60);
       
-      if (currentState.isWorking) workingHours += timeInFinalState;
-      if (currentState.isMaintenance) maintenanceHours += timeInFinalState;
-      if (currentState.hasError) errorHours += timeInFinalState;
+      // Only add time if it's positive (not in the future)
+      if (timeInFinalState > 0) {
+        if (currentState.isWorking) workingHours += timeInFinalState;
+        if (currentState.isMaintenance) maintenanceHours += timeInFinalState;
+        if (currentState.hasError) errorHours += timeInFinalState;
+      }
       
       // ✅ Carry over final state to next period
       carryOverState = { ...currentState };
       
       results.push({
-        date: timeKey,
+        date: bucket.label,
         workingHours: Math.round(workingHours * 100) / 100,
         maintenanceHours: Math.round(maintenanceHours * 100) / 100,
         errorHours: Math.round(errorHours * 100) / 100,
@@ -6017,6 +6043,13 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
 
     // Sort results by date
     results.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    console.log(`🔍 [DEBUG] Final results for 30-day fix:`, results.map(r => ({
+      date: r.date,
+      workingHours: r.workingHours,
+      maintenanceHours: r.maintenanceHours,
+      errorHours: r.errorHours
+    })));
     
     res.json({
       granularity: finalGranularity,
