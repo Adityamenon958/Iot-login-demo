@@ -1,0 +1,20 @@
+/* Clean Chart Container - No borders, no background */
+.chartContainer {
+  height: 290px;
+  margin-top: 15px;
+  position: relative;
+}
+
+.chartWrapper {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .chartContainer {
+    height: 250px;
+    margin-top: 10px;
+  }
+}

@@ -5771,6 +5771,269 @@ app.get("/api/crane/timeseries-stats", authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ Helper functions for binary conversion (same as frontend)
+const decimalToBinary = (decimal, bits = 16) => {
+  return parseInt(decimal).toString(2).padStart(bits, '0');
+};
+
+const split16BitTo8Bit = (binary16) => {
+  const padded = binary16.padStart(16, '0');
+  return {
+    high: padded.substring(0, 8),
+    low: padded.substring(8, 16)
+  };
+};
+
+// ✅ GET: Elevator time-series stats for line chart (working/maintenance hours over time)
+app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) => {
+  try {
+    const { elevatorId, start, end, granularity } = req.query;
+    const { role, companyName } = req.user;
+    
+    // Company scope
+    const companyFilter = role !== "superadmin" ? { elevatorCompany: companyName } : {};
+    
+    // Build base filter
+    const baseFilter = {
+      ...companyFilter,
+      elevatorId: elevatorId
+    };
+    
+    // Add time range filter
+    if (start && end) {
+      baseFilter.timestamp = {
+        $gte: new Date(start),
+        $lte: new Date(end)
+      };
+    } else {
+      // Default to last 7 days if no range specified
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      baseFilter.timestamp = { $gte: sevenDaysAgo };
+    }
+    
+    // Auto-determine granularity if not specified
+    let finalGranularity = granularity || 'auto';
+    if (finalGranularity === 'auto') {
+      const daysDiff = start && end ? 
+        (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24) : 7;
+        if (daysDiff <= 2) finalGranularity = 'hourly';
+      else if (daysDiff <= 14) finalGranularity = 'daily';
+      else finalGranularity = 'weekly';
+    }
+    
+    // Fetch all logs for the elevator in the time range
+    const logs = await ElevatorEvent.find(baseFilter)
+      .sort({ timestamp: 1 })
+      .lean()
+      .maxTimeMS(10000);
+
+    if (logs.length === 0) {
+      return res.json({
+        granularity: finalGranularity,
+        points: [],
+        elevatorId: elevatorId,
+        totalPoints: 0
+      });
+    }
+
+    // Group logs by time period based on granularity
+    const timeGroups = {};
+    
+    for (const log of logs) {
+      const date = new Date(log.timestamp);
+      let timeKey;
+      
+      if (finalGranularity === 'hourly') {
+        // Group by hour: 2025-10-09T14:00:00.000Z
+        timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toISOString();
+      } else if (finalGranularity === 'daily') {
+        // Group by day: 2025-10-09
+        timeKey = date.toISOString().slice(0, 10);
+      } else {
+        // Group by week: 2025-W41
+        const week = Math.ceil(date.getDate() / 7);
+        timeKey = `${date.getFullYear()}-W${week}`;
+      }
+      
+      if (!timeGroups[timeKey]) {
+        timeGroups[timeKey] = [];
+      }
+      timeGroups[timeKey].push(log);
+    }
+
+    // ✅ OPTIMIZATION: Get initial state ONCE before the entire query range (not per period)
+    let globalInitialState = { isWorking: false, isMaintenance: false, hasError: false };
+    
+    // Get the very first log timestamp from all logs
+    const firstLogTimestamp = logs.length > 0 ? new Date(logs[0].timestamp) : new Date();
+    
+    // Find last log before the entire query range
+    const allLogsBeforeRange = await ElevatorEvent.find({
+      ...baseFilter,
+      timestamp: { $lt: firstLogTimestamp }
+    })
+    .sort({ timestamp: -1 })
+    .limit(1)
+    .lean();
+    
+    if (allLogsBeforeRange.length > 0) {
+      const lastLogBefore = allLogsBeforeRange[0];
+      if (lastLogBefore.data && lastLogBefore.data.length >= 2) {
+        const reg66 = parseInt(lastLogBefore.data[1]) || 0;
+        const reg66Binary = decimalToBinary(reg66, 16);
+        const reg66Split = split16BitTo8Bit(reg66Binary);
+        const reg66H = reg66Split.high;
+        const reg66L = reg66Split.low;
+        
+        globalInitialState = {
+          isWorking: reg66H[7] === '1',        // In Service
+          isMaintenance: reg66H[5] === '1',    // Maintenance ON
+          hasError: reg66H[4] === '1' ||       // Overload
+                   reg66H[1] === '1' ||        // Earthquake
+                   reg66L[3] === '1' ||        // OEPS
+                   reg66L[7] === '1' ||        // Fire Return
+                   reg66L[6] === '1' ||        // Fire Return In Place
+                   reg66H[6] === '0'           // Comm Fault
+        };
+      }
+    }
+
+    // Calculate hours for each time group using CORRECT period-based logic
+    const results = [];
+    
+    // Sort time periods chronologically
+    const sortedTimeKeys = Object.keys(timeGroups).sort((a, b) => new Date(a) - new Date(b));
+    
+    // Track state across periods
+    let carryOverState = { ...globalInitialState };
+    
+    for (const timeKey of sortedTimeKeys) {
+      const groupLogs = timeGroups[timeKey];
+      groupLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      
+      // Define time period boundaries
+      let periodStart, periodEnd;
+      if (finalGranularity === 'hourly') {
+        const periodDate = new Date(timeKey);
+        periodStart = periodDate;
+        periodEnd = new Date(periodDate.getTime() + 60 * 60 * 1000); // +1 hour
+      } else if (finalGranularity === 'daily') {
+        const periodDate = new Date(timeKey + 'T00:00:00');
+        periodStart = periodDate;
+        periodEnd = new Date(periodDate.getTime() + 24 * 60 * 60 * 1000); // +24 hours
+      } else {
+        // Weekly - Parse week string like "2025-W4"
+        const [year, weekStr] = timeKey.split('-W');
+        const week = parseInt(weekStr);
+        
+        // Calculate the start of the week (Monday)
+        const jan1 = new Date(year, 0, 1);
+        const jan1Day = jan1.getDay();
+        const daysToFirstMonday = jan1Day === 0 ? 1 : 8 - jan1Day; // Adjust for Monday start
+        const firstMonday = new Date(jan1.getTime() + daysToFirstMonday * 24 * 60 * 60 * 1000);
+        
+        // Calculate the start of the specified week
+        periodStart = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
+        periodEnd = new Date(periodStart.getTime() + 7 * 24 * 60 * 60 * 1000); // +7 days
+      }
+      
+      // ✅ CORRECT LOGIC: Track state changes within the time period
+      let workingHours = 0;
+      let maintenanceHours = 0;
+      let errorHours = 0;
+      
+      // Use carry-over state from previous period as initial state
+      let initialState = { ...carryOverState };
+      
+      // Step 2: Track state changes during the period
+      let currentState = { ...initialState };
+      let stateStartTime = periodStart;
+      
+      // Add logs in chronological order within the period
+      const sortedLogs = [...groupLogs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      
+      for (const log of sortedLogs) {
+        if (log.data && log.data.length >= 2) {
+          const reg66 = parseInt(log.data[1]) || 0;
+          const reg66Binary = decimalToBinary(reg66, 16);
+          const reg66Split = split16BitTo8Bit(reg66Binary);
+          const reg66H = reg66Split.high;
+          const reg66L = reg66Split.low;
+          
+          const newState = {
+            isWorking: reg66H[7] === '1',        // In Service
+            isMaintenance: reg66H[5] === '1',    // Maintenance ON
+            hasError: reg66H[4] === '1' ||       // Overload
+                     reg66H[1] === '1' ||        // Earthquake
+                     reg66L[3] === '1' ||        // OEPS
+                     reg66L[7] === '1' ||        // Fire Return
+                     reg66L[6] === '1' ||        // Fire Return In Place
+                     reg66H[6] === '0'           // Comm Fault
+          };
+          
+          // Check if state changed
+          const stateChanged = 
+            currentState.isWorking !== newState.isWorking ||
+            currentState.isMaintenance !== newState.isMaintenance ||
+            currentState.hasError !== newState.hasError;
+          
+          if (stateChanged) {
+            // Calculate time spent in previous state
+            const stateEndTime = new Date(log.timestamp);
+            const timeInPreviousState = (stateEndTime - stateStartTime) / (1000 * 60 * 60); // Convert to hours
+            
+            // Add time to appropriate categories
+            if (currentState.isWorking) workingHours += timeInPreviousState;
+            if (currentState.isMaintenance) maintenanceHours += timeInPreviousState;
+            if (currentState.hasError) errorHours += timeInPreviousState;
+            
+            // Update state and start time
+            currentState = { ...newState };
+            stateStartTime = stateEndTime;
+          }
+        }
+      }
+      
+      // Step 3: Calculate time for the final state (until end of period)
+      const finalEndTime = new Date(Math.min(periodEnd.getTime(), new Date().getTime()));
+      const timeInFinalState = (finalEndTime - stateStartTime) / (1000 * 60 * 60);
+      
+      if (currentState.isWorking) workingHours += timeInFinalState;
+      if (currentState.isMaintenance) maintenanceHours += timeInFinalState;
+      if (currentState.hasError) errorHours += timeInFinalState;
+      
+      // ✅ Carry over final state to next period
+      carryOverState = { ...currentState };
+      
+      results.push({
+        date: timeKey,
+        workingHours: Math.round(workingHours * 100) / 100,
+        maintenanceHours: Math.round(maintenanceHours * 100) / 100,
+        errorHours: Math.round(errorHours * 100) / 100,
+        totalHours: Math.round((workingHours + maintenanceHours + errorHours) * 100) / 100,
+        logCount: groupLogs.length
+      });
+    }
+
+    // Sort results by date
+    results.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    res.json({
+      granularity: finalGranularity,
+      points: results,
+      elevatorId: elevatorId,
+      totalPoints: results.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching elevator timeseries stats:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch elevator timeseries data', 
+      error: error.message 
+    });
+  }
+});
+
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
 app.get('*', (req, res) => {

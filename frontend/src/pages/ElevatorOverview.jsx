@@ -5,6 +5,7 @@ import styles from "./MainContent.module.css";
 import { PiElevatorDuotone, PiCheckCircleDuotone, PiXCircleDuotone, PiWarningCircleDuotone } from "react-icons/pi";
 import ElevatorTooltip from '../components/ElevatorTooltip';
 import ElevatorLogsTable from '../components/ElevatorLogsTable';
+import ElevatorLineChart from '../components/ElevatorLineChart';
 
 // ✅ Format helpers
 const formatDateTime = (value) => {
@@ -257,6 +258,9 @@ export default function ElevatorOverview() {
   // ✅ State for time range filter
   const [timeRange, setTimeRange] = useState('24'); // hours
 
+  // ✅ State for chart elevator selection
+  const [selectedElevator, setSelectedElevator] = useState(null);
+
   // ✅ Background refresh states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isIndividualRefreshing, setIsIndividualRefreshing] = useState(false);
@@ -349,6 +353,14 @@ export default function ElevatorOverview() {
         });
         
         setIndividualElevators(processedElevators);
+        
+        // ✅ Set selectedElevator to the elevator with the latest log (if not already set)
+        if (!selectedElevator && processedElevators.length > 0) {
+          const latestElevator = processedElevators.reduce((latest, current) => {
+            return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
+          });
+          setSelectedElevator(latestElevator.id);
+        }
       }
     } catch (err) {
       console.error('❌ Error fetching individual elevator data:', err);
@@ -595,27 +607,29 @@ export default function ElevatorOverview() {
             />
           </div>
           
-          {/* Horizontal scroll container */}
-          <div 
-            style={{ 
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              whiteSpace: 'nowrap',
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#4facfe #f1f3f5',
-              paddingTop: '15px',
-              paddingBottom: '10px',
-              marginBottom: '10px'
-            }}
-          >
-            <div 
-              style={{ 
-                display: 'inline-flex',
-                gap: '12px',
-                minHeight: '290px'
-              }}
-            >
-              {individualElevators.map((elevator) => {
+          {/* Two-column layout: Cards (left 60%) + Chart Space (right 40%) */}
+          <Row className="g-2">
+            {/* Left: Elevator Cards - Horizontal Scroll (60%) */}
+            <Col xs={12} lg={7} >
+              <div 
+                style={{ 
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  whiteSpace: 'nowrap',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#4facfe #f1f3f5',
+                  paddingTop: '15px',
+                  paddingBottom: '10px'
+                }}
+              >
+                <div 
+                  style={{ 
+                    display: 'inline-flex',
+                    gap: '12px',
+                    minHeight: '300px'
+                  }}
+                >
+                  {individualElevators.map((elevator) => {
                 // ✅ Get color mapping based on priority
                 const getPriorityColor = (color) => {
                   const colorMap = {
@@ -665,7 +679,7 @@ export default function ElevatorOverview() {
                     key={elevator.id}
                     style={{ 
                       flex: '0 0 auto',
-                      width: '220px',
+                      width: '235px',
                       display: 'inline-block'
                     }}
                   >
@@ -778,16 +792,71 @@ export default function ElevatorOverview() {
                     </Card>
                   </div>
                 );
-              })}
-            </div>
-          </div>
-          
-          {/* Scroll hint */}
-          {individualElevators.length > 5 && (
-            <small className="text-muted d-block text-center" style={{ fontSize: '0.75rem' }}>
-              ← Scroll horizontally to see all elevators →
-            </small>
-          )}
+                  })}
+                </div>
+              </div>
+              
+              {/* Scroll hint */}
+              {individualElevators.length > 5 && (
+                <small className="text-muted d-block text-center" style={{ fontSize: '0.75rem' }}>
+                  ← Scroll horizontally to see all elevators →
+                </small>
+              )}
+            </Col>
+            
+            {/* Right: Line Chart (40%) */}
+            <Col xs={12} lg={5}>
+              {/* Chart Time Range Selector */}
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <small className="text-muted">Chart Time Range:</small>
+                <div className="btn-group" role="group">
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="chartTimeRange"
+                    id="chart24h"
+                    value="24"
+                    checked={timeRange === '24'}
+                    onChange={(e) => setTimeRange(e.target.value)}
+                  />
+                  <label className="btn btn-outline-secondary btn-sm" htmlFor="chart24h">
+                    24h
+                  </label>
+                  
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="chartTimeRange"
+                    id="chart7d"
+                    value="168"
+                    checked={timeRange === '168'}
+                    onChange={(e) => setTimeRange(e.target.value)}
+                  />
+                  <label className="btn btn-outline-secondary btn-sm" htmlFor="chart7d">
+                    7d
+                  </label>
+                  
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="chartTimeRange"
+                    id="chart30d"
+                    value="720"
+                    checked={timeRange === '720'}
+                    onChange={(e) => setTimeRange(e.target.value)}
+                  />
+                  <label className="btn btn-outline-secondary btn-sm" htmlFor="chart30d">
+                    30d
+                  </label>
+                </div>
+              </div>
+              
+              <ElevatorLineChart 
+                selectedElevator={selectedElevator}
+                timeRange={timeRange}
+              />
+            </Col>
+          </Row>
         </div>
       )}
 
