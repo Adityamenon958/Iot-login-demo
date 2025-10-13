@@ -59,6 +59,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
       try {
         // ✅ Use individual access check for each dashboard
         const accessChecks = await Promise.all([
+          axios.get('/api/check-dashboard-access/home', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/dashboard', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/craneOverview', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/elevatorOverview', { withCredentials: true }),
@@ -70,15 +71,15 @@ export default function Sidebar({ isOpen, closeSidebar }) {
         ]);
 
         const access = {
-          home: true, // Always accessible
-          dashboard: accessChecks[0].data.hasAccess,
-          craneOverview: accessChecks[1].data.hasAccess,
-          elevatorOverview: accessChecks[2].data.hasAccess,
-          reports: accessChecks[3].data.hasAccess,
-          addUsers: accessChecks[4].data.hasAccess,
-          addDevices: accessChecks[5].data.hasAccess,
-          subscription: accessChecks[6].data.hasAccess,
-          settings: accessChecks[7].data.hasAccess
+          home: accessChecks[0].data.hasAccess, // ✅ Now respects database setting
+          dashboard: accessChecks[1].data.hasAccess,
+          craneOverview: accessChecks[2].data.hasAccess,
+          elevatorOverview: accessChecks[3].data.hasAccess,
+          reports: accessChecks[4].data.hasAccess,
+          addUsers: accessChecks[5].data.hasAccess,
+          addDevices: accessChecks[6].data.hasAccess,
+          subscription: accessChecks[7].data.hasAccess,
+          settings: accessChecks[8].data.hasAccess
         };
 
         setCompanyAccess(access);
@@ -165,11 +166,13 @@ export default function Sidebar({ isOpen, closeSidebar }) {
         </div>
 
         <Nav className="flex-column align-items-start px-3">
-          {/* ✅ Home - Always accessible */}
+          {/* ✅ Home - Check access for non-superadmin */}
+          {(role === 'superadmin' || companyAccess.home) && (
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard' ? styles.active : ''}`} onClick={() => navigate('/dashboard')}>
             <LayoutDashboard size={20} className="me-2" />
             Home
           </Button>
+          )}
 
           {/* ✅ Dashboard - Check access for non-superadmin */}
           {(role === 'superadmin' || companyAccess.dashboard) && (

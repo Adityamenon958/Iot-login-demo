@@ -1,7 +1,25 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Table, Card, Form, Badge, Button, Row, Col, Spinner } from 'react-bootstrap';
+import axios from 'axios';
 import styles from './ElevatorLogsTable.module.css';
 import RegisterBitDisplay from './RegisterBitDisplay';
+
+// ✅ Binary conversion helpers (same as ElevatorOverview.jsx)
+const decimalToBinary = (decimal, bits = 16) => {
+  return parseInt(decimal).toString(2).padStart(bits, '0');
+};
+
+const binaryToDecimal = (binary) => {
+  return parseInt(binary, 2);
+};
+
+const split16BitTo8Bit = (binary16) => {
+  const padded = binary16.padStart(16, '0');
+  return {
+    high: padded.substring(0, 8),
+    low: padded.substring(8, 16)
+  };
+};
 
 // ✅ Format date and time for display
 const formatDateTime = (value) => {
@@ -26,13 +44,22 @@ const getUniqueValues = (elevators, key) => {
 
 // ✅ Get unique status values
 const getUniqueStatuses = (elevators) => {
-  const statuses = elevators.map(e => e.criticalStatus || e.priorityStatus || 'Normal');
+  const statuses = elevators.map(e => e.errorCode || 'Normal');
   return [...new Set(statuses)].filter(Boolean).sort();
 };
 
-export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, isRefreshing, lastRefreshTime }) {
+export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshing, lastRefreshTime }) {
+  // ✅ State for data fetching
+  const [elevators, setElevators] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [searchResultsCount, setSearchResultsCount] = useState(0);
+  
   // ✅ State for search, filters, sorting, pagination
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     elevatorId: '',
     inService: '',
@@ -42,6 +69,193 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
+
+  // ✅ Data fetching function
+  const fetchElevatorData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const offset = (currentPage - 1) * rowsPerPage;
+      
+      const response = await axios.get('/api/elevators/all-logs', {
+        withCredentials: true,
+        params: { 
+          limit: rowsPerPage,
+          offset: offset,
+          hours: timeRange,
+          sortBy: sortConfig.key,
+          sortDirection: sortConfig.direction,
+          search: debouncedSearchTerm,
+          ...filters
+        }
+      });
+      
+      if (response.data && response.data.logs) {
+        // Process each elevator's data
+        const processedElevators = response.data.logs.map(log => {
+          // Process register data (same logic as ElevatorOverview.jsx)
+          const reg65 = parseInt(log.data[0]) || 0;
+          const reg66 = parseInt(log.data[1]) || 0;
+          
+          // Convert to binary and split using helper functions
+          const reg65Binary = decimalToBinary(reg65, 16);
+          const reg65Split = split16BitTo8Bit(reg65Binary);
+          
+          const reg66Binary = decimalToBinary(reg66, 16);
+          const reg66Split = split16BitTo8Bit(reg66Binary);
+          
+          // Determine floor from register 65H (high 8 bits converted to decimal)
+          const floor = binaryToDecimal(reg65Split.high);
+          
+          // Determine service status from register 66H (same logic as ElevatorOverview.jsx)
+          const serviceStatus = [];
+          const reg66H = reg66Split.high;
+          if (reg66H[7] === '1') serviceStatus.push('In Service');      // bit0
+          if (reg66H[6] === '1') serviceStatus.push('Comm Normal');     // bit1
+          if (reg66H[5] === '1') serviceStatus.push('Maintenance ON');  // bit2
+          if (reg66H[4] === '1') serviceStatus.push('Overload');        // bit3
+          if (reg66H[3] === '1') serviceStatus.push('Automatic');       // bit4
+          if (reg66H[2] === '1') serviceStatus.push('Car Walking');     // bit5
+          if (reg66H[1] === '1') serviceStatus.push('Earthquake');      // bit6
+          if (reg66H[0] === '1') serviceStatus.push('Safety Circuit');  // bit7
+
+          // 66L - Power status flags (same logic as ElevatorOverview.jsx)
+          const powerStatus = [];
+          const reg66L = reg66Split.low;
+          
+          if (reg66L[7] === '1') powerStatus.push('Fire Return');        // bit0
+          if (reg66L[6] === '1') powerStatus.push('Fire Return In Place'); // bit1
+          if (reg66L[5] === '1') powerStatus.push('Standby');            // bit2
+          if (reg66L[4] === '1') powerStatus.push('Normal Power');       // bit3
+          if (reg66L[3] === '1') powerStatus.push('OEPS');               // bit4
+          if (reg66L[2] === '1') powerStatus.push('Standby');            // bit5
+          if (reg66L[1] === '1') powerStatus.push('Standby');            // bit6
+          if (reg66L[0] === '1') powerStatus.push('Standby');            // bit7
+
+          // ✅ Calculate Priority Score based on Reg 66H and Reg 66L only (same logic as ElevatorOverview.jsx)
+          let maxScore = 0;
+          let criticalStatus = '';
+
+          // Critical/Emergency (Red) - Score 6
+          const criticalStatuses = [
+            'Overload', 'Earthquake', 'OEPS', 
+            'Fire Return', 'Fire Return In Place'
+          ];
+          const criticalFound = [...serviceStatus, ...powerStatus]
+            .filter(status => criticalStatuses.includes(status));
+          if (criticalFound.length > 0) {
+            maxScore = Math.max(maxScore, 6);
+            criticalStatus = criticalFound[0];
+          }
+
+          // Check for communication fault (Comm Normal = 0 means abnormal)
+          if (serviceStatus.includes('Comm Normal') === false && reg66H[6] === '0') {
+            maxScore = Math.max(maxScore, 6);
+            criticalStatus = 'Comm Fault';
+          }
+
+          // Check for out of service (In Service = 0)
+          if (serviceStatus.includes('In Service') === false && reg66H[7] === '0') {
+            maxScore = Math.max(maxScore, 0); // Gray for out of service
+            criticalStatus = 'Out of Service';
+          }
+
+          // Maintenance/Inspection (Orange) - Score 4
+          const maintenanceStatuses = ['Maintenance ON'];
+          const maintenanceFound = [...serviceStatus]
+            .filter(status => maintenanceStatuses.includes(status));
+          if (maintenanceFound.length > 0 && maxScore < 6) {
+            maxScore = Math.max(maxScore, 4);
+            criticalStatus = maintenanceFound[0];
+          }
+
+          // Normal/Running (Green) - Score 1
+          const normalStatuses = ['In Service', 'Automatic', 'Car Walking', 'Normal Power', 'Safety Circuit'];
+          const normalFound = [...serviceStatus, ...powerStatus]
+            .filter(status => normalStatuses.includes(status));
+          if (normalFound.length > 0 && maxScore < 4) {
+            maxScore = Math.max(maxScore, 1);
+            criticalStatus = normalFound[0];
+          }
+
+          // Determine color and status based on priority score
+          let priorityColor = 'gray';
+          let priorityStatus = 'Unknown';
+          let overallStatus = 'unknown';
+
+          if (maxScore >= 6) {
+            priorityColor = 'red';
+            priorityStatus = criticalStatus; // ✅ Use specific error name instead of 'Critical'
+            overallStatus = 'error';
+          } else if (maxScore === 4) {
+            priorityColor = 'orange';
+            priorityStatus = criticalStatus; // ✅ Use specific status name
+            overallStatus = 'warning';
+          } else if (maxScore === 1) {
+            priorityColor = 'green';
+            priorityStatus = criticalStatus; // ✅ Use specific status name
+            overallStatus = 'active';
+          } else {
+            priorityColor = 'gray';
+            priorityStatus = criticalStatus; // ✅ Use specific status name
+            overallStatus = 'inactive';
+          }
+          
+          return {
+            _id: `${log.elevatorId}-${log.timestamp}-${log._id}`,
+            timestamp: log.timestamp,
+            timestampDisplay: formatDateTime(log.timestamp),
+            id: log.elevatorId,
+            company: log.elevatorCompany,
+            location: log.location,
+            floor: floor,
+            inService: serviceStatus.includes('In Service'),
+            inMaintenance: serviceStatus.includes('Maintenance ON'),
+            errorCode: priorityStatus,
+            priorityColor: priorityColor,
+            registerBits: {
+              reg65L: {
+                bits: reg65Split.low.split(''), // Use exact same logic as original
+                labels: ['Door Open', 'Attendant', 'Independent', 'Fire Exclusive', 'Inspection', 'Comprehensive Fault', 'Down', 'Up']
+              },
+              reg66H: {
+                bits: reg66Split.high.split(''), // Use exact same logic as original
+                labels: ['In Service', 'Comm Normal', 'Maintenance ON', 'Overload', 'Automatic', 'Car Walking', 'Earthquake', 'Safety Circuit']
+              },
+              reg66L: {
+                bits: reg66Split.low.split(''), // Use exact same logic as original
+                labels: ['Fire Return', 'Fire Return In Place', 'Standby', 'Normal Power', 'OEPS', 'Standby', 'Standby', 'Standby']
+              }
+            }
+          };
+        });
+        
+        setElevators(processedElevators);
+        setTotalCount(response.data.total || 0);
+        setHasMore(response.data.hasMore || false);
+        setSearchResultsCount(processedElevators.length);
+      }
+    } catch (err) {
+      console.error('Error fetching elevator data:', err);
+      setError('Failed to load elevator data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // ✅ Fetch data when dependencies change
+  useEffect(() => {
+    fetchElevatorData();
+  }, [currentPage, rowsPerPage, timeRange, sortConfig, debouncedSearchTerm, filters]);
 
   // ✅ Helper function to format time ago
   const formatTimeAgo = (date) => {
@@ -71,94 +285,15 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
     );
   };
 
-  // ✅ Transform elevator data for table
-  const tableData = useMemo(() => {
-    return elevators.map((elevator, index) => ({
-      _id: `${elevator.id}-${elevator.timestamp}-${index}`,
-      timestamp: elevator.timestamp || elevator.createdAt,
-      timestampDisplay: formatDateTime(elevator.timestamp || elevator.createdAt),
-      id: elevator.id,
-      company: elevator.company,
-      location: elevator.location,
-      floor: elevator.floor,
-      inService: elevator.serviceStatus.includes('In Service'),
-      inMaintenance: elevator.serviceStatus.includes('Maintenance ON'),
-      errorCode: elevator.criticalStatus || elevator.priorityStatus || 'Normal',
-      priorityColor: elevator.priorityColor,
-      priorityScore: elevator.priorityScore,
-      registerBits: elevator.registerBits // ✅ FIX: Include registerBits
-    }));
-  }, [elevators]);
+  // ✅ Data is already processed in fetchElevatorData - use directly
 
-  // ✅ Apply search filter
-  const searchedData = useMemo(() => {
-    if (!searchTerm) return tableData;
-    
-    const lowerSearch = searchTerm.toLowerCase();
-    return tableData.filter(row => 
-      row.timestampDisplay.toLowerCase().includes(lowerSearch) ||
-      row.id.toLowerCase().includes(lowerSearch) ||
-      row.company.toLowerCase().includes(lowerSearch) ||
-      row.location.toLowerCase().includes(lowerSearch) ||
-      row.floor.toString().includes(lowerSearch) ||
-      row.errorCode.toLowerCase().includes(lowerSearch)
-    );
-  }, [tableData, searchTerm]);
+  // ✅ Server-side filtering, sorting, and pagination - use data directly
+  const paginatedData = elevators; // Data is already processed from server
 
-  // ✅ Apply column filters
-  const filteredData = useMemo(() => {
-    return searchedData.filter(row => {
-      if (filters.elevatorId && row.id !== filters.elevatorId) return false;
-      if (filters.inService !== '' && row.inService !== (filters.inService === 'true')) return false;
-      if (filters.inMaintenance !== '' && row.inMaintenance !== (filters.inMaintenance === 'true')) return false;
-      if (filters.status && row.errorCode !== filters.status) return false;
-      return true;
-    });
-  }, [searchedData, filters]);
-
-  // ✅ Apply sorting
-  const sortedData = useMemo(() => {
-    let sorted = [...filteredData];
-    if (sortConfig.key) {
-      sorted.sort((a, b) => {
-        let aVal = a[sortConfig.key];
-        let bVal = b[sortConfig.key];
-        
-        // Handle timestamp sorting
-        if (sortConfig.key === 'timestamp') {
-          aVal = new Date(aVal).getTime();
-          bVal = new Date(bVal).getTime();
-        }
-        
-        // Handle boolean sorting
-        if (typeof aVal === 'boolean') {
-          aVal = aVal ? 1 : 0;
-          bVal = bVal ? 1 : 0;
-        }
-        
-        if (aVal < bVal) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sorted;
-  }, [filteredData, sortConfig]);
-
-  // ✅ Apply pagination
-  const paginatedData = useMemo(() => {
-    const indexOfLastRow = currentPage * rowsPerPage;
-    const indexOfFirstRow = indexOfLastRow - rowsPerPage;
-    return sortedData.slice(indexOfFirstRow, indexOfLastRow);
-  }, [sortedData, currentPage, rowsPerPage]);
-
-  // ✅ Calculate pagination values
-  const totalPages = Math.ceil(sortedData.length / rowsPerPage);
-  const startRow = sortedData.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
-  const endRow = Math.min(currentPage * rowsPerPage, sortedData.length);
+  // ✅ Calculate pagination values from server data
+  const totalPages = Math.ceil(totalCount / rowsPerPage);
+  const startRow = totalCount === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
+  const endRow = Math.min(currentPage * rowsPerPage, totalCount);
 
   // ✅ Handle sorting
   const handleSort = (key) => {
@@ -167,7 +302,7 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
       direction = 'desc';
     }
     setSortConfig({ key, direction });
-    setCurrentPage(1); // Reset to first page on sort
+    setCurrentPage(1); // Reset to first page when sorting changes
   };
 
   // ✅ Handle filter change
@@ -180,6 +315,13 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1); // Reset to first page on search
+  };
+
+  // ✅ Clear search
+  const clearSearch = () => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setCurrentPage(1);
   };
 
   // ✅ Clear all filters
@@ -235,7 +377,7 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
             <h6 className="mb-0 fw-bold">
               📊 Elevator Activity Logs
               <small className="text-muted ms-2" style={{ fontSize: '0.8rem', fontWeight: 'normal' }}>
-                ({sortedData.length} {sortedData.length === 1 ? 'log' : 'logs'})
+                ({paginatedData.length} {paginatedData.length === 1 ? 'log' : 'logs'})
               </small>
             </h6>
           </Col>
@@ -245,15 +387,33 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
               paddingTop: '4px',
               paddingBottom: '4px'
             }}>
-              <Form.Control
-                type="text"
-                placeholder="🔍 Search all columns..."
-                value={searchTerm}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className={styles.searchInput}
-                size="sm"
-                style={{ maxWidth: '300px' }}
-              />
+              <div className="d-flex align-items-center">
+                <Form.Control
+                  type="text"
+                  placeholder="Search all columns..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className={styles.searchInput}
+                  size="sm"
+                  style={{ maxWidth: '300px' }}
+                />
+                {searchTerm && (
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={clearSearch}
+                    className="ms-1"
+                    style={{ padding: '0.25rem 0.5rem' }}
+                  >
+                    ×
+                  </Button>
+                )}
+              </div>
+              {debouncedSearchTerm && (
+                <small className="text-muted ms-2">
+                  {searchResultsCount} results
+                </small>
+              )}
               <RefreshIndicator 
                 isRefreshing={isRefreshing}
                 lastRefreshTime={lastRefreshTime}
@@ -368,7 +528,7 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
                 variant="outline-secondary" 
                 size="sm"
                 onClick={clearFilters}
-                disabled={!searchTerm && !filters.elevatorId && !filters.inService && !filters.inMaintenance && !filters.status}
+                disabled={!debouncedSearchTerm && !filters.elevatorId && !filters.inService && !filters.inMaintenance && !filters.status}
               >
                 Clear Filters
               </Button>
@@ -384,26 +544,26 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
                 <th onClick={() => handleSort('timestamp')} className={styles.sortable}>
                   Date & Time{getSortIndicator('timestamp')}
                 </th>
-                <th onClick={() => handleSort('id')} className={styles.sortable}>
-                  Elevator ID{getSortIndicator('id')}
+                <th>
+                  Elevator ID
                 </th>
-                <th onClick={() => handleSort('company')} className={styles.sortable}>
-                  Company{getSortIndicator('company')}
+                <th>
+                  Company
                 </th>
-                <th onClick={() => handleSort('location')} className={styles.sortable}>
-                  Location{getSortIndicator('location')}
+                <th>
+                  Location
                 </th>
-                <th onClick={() => handleSort('floor')} className={styles.sortable} style={{ textAlign: 'center' }}>
-                  Floor{getSortIndicator('floor')}
+                <th style={{ textAlign: 'center' }}>
+                  Floor
                 </th>
-                <th onClick={() => handleSort('inService')} className={styles.sortable} style={{ textAlign: 'center' }}>
-                  In Service{getSortIndicator('inService')}
+                <th style={{ textAlign: 'center' }}>
+                  In Service
                 </th>
-                <th onClick={() => handleSort('inMaintenance')} className={styles.sortable} style={{ textAlign: 'center' }}>
-                  Maintenance{getSortIndicator('inMaintenance')}
+                <th style={{ textAlign: 'center' }}>
+                  Maintenance
                 </th>
-                <th onClick={() => handleSort('errorCode')} className={styles.sortable}>
-                  Status / Error{getSortIndicator('errorCode')}
+                <th>
+                  Status / Error
                 </th>
                 <th style={{ textAlign: 'center', minWidth: '200px' }}>
                   Register Bits
@@ -474,7 +634,7 @@ export default function ElevatorLogsTable({ elevators, timeRange, setTimeRange, 
           <Row className="align-items-center">
             <Col xs={12} md={4} className="mb-2 mb-md-0">
               <small className="text-muted">
-                Showing {startRow} to {endRow} of {sortedData.length} logs
+                Showing {startRow} to {endRow} of {totalCount} logs
               </small>
             </Col>
             <Col xs={12} md={4} className="text-center mb-2 mb-md-0">

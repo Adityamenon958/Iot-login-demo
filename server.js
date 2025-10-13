@@ -1311,9 +1311,16 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     const { 
       elevatorId, 
       location, 
-      limit = 50,  // ✅ Changed default from 500 to 50
+      limit = 20,  // ✅ Default to 20 rows per page
       offset = 0, 
-      hours = 24 
+      hours = 24,
+      sortBy = 'timestamp',
+      sortDirection = 'desc',
+      search = '',
+      // ✅ New filter parameters
+      inService,
+      inMaintenance,
+      status
     } = req.query;
     
     // ✅ Get user info from token (set by authenticateToken middleware)
@@ -1353,6 +1360,22 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
       console.log(`📍 [${requestId}] Filtering by location: ${location}`);
     }
     
+    // Optional: Search filter (basic fields only - register-based search will be applied later)
+    // Note: We don't apply basic search filter here anymore since register-based search handles everything
+    // This ensures floor numbers and status values can be found even if they don't match basic fields
+    if (search) {
+      console.log(`🔍 [${requestId}] Searching for: ${search} (will be processed in register-based search)`);
+    }
+    
+    // ✅ Register-based filtering (inService, inMaintenance, status)
+    // Note: These filters will be applied after fetching data since they require register parsing
+    const registerFilters = {
+      inService: inService ? inService === 'true' : null,
+      inMaintenance: inMaintenance ? inMaintenance === 'true' : null,
+      status: status || null
+    };
+    
+    console.log(`🔍 [${requestId}] Register filters:`, registerFilters);
     console.log(`🔍 [${requestId}] Final filter:`, JSON.stringify(filter));
     
     // ✅ Get total count (for pagination info)
@@ -1362,8 +1385,9 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     
     // ✅ Fetch limited logs with .lean() for performance
     const fetchStartTime = Date.now();
+    const sortOrder = sortDirection === 'asc' ? 1 : -1;
     const logs = await ElevatorEvent.find(filter)
-      .sort({ timestamp: -1 })  // Newest first
+      .sort({ [sortBy]: sortOrder })  // Dynamic sorting
       .skip(parseInt(offset))
       .limit(parseInt(limit))
       .lean()  // ✅ Return plain JS objects (faster than Mongoose documents)
@@ -1371,7 +1395,191 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     
     console.log(`📦 [${requestId}] Fetched ${logs.length} logs (took ${Date.now() - fetchStartTime}ms)`);
     
-    if (logs.length === 0) {
+    // ✅ Apply register-based filtering and search if needed
+    let filteredLogs = logs;
+    const hasRegisterFilters = registerFilters.inService !== null || registerFilters.inMaintenance !== null || registerFilters.status !== null;
+    const hasRegisterSearch = search && search.trim().length > 0;
+    
+    if ((hasRegisterFilters || hasRegisterSearch) && logs.length > 0) {
+      console.log(`🔧 [${requestId}] Applying register-based filters and search...`);
+      const filterStartTime = Date.now();
+      
+      filteredLogs = logs.filter(log => {
+        // Skip logs without register data
+        if (!log.data || log.data.length < 2) {
+          return false;
+        }
+        
+        try {
+          // Process register data (same logic as frontend)
+          const reg65 = parseInt(log.data[0]) || 0;
+          const reg66 = parseInt(log.data[1]) || 0;
+          
+          const reg65Binary = decimalToBinary(reg65, 16);
+          const reg65Split = split16BitTo8Bit(reg65Binary);
+          
+          const reg66Binary = decimalToBinary(reg66, 16);
+          const reg66Split = split16BitTo8Bit(reg66Binary);
+          
+          // 66H - Service status flags
+          const serviceStatus = [];
+          const reg66H = reg66Split.high;
+          if (reg66H[7] === '1') serviceStatus.push('In Service');
+          if (reg66H[6] === '1') serviceStatus.push('Comm Normal');
+          if (reg66H[5] === '1') serviceStatus.push('Maintenance ON');
+          if (reg66H[4] === '1') serviceStatus.push('Overload');
+          if (reg66H[3] === '1') serviceStatus.push('Automatic');
+          if (reg66H[2] === '1') serviceStatus.push('Car Walking');
+          if (reg66H[1] === '1') serviceStatus.push('Earthquake');
+          if (reg66H[0] === '1') serviceStatus.push('Safety Circuit');
+
+          // 66L - Power status flags
+          const powerStatus = [];
+          const reg66L = reg66Split.low;
+          if (reg66L[7] === '1') powerStatus.push('Fire Return');
+          if (reg66L[6] === '1') powerStatus.push('Fire Return In Place');
+          if (reg66L[5] === '1') powerStatus.push('Standby');
+          if (reg66L[4] === '1') powerStatus.push('Normal Power');
+          if (reg66L[3] === '1') powerStatus.push('OEPS');
+          if (reg66L[2] === '1') powerStatus.push('Standby');
+          if (reg66L[1] === '1') powerStatus.push('Standby');
+          if (reg66L[0] === '1') powerStatus.push('Standby');
+
+          // Calculate priority score (same logic as frontend)
+          let maxScore = 0;
+          let criticalStatus = '';
+
+          // Critical/Emergency (Score 6)
+          const criticalStatuses = ['Overload', 'Earthquake', 'OEPS', 'Fire Return', 'Fire Return In Place'];
+          const criticalFound = [...serviceStatus, ...powerStatus].filter(status => criticalStatuses.includes(status));
+          if (criticalFound.length > 0) {
+            maxScore = Math.max(maxScore, 6);
+            criticalStatus = criticalFound[0];
+          }
+
+          // Check for communication fault (Comm Normal = 0 means abnormal)
+          if (serviceStatus.includes('Comm Normal') === false && reg66H[6] === '0') {
+            maxScore = Math.max(maxScore, 6);
+            criticalStatus = 'Comm Fault';
+          }
+
+          // Check for out of service (In Service = 0)
+          if (serviceStatus.includes('In Service') === false && reg66H[7] === '0') {
+            maxScore = Math.max(maxScore, 0);
+            criticalStatus = 'Out of Service';
+          }
+
+          // Maintenance/Inspection (Score 4)
+          if (serviceStatus.includes('Maintenance ON') && maxScore < 6) {
+            maxScore = Math.max(maxScore, 4);
+            criticalStatus = 'Maintenance ON';
+          }
+
+          // Normal/Running (Score 1)
+          const normalStatuses = ['In Service', 'Automatic', 'Car Walking', 'Normal Power', 'Safety Circuit'];
+          const normalFound = [...serviceStatus, ...powerStatus].filter(status => normalStatuses.includes(status));
+          if (normalFound.length > 0 && maxScore < 4) {
+            maxScore = Math.max(maxScore, 1);
+            criticalStatus = normalFound[0];
+          }
+
+          // Determine final status
+          let priorityStatus = 'Unknown';
+          if (maxScore >= 6) {
+            priorityStatus = criticalStatus;
+          } else if (maxScore === 4) {
+            priorityStatus = criticalStatus;
+          } else if (maxScore === 1) {
+            priorityStatus = criticalStatus;
+          } else {
+            priorityStatus = criticalStatus;
+          }
+
+          // Calculate floor from register 65H (high 8 bits converted to decimal)
+          const floor = binaryToDecimal(reg65Split.high);
+
+          // Apply filters
+          let passesFilters = true;
+
+          // In Service filter
+          if (registerFilters.inService !== null) {
+            const isInService = serviceStatus.includes('In Service');
+            if (registerFilters.inService !== isInService) {
+              passesFilters = false;
+            }
+          }
+
+          // In Maintenance filter
+          if (registerFilters.inMaintenance !== null) {
+            const isInMaintenance = serviceStatus.includes('Maintenance ON');
+            if (registerFilters.inMaintenance !== isInMaintenance) {
+              passesFilters = false;
+            }
+          }
+
+          // Status filter
+          if (registerFilters.status !== null) {
+            if (priorityStatus !== registerFilters.status) {
+              passesFilters = false;
+            }
+          }
+
+          // Enhanced register-based search (includes both basic fields and register data)
+          if (hasRegisterSearch && passesFilters) {
+            const searchLower = search.toLowerCase();
+            let matchesSearch = false;
+
+            // ✅ Search in basic fields first
+            if (log.elevatorId && log.elevatorId.toLowerCase().includes(searchLower)) {
+              matchesSearch = true;
+            }
+            if (log.location && log.location.toLowerCase().includes(searchLower)) {
+              matchesSearch = true;
+            }
+            if (log.elevatorCompany && log.elevatorCompany.toLowerCase().includes(searchLower)) {
+              matchesSearch = true;
+            }
+
+            // ✅ Search in status values
+            const allStatuses = [...serviceStatus, ...powerStatus, priorityStatus];
+            if (allStatuses.some(status => status.toLowerCase().includes(searchLower))) {
+              matchesSearch = true;
+            }
+
+            // ✅ Search in floor number (numeric search)
+            if (!isNaN(search) && floor.toString().includes(search)) {
+              console.log(`🔍 [${requestId}] Floor search match: search="${search}", floor=${floor}, logId=${log._id}`);
+              matchesSearch = true;
+            }
+
+            // ✅ Search in specific status keywords
+            const searchKeywords = [
+              'oeps', 'overload', 'earthquake', 'maintenance', 'service', 'automatic', 
+              'car walking', 'safety circuit', 'fire return', 'standby', 'normal power',
+              'comm normal', 'critical', 'warning', 'normal', 'unknown'
+            ];
+            
+            if (searchKeywords.some(keyword => keyword.includes(searchLower))) {
+              matchesSearch = true;
+            }
+
+            // If search doesn't match any data, exclude this log
+            if (!matchesSearch) {
+              passesFilters = false;
+            }
+          }
+
+          return passesFilters;
+        } catch (error) {
+          console.error(`❌ [${requestId}] Error processing register data for log ${log._id}:`, error);
+          return false; // Skip logs with invalid data
+        }
+      });
+      
+      console.log(`🔧 [${requestId}] Register filtering and search: ${logs.length} → ${filteredLogs.length} logs (took ${Date.now() - filterStartTime}ms)`);
+    }
+    
+    if (filteredLogs.length === 0) {
       console.log(`✅ [${requestId}] No logs found, returning empty array`);
       return res.json({ 
         logs: [], 
@@ -1382,78 +1590,18 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
       });
     }
     
-    // ✅ OPTIMIZATION: Get unique elevator IDs from the fetched logs
-    const elevatorIds = [...new Set(logs.map(l => l.elevatorId))];
-    console.log(`🏢 [${requestId}] Found ${elevatorIds.length} unique elevators in fetched logs: ${elevatorIds.join(', ')}`);
-    
-    // ✅ OPTIMIZATION: ONE aggregation query to get all logs grouped by elevator
-    const aggStartTime = Date.now();
-    const groupedLogs = await ElevatorEvent.aggregate([
-      { $match: { elevatorId: { $in: elevatorIds } } },
-      { $sort: { elevatorId: 1, timestamp: 1 } },  // Sort by elevator then timestamp
-      { $group: { 
-        _id: "$elevatorId", 
-        allLogs: { $push: "$$ROOT" } 
-      }}
-    ]).allowDiskUse(true).option({ maxTimeMS: 20000 });
-    
-    console.log(`📊 [${requestId}] Aggregation completed for ${groupedLogs.length} elevators (took ${Date.now() - aggStartTime}ms)`);
-    
-    // ✅ Calculate working hours once per elevator and store in map
-    const calcStartTime = Date.now();
-    const workingHoursMap = {};
-    
-    for (const group of groupedLogs) {
-      const elevatorIdKey = group._id;
-      const allLogsForElevator = group.allLogs;
-      
-      try {
-        // ✅ Call helper function with all logs for this elevator
-        const calculatedHours = calculateElevatorWorkingHours(allLogsForElevator);
-        workingHoursMap[elevatorIdKey] = calculatedHours;
-      } catch (err) {
-        console.error(`❌ [${requestId}] Error calculating hours for ${elevatorIdKey}:`, err);
-        workingHoursMap[elevatorIdKey] = {
-          workingHours: {
-            total: 0,
-            formatted: '0m',
-            currentSession: null
-          },
-          maintenanceHours: null
-        };
-      }
-    }
-    
-    console.log(`⏱️ [${requestId}] Calculated working hours for ${Object.keys(workingHoursMap).length} elevators (took ${Date.now() - calcStartTime}ms)`);
-    
-    // ✅ Map calculated hours back to the original logs
-    const logsWithWorkingHours = logs.map(log => {
-      const hours = workingHoursMap[log.elevatorId] || {
-        workingHours: {
-          total: 0,
-          formatted: '0m',
-          currentSession: null
-        },
-        maintenanceHours: null
-      };
-      
-      return {
-        ...log,
-        workingHours: hours.workingHours,
-        maintenanceHours: hours.maintenanceHours
-      };
-    });
+    // ✅ No working hours calculation needed for table - return logs directly
     
     // ✅ Return with pagination metadata
-    const hasMore = (parseInt(offset) + logs.length) < total;
+    const hasMore = (parseInt(offset) + filteredLogs.length) < total;
     const totalTime = Date.now() - startTime;
     
-    console.log(`✅ [${requestId}] Returning ${logsWithWorkingHours.length} logs with working hours`);
+    console.log(`✅ [${requestId}] Returning ${filteredLogs.length} logs (no working hours calculation)`);
     console.log(`📊 [${requestId}] Pagination: offset=${offset}, limit=${limit}, total=${total}, hasMore=${hasMore}`);
     console.log(`⚡ [${requestId}] Total request time: ${totalTime}ms`);
     
     res.json({ 
-      logs: logsWithWorkingHours, 
+      logs: filteredLogs, 
       total, 
       limit: parseInt(limit), 
       offset: parseInt(offset), 
@@ -5782,6 +5930,10 @@ const split16BitTo8Bit = (binary16) => {
     high: padded.substring(0, 8),
     low: padded.substring(8, 16)
   };
+};
+
+const binaryToDecimal = (binary) => {
+  return parseInt(binary, 2);
 };
 
 // ✅ Helper function for ISO week calculation

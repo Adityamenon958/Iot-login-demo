@@ -1,5 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Col, Row, Card, Badge, Spinner, Form } from 'react-bootstrap';
+import { Col, Row, Card, Badge, Spinner, Form, Dropdown } from 'react-bootstrap';
+
+// ✅ CSS for Live badge animation
+const livePulseStyle = `
+  @keyframes livePulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+`;
 import axios from 'axios';
 import styles from "./MainContent.module.css";
 import { PiElevatorDuotone, PiCheckCircleDuotone, PiXCircleDuotone, PiWarningCircleDuotone } from "react-icons/pi";
@@ -245,6 +254,16 @@ const processElevatorData = (dataArray) => {
 };
 
 export default function ElevatorOverview() {
+  // ✅ Inject CSS for Live badge animation
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = livePulseStyle;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
   // ✅ State for historical logs table (ALL logs)
   const [elevators, setElevators] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,8 +274,18 @@ export default function ElevatorOverview() {
   const [individualCardsLoading, setIndividualCardsLoading] = useState(true);
   const [individualCardsError, setIndividualCardsError] = useState(null);
 
-  // ✅ State for time range filter
-  const [timeRange, setTimeRange] = useState('24'); // hours
+  // ✅ State for line chart time range (independent)
+  const [chartTimeRange, setChartTimeRange] = useState('24'); // hours
+  
+  // ✅ State for table time range (independent)
+  const [tableTimeRange, setTableTimeRange] = useState('24'); // hours
+  
+  // ✅ State for line visibility controls
+  const [visibleLines, setVisibleLines] = useState({
+    working: true,
+    maintenance: true,
+    error: true
+  });
 
   // ✅ State for chart elevator selection
   const [selectedElevator, setSelectedElevator] = useState(null);
@@ -280,7 +309,7 @@ export default function ElevatorOverview() {
         params: { 
           limit: 50,            // Fetch 50 logs (reduced from 500 for performance testing)
           offset: 0,            // Start from beginning
-          hours: timeRange      // Time range filter
+          hours: tableTimeRange      // Table time range filter
         }
       });
       
@@ -387,7 +416,7 @@ export default function ElevatorOverview() {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [timeRange]); // Re-fetch when time range changes
+  }, [tableTimeRange]); // Re-fetch when table time range changes
 
   // ✅ Fetch individual elevator data on component mount and set up auto-refresh
   useEffect(() => {
@@ -599,7 +628,18 @@ export default function ElevatorOverview() {
         <div className="mb-4">
           <div className="d-flex justify-content-between align-items-center mb-0">
             <h6 className="mb-0 fw-bold" style={{ fontSize: '0.95rem' }}>
-              Elevator Status
+              Elevator Status 
+              <span 
+                className="ms-2" 
+                style={{ 
+                  color: '#dc3545',
+                  fontSize: '0.8rem',
+                  fontWeight: 'bold',
+                  animation: 'livePulse 2s infinite'
+                }}
+              >
+                Live
+              </span>
             </h6>
             <RefreshIndicator 
               isRefreshing={isIndividualRefreshing}
@@ -821,6 +861,71 @@ export default function ElevatorOverview() {
                   ))}
                 </Form.Select>
                 
+                {/* Line Chart Legend */}
+                <div className="d-flex align-items-center gap-2" style={{ fontSize: '0.8rem' }}>
+                  
+                  <span className="d-flex align-items-center gap-1">
+                    <span style={{ color: '#10b981', fontWeight: 'bold' }}>●</span>
+                    <span>Working</span>
+                  </span>
+                  <span className="d-flex align-items-center gap-1">
+                    <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>●</span>
+                    <span>Maintenance</span>
+                  </span>
+                  <span className="d-flex align-items-center gap-1">
+                    <span style={{ color: '#ef4444', fontWeight: 'bold' }}>●</span>
+                    <span>Error</span>
+                  </span>
+                </div>
+                
+                {/* Custom Line Visibility Dropdown */}
+                <Dropdown>
+                  <Dropdown.Toggle 
+                    variant="outline-secondary" 
+                    size="sm" 
+                    style={{ 
+                      width: '90px', 
+                      fontSize: '0.75rem',
+                      padding: '0.25rem 0.5rem'
+                    }}
+                  >
+                    Lines ({Object.values(visibleLines).filter(Boolean).length})
+                  </Dropdown.Toggle>
+                  
+                  <Dropdown.Menu style={{ minWidth: '120px' }}>
+                    <Dropdown.ItemText style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>
+                      <Form.Check
+                        type="checkbox"
+                        id="dropdownWorking"
+                        label="Working"
+                        checked={visibleLines.working}
+                        onChange={(e) => setVisibleLines(prev => ({ ...prev, working: e.target.checked }))}
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                    </Dropdown.ItemText>
+                    <Dropdown.ItemText style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>
+                      <Form.Check
+                        type="checkbox"
+                        id="dropdownMaintenance"
+                        label="Maintenance"
+                        checked={visibleLines.maintenance}
+                        onChange={(e) => setVisibleLines(prev => ({ ...prev, maintenance: e.target.checked }))}
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                    </Dropdown.ItemText>
+                    <Dropdown.ItemText style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>
+                      <Form.Check
+                        type="checkbox"
+                        id="dropdownError"
+                        label="Error"
+                        checked={visibleLines.error}
+                        onChange={(e) => setVisibleLines(prev => ({ ...prev, error: e.target.checked }))}
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                    </Dropdown.ItemText>
+                  </Dropdown.Menu>
+                </Dropdown>
+                
                 <div className="btn-group" role="group">
                   <input
                     type="radio"
@@ -828,8 +933,8 @@ export default function ElevatorOverview() {
                     name="chartTimeRange"
                     id="chart24h"
                     value="24"
-                    checked={timeRange === '24'}
-                    onChange={(e) => setTimeRange(e.target.value)}
+                    checked={chartTimeRange === '24'}
+                    onChange={(e) => setChartTimeRange(e.target.value)}
                   />
                   <label className="btn btn-outline-secondary btn-sm" htmlFor="chart24h">
                     24h
@@ -841,8 +946,8 @@ export default function ElevatorOverview() {
                     name="chartTimeRange"
                     id="chart7d"
                     value="168"
-                    checked={timeRange === '168'}
-                    onChange={(e) => setTimeRange(e.target.value)}
+                    checked={chartTimeRange === '168'}
+                    onChange={(e) => setChartTimeRange(e.target.value)}
                   />
                   <label className="btn btn-outline-secondary btn-sm" htmlFor="chart7d">
                     7d
@@ -854,8 +959,8 @@ export default function ElevatorOverview() {
                     name="chartTimeRange"
                     id="chart30d"
                     value="720"
-                    checked={timeRange === '720'}
-                    onChange={(e) => setTimeRange(e.target.value)}
+                    checked={chartTimeRange === '720'}
+                    onChange={(e) => setChartTimeRange(e.target.value)}
                   />
                   <label className="btn btn-outline-secondary btn-sm" htmlFor="chart30d">
                     30d
@@ -865,7 +970,8 @@ export default function ElevatorOverview() {
               
               <ElevatorLineChart 
                 selectedElevator={selectedElevator}
-                timeRange={timeRange}
+                timeRange={chartTimeRange}
+                visibleLines={visibleLines}
               />
             </Col>
           </Row>
@@ -875,9 +981,8 @@ export default function ElevatorOverview() {
       {/* Elevator Logs Table */}
       {!loading && !error && elevators.length > 0 && (
         <ElevatorLogsTable 
-          elevators={elevators} 
-          timeRange={timeRange}
-          setTimeRange={setTimeRange}
+          timeRange={tableTimeRange}
+          setTimeRange={setTableTimeRange}
           isRefreshing={isRefreshing}
           lastRefreshTime={lastRefreshTime}
         />

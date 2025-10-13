@@ -26,7 +26,7 @@ ChartJS.register(
   Filler
 );
 
-const ElevatorLineChart = ({ selectedElevator, timeRange }) => {
+const ElevatorLineChart = ({ selectedElevator, timeRange, visibleLines = { working: true, maintenance: true, error: true } }) => {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -141,52 +141,63 @@ const ElevatorLineChart = ({ selectedElevator, timeRange }) => {
           }
         });
 
+        // ✅ Create all datasets first
+        const allDatasets = [
+          {
+            label: 'Working Hours',
+            data: apiData.map(point => point.workingHours || 0),
+            borderColor: '#28a745',
+            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+            pointBackgroundColor: '#28a745',
+            pointBorderColor: '#28a745',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          },
+          {
+            label: 'Maintenance Hours',
+            data: apiData.map(point => point.maintenanceHours || 0),
+            borderColor: '#ffc107',
+            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+            pointBackgroundColor: '#ffc107',
+            pointBorderColor: '#ffc107',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          },
+          {
+            label: 'Error Hours',
+            data: apiData.map(point => point.errorHours || 0),
+            borderColor: '#dc3545',
+            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+            pointBackgroundColor: '#dc3545',
+            pointBorderColor: '#dc3545',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          }
+        ];
+
+        // ✅ Filter datasets based on visibleLines
+        const filteredDatasets = allDatasets.filter(dataset => {
+          if (dataset.label === 'Working Hours') return visibleLines.working;
+          if (dataset.label === 'Maintenance Hours') return visibleLines.maintenance;
+          if (dataset.label === 'Error Hours') return visibleLines.error;
+          return true;
+        });
+
         const processedData = {
           labels,
-          datasets: [
-            {
-              label: 'Working Hours',
-              data: apiData.map(point => point.workingHours || 0),
-              borderColor: '#28a745',
-              backgroundColor: 'rgba(40, 167, 69, 0.1)',
-              borderWidth: 2,
-              fill: false,
-              tension: 0.4,
-              pointBackgroundColor: '#28a745',
-              pointBorderColor: '#28a745',
-              pointBorderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-            },
-            {
-              label: 'Maintenance Hours',
-              data: apiData.map(point => point.maintenanceHours || 0),
-              borderColor: '#ffc107',
-              backgroundColor: 'rgba(255, 193, 7, 0.1)',
-              borderWidth: 2,
-              fill: false,
-              tension: 0.4,
-              pointBackgroundColor: '#ffc107',
-              pointBorderColor: '#ffc107',
-              pointBorderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-            },
-            {
-              label: 'Error Hours',
-              data: apiData.map(point => point.errorHours || 0),
-              borderColor: '#dc3545',
-              backgroundColor: 'rgba(220, 53, 69, 0.1)',
-              borderWidth: 2,
-              fill: false,
-              tension: 0.4,
-              pointBackgroundColor: '#dc3545',
-              pointBorderColor: '#dc3545',
-              pointBorderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-            }
-          ]
+          datasets: filteredDatasets,
         };
 
         setChartData(processedData);
@@ -200,7 +211,7 @@ const ElevatorLineChart = ({ selectedElevator, timeRange }) => {
     };
 
     fetchChartData();
-  }, [selectedElevator, timeRange]);
+  }, [selectedElevator, timeRange, visibleLines]);
 
   const options = {
     responsive: true,

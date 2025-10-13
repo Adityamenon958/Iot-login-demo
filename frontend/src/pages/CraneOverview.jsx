@@ -107,15 +107,6 @@ export default function CraneOverview() {
   // ✅ Use dashboard data or default (restored)
   const currentData = dashboardData || defaultData;
   
-  // ✅ DEBUG: Log what data we're receiving
-  console.log('🔍 [Frontend] dashboardData:', dashboardData);
-  console.log('🔍 [Frontend] currentData.quickStats?.thisMonth:', currentData.quickStats?.thisMonth);
-  console.log('🔍 [Frontend] workingCompleted fallback:', currentData.quickStats?.thisMonth?.completed || 0);
-  
-  // ✅ Debug: Log the data being received
-  console.log('🔍 [Frontend] Dashboard Data:', dashboardData);
-  console.log('🔍 [Frontend] Current Data:', currentData);
-  console.log('🔍 [Frontend] Quick Stats thisMonth:', currentData.quickStats?.thisMonth);
 
   // ✅ Available cranes from overview (once loaded) (restored)
   const availableCranes = (dashboardData?.craneDevices || []).sort();
@@ -247,7 +238,6 @@ export default function CraneOverview() {
 
   // ✅ Handler for crane selection (restored)
   const handleCraneSelect = (craneData) => {
-    console.log('🔍 Crane selected in CraneOverview:', craneData);
     setSelectedCrane(craneData);
   };
 
