@@ -41,7 +41,11 @@ function App() {
 
 
       <Route path="/dashboard" element={<Dashboard />}>
-        <Route index element={<DashboardHome2 />} />
+        <Route index element={
+          <RouteGuard requiredAccess="home">
+            <DashboardHome2 />
+          </RouteGuard>
+        } />
         {/* <Route path="dynamicdb" element={<DynamicDb />} /> */}
         <Route path="device" element={<Navigate to="GS-1234" replace />} />
         <Route path="device/:deviceId" element={<DynamicDb />} />

@@ -42,6 +42,7 @@ const LoginPage = ({ selectedPlan }) => {
         const res2 = await axios.get('/api/auth/userinfo', { withCredentials: true });
         console.log("Verified User Info ✅", res2.data);
 
+        // ✅ Redirect to dashboard - RouteGuard will handle smart redirect if home is disabled
         navigate('/dashboard');
       } catch (error) {
         console.error("Google Login Backend Error ❌", error.response?.data?.message || error.message);
@@ -153,6 +154,7 @@ const LoginPage = ({ selectedPlan }) => {
       const res2 = await axios.get('/api/auth/userinfo', { withCredentials: true });
       console.log("Verified User Info ✅", res2.data);
   
+      // ✅ Redirect to dashboard - RouteGuard will handle smart redirect if home is disabled
       navigate('/dashboard');
     } catch (error) {
       console.error("Login Failed ❌", error.response?.data?.message || error.message);

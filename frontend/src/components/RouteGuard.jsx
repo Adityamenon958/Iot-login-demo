@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Spinner, Alert } from 'react-bootstrap';
 import axios from 'axios';
 
 export default function RouteGuard({ children, requiredAccess }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
   const [userRole, setUserRole] = useState('');
@@ -12,6 +13,54 @@ export default function RouteGuard({ children, requiredAccess }) {
   useEffect(() => {
     checkAccess();
   }, [requiredAccess]);
+
+  // ✅ Function to redirect to first available page
+  const redirectToAvailablePage = async () => {
+    try {
+      // Define available pages in priority order
+      const availablePages = [
+        // Tier 1: Dashboard/Overview (Highest Priority)
+        { access: 'craneOverview', path: '/dashboard/crane-overview' },
+        { access: 'elevatorOverview', path: '/dashboard/elevator-overview' },
+        { access: 'reports', path: '/dashboard/reports' },
+        
+        // Tier 2: Device Management (Medium Priority)  
+        { access: 'addDevices', path: '/dashboard/adddevice' },
+        { access: 'dashboard', path: '/dashboard/device' },
+        
+        // Tier 3: Administrative (Lowest Priority)
+        { access: 'addUsers', path: '/dashboard/adduser' },
+        { access: 'settings', path: '/dashboard/settings' }
+      ];
+
+      // Check each page access
+      for (const page of availablePages) {
+        try {
+          const response = await axios.get(`/api/check-dashboard-access/${page.access}`, {
+            withCredentials: true
+          });
+          
+          if (response.data.hasAccess) {
+            console.log(`✅ Redirecting to available page: ${page.path}`);
+            navigate(page.path);
+            return;
+          }
+        } catch (err) {
+          console.error(`❌ Error checking access for ${page.access}:`, err);
+          continue;
+        }
+      }
+
+      // If no pages are available, show error
+      setError('No accessible pages found. Please contact your administrator.');
+      setLoading(false);
+      
+    } catch (err) {
+      console.error('❌ Error in redirectToAvailablePage:', err);
+      setError('Failed to find available pages. Please contact your administrator.');
+      setLoading(false);
+    }
+  };
 
   const checkAccess = async () => {
     try {
@@ -41,6 +90,11 @@ export default function RouteGuard({ children, requiredAccess }) {
       setHasAccess(accessResponse.data.hasAccess);
       
       if (!accessResponse.data.hasAccess) {
+        // ✅ Special handling for home page access denial
+        if (requiredAccess === 'home') {
+          await redirectToAvailablePage();
+          return;
+        }
         setError(`Access denied. You don't have permission to access this page.`);
       }
 
