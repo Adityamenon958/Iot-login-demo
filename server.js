@@ -1378,33 +1378,39 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     console.log(`🔍 [${requestId}] Register filters:`, registerFilters);
     console.log(`🔍 [${requestId}] Final filter:`, JSON.stringify(filter));
     
-    // ✅ Get total count (for pagination info)
-    const countStartTime = Date.now();
-    const total = await ElevatorEvent.countDocuments(filter).maxTimeMS(10000);
-    console.log(`📊 [${requestId}] Total logs matching filter: ${total} (took ${Date.now() - countStartTime}ms)`);
-    
-    // ✅ Fetch limited logs with .lean() for performance
+    // ✅ Fetch logs matching basic filters
     const fetchStartTime = Date.now();
     const sortOrder = sortDirection === 'asc' ? 1 : -1;
-    const logs = await ElevatorEvent.find(filter)
-      .sort({ [sortBy]: sortOrder })  // Dynamic sorting
-      .skip(parseInt(offset))
-      .limit(parseInt(limit))
-      .lean()  // ✅ Return plain JS objects (faster than Mongoose documents)
-      .maxTimeMS(10000);
-    
-    console.log(`📦 [${requestId}] Fetched ${logs.length} logs (took ${Date.now() - fetchStartTime}ms)`);
-    
-    // ✅ Apply register-based filtering and search if needed
-    let filteredLogs = logs;
     const hasRegisterFilters = registerFilters.inService !== null || registerFilters.inMaintenance !== null || registerFilters.status !== null;
     const hasRegisterSearch = search && search.trim().length > 0;
     
-    if ((hasRegisterFilters || hasRegisterSearch) && logs.length > 0) {
+    let allLogs;
+    if (hasRegisterFilters || hasRegisterSearch) {
+      // ✅ Fetch ALL logs if register-based filtering is needed
+      allLogs = await ElevatorEvent.find(filter)
+        .sort({ [sortBy]: sortOrder })
+        .lean()
+        .maxTimeMS(10000);
+      console.log(`📦 [${requestId}] Fetched ${allLogs.length} total logs for register filtering (took ${Date.now() - fetchStartTime}ms)`);
+    } else {
+      // ✅ Apply pagination directly if no register filtering needed (performance optimization)
+      allLogs = await ElevatorEvent.find(filter)
+        .sort({ [sortBy]: sortOrder })
+        .skip(parseInt(offset))
+        .limit(parseInt(limit))
+        .lean()
+        .maxTimeMS(10000);
+      console.log(`📦 [${requestId}] Fetched ${allLogs.length} paginated logs (no register filtering needed) (took ${Date.now() - fetchStartTime}ms)`);
+    }
+    
+    // ✅ Apply register-based filtering and search if needed
+    let filteredLogs = allLogs;
+    
+    if ((hasRegisterFilters || hasRegisterSearch) && allLogs.length > 0) {
       console.log(`🔧 [${requestId}] Applying register-based filters and search...`);
       const filterStartTime = Date.now();
       
-      filteredLogs = logs.filter(log => {
+      filteredLogs = allLogs.filter(log => {
         // Skip logs without register data
         if (!log.data || log.data.length < 2) {
           return false;
@@ -1576,33 +1582,47 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
         }
       });
       
-      console.log(`🔧 [${requestId}] Register filtering and search: ${logs.length} → ${filteredLogs.length} logs (took ${Date.now() - filterStartTime}ms)`);
+      console.log(`🔧 [${requestId}] Register filtering and search: ${allLogs.length} → ${filteredLogs.length} logs (took ${Date.now() - filterStartTime}ms)`);
     }
     
     if (filteredLogs.length === 0) {
-      console.log(`✅ [${requestId}] No logs found, returning empty array`);
+      console.log(`✅ [${requestId}] No logs found after filtering, returning empty array`);
       return res.json({ 
         logs: [], 
-        total, 
+        total: 0, 
         limit: parseInt(limit), 
         offset: parseInt(offset),
+        hasMore: false,
         timing: Date.now() - startTime
       });
     }
     
-    // ✅ No working hours calculation needed for table - return logs directly
-    
-    // ✅ Return with pagination metadata
-    const hasMore = (parseInt(offset) + filteredLogs.length) < total;
+    // ✅ Handle pagination based on whether register filtering was applied
+    let finalLogs, totalCount, hasMore;
     const totalTime = Date.now() - startTime;
     
-    console.log(`✅ [${requestId}] Returning ${filteredLogs.length} logs (no working hours calculation)`);
-    console.log(`📊 [${requestId}] Pagination: offset=${offset}, limit=${limit}, total=${total}, hasMore=${hasMore}`);
-    console.log(`⚡ [${requestId}] Total request time: ${totalTime}ms`);
+    if (hasRegisterFilters || hasRegisterSearch) {
+      // ✅ Register filtering was applied - paginate the filtered results
+      const totalFiltered = filteredLogs.length;
+      const startIndex = parseInt(offset);
+      const endIndex = startIndex + parseInt(limit);
+      finalLogs = filteredLogs.slice(startIndex, endIndex);
+      totalCount = totalFiltered;
+      hasMore = endIndex < totalFiltered;
+      
+      console.log(`✅ [${requestId}] Returning ${finalLogs.length} logs from ${totalFiltered} filtered logs (offset: ${startIndex}, limit: ${parseInt(limit)})`);
+    } else {
+      // ✅ No register filtering - logs are already paginated
+      finalLogs = filteredLogs;
+      totalCount = filteredLogs.length; // This is approximate since we only fetched one page
+      hasMore = filteredLogs.length === parseInt(limit); // If we got exactly the limit, there might be more
+      
+      console.log(`✅ [${requestId}] Returning ${finalLogs.length} paginated logs (no filtering applied)`);
+    }
     
     res.json({ 
-      logs: filteredLogs, 
-      total, 
+      logs: finalLogs, 
+      total: totalCount, 
       limit: parseInt(limit), 
       offset: parseInt(offset), 
       hasMore,
