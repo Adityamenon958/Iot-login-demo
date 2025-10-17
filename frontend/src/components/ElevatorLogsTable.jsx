@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Table, Card, Form, Badge, Button, Row, Col, Spinner } from 'react-bootstrap';
 import axios from 'axios';
 import styles from './ElevatorLogsTable.module.css';
-import RegisterBitDisplay from './RegisterBitDisplay';
+import StatusDisplay from './StatusDisplay';
 
 // ✅ Binary conversion helpers (same as ElevatorOverview.jsx)
 const decimalToBinary = (decimal, bits = 16) => {
@@ -120,6 +120,18 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
           if (reg66H[1] === '1') serviceStatus.push('Earthquake');      // bit6
           if (reg66H[0] === '1') serviceStatus.push('Safety Circuit');  // bit7
 
+          // 65L - Door/Operational status flags
+          const operationalStatus = [];
+          const reg65L = reg65Split.low;
+          if (reg65L[7] === '1') operationalStatus.push('Door Open');           // bit0
+          if (reg65L[6] === '1') operationalStatus.push('Attendant');           // bit1
+          if (reg65L[5] === '1') operationalStatus.push('Independent');         // bit2
+          if (reg65L[4] === '1') operationalStatus.push('Fire Exclusive');      // bit3
+          if (reg65L[3] === '1') operationalStatus.push('Inspection');          // bit4
+          if (reg65L[2] === '1') operationalStatus.push('Comprehensive Fault'); // bit5
+          if (reg65L[1] === '1') operationalStatus.push('Down');                // bit6
+          if (reg65L[0] === '1') operationalStatus.push('Up');                  // bit7
+
           // 66L - Power status flags (same logic as ElevatorOverview.jsx)
           const powerStatus = [];
           const reg66L = reg66Split.low;
@@ -140,9 +152,10 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
           // Critical/Emergency (Red) - Score 6
           const criticalStatuses = [
             'Overload', 'Earthquake', 'OEPS', 
-            'Fire Return', 'Fire Return In Place'
+            'Fire Return', 'Fire Return In Place',
+            'Comprehensive Fault'
           ];
-          const criticalFound = [...serviceStatus, ...powerStatus]
+          const criticalFound = [...serviceStatus, ...powerStatus, ...operationalStatus]
             .filter(status => criticalStatuses.includes(status));
           if (criticalFound.length > 0) {
             maxScore = Math.max(maxScore, 6);
@@ -162,8 +175,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
           }
 
           // Maintenance/Inspection (Orange) - Score 4
-          const maintenanceStatuses = ['Maintenance ON'];
-          const maintenanceFound = [...serviceStatus]
+          const maintenanceStatuses = ['Maintenance ON', 'Inspection'];
+          const maintenanceFound = [...serviceStatus, ...operationalStatus]
             .filter(status => maintenanceStatuses.includes(status));
           if (maintenanceFound.length > 0 && maxScore < 6) {
             maxScore = Math.max(maxScore, 4);
@@ -171,8 +184,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
           }
 
           // Normal/Running (Green) - Score 1
-          const normalStatuses = ['In Service', 'Automatic', 'Car Walking', 'Normal Power', 'Safety Circuit'];
-          const normalFound = [...serviceStatus, ...powerStatus]
+          const normalStatuses = ['In Service', 'Automatic', 'Car Walking', 'Normal Power', 'Safety Circuit', 'Up', 'Down'];
+          const normalFound = [...serviceStatus, ...powerStatus, ...operationalStatus]
             .filter(status => normalStatuses.includes(status));
           if (normalFound.length > 0 && maxScore < 4) {
             maxScore = Math.max(maxScore, 1);
@@ -214,20 +227,11 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
             inMaintenance: serviceStatus.includes('Maintenance ON'),
             errorCode: priorityStatus,
             priorityColor: priorityColor,
-            registerBits: {
-              reg65L: {
-                bits: reg65Split.low.split(''), // Use exact same logic as original
-                labels: ['Door Open', 'Attendant', 'Independent', 'Fire Exclusive', 'Inspection', 'Comprehensive Fault', 'Down', 'Up']
-              },
-              reg66H: {
-                bits: reg66Split.high.split(''), // Use exact same logic as original
-                labels: ['In Service', 'Comm Normal', 'Maintenance ON', 'Overload', 'Automatic', 'Car Walking', 'Earthquake', 'Safety Circuit']
-              },
-              reg66L: {
-                bits: reg66Split.low.split(''), // Use exact same logic as original
-                labels: ['Fire Return', 'Fire Return In Place', 'Standby', 'Normal Power', 'OEPS', 'Standby', 'Standby', 'Standby']
-              }
-            }
+            // Status data for the new StatusDisplay component
+            serviceStatus: serviceStatus,
+            powerStatus: powerStatus,
+            operationalStatus: operationalStatus,
+            priorityStatus: priorityStatus
           };
         });
         
@@ -565,8 +569,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
                 <th>
                   Status / Error
                 </th>
-                <th style={{ textAlign: 'center', minWidth: '200px' }}>
-                  Register Bits
+                <th style={{ textAlign: 'center', minWidth: '180px' }}>
+                  Elevator Status
                 </th>
               </tr>
             </thead>
@@ -604,23 +608,13 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
                         {row.errorCode}
                       </Badge>
                     </td>
-                    <td style={{ verticalAlign: 'top', padding: '4px' }}>
-                      {row.registerBits && row.registerBits.reg65L && (
-                        <>
-                          <RegisterBitDisplay 
-                            registerData={row.registerBits.reg65L} 
-                            registerName="65L" 
-                          />
-                          <RegisterBitDisplay 
-                            registerData={row.registerBits.reg66H} 
-                            registerName="66H" 
-                          />
-                          <RegisterBitDisplay 
-                            registerData={row.registerBits.reg66L} 
-                            registerName="66L" 
-                          />
-                        </>
-                      )}
+                    <td style={{ verticalAlign: 'top', padding: '8px' }}>
+                      <StatusDisplay 
+                        serviceStatus={row.serviceStatus}
+                        powerStatus={row.powerStatus}
+                        operationalStatus={row.operationalStatus}
+                        priorityStatus={row.priorityStatus}
+                      />
                     </td>
                   </tr>
                 ))
