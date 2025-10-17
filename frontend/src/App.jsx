@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route,Navigate } from 'react-router-dom';
-import LoginPage from './LoginPage';
 import Dashboard from './pages/Dashboard';
 import ReportsPage from './pages/ReportsPage';
 import Settings from './pages/Settings';
@@ -12,7 +11,7 @@ import DashboardHome2 from './pages/DashboardHome2';
 import AddDevice from './pages/AddDevices';
 import Subscription from './pages/Subscription';
 import FullPageSpinner from './components/FullPageSpinner';
-import LoginCarousel from './components/LoginCarousel';
+import LoginCarousel from './components/login/LoginCarousel';
 import RouteGuard from './components/RouteGuard';
 import './App.css';
 import DynamicDb from './components/DynamicDb';

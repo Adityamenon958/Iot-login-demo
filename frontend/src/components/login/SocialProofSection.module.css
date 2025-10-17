@@ -1,0 +1,355 @@
+/* ✅ Social Proof Section - Light gradient with testimonials and company logos */
+.socialProofSection {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ✅ Section header */
+.sectionTitle {
+  font-family: 'Poppins', sans-serif;
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  animation: fadeInUp 1s ease-out;
+}
+
+.sectionSubtitle {
+  font-size: 1.1rem;
+  color: #7f8c8d;
+  line-height: 1.6;
+  max-width: 600px;
+  margin: 0 auto;
+  animation: fadeInUp 1s ease-out 0.2s both;
+}
+
+/* ✅ Stats container */
+.statsContainer {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  background: white;
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.6s ease;
+}
+
+.statsVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.statItem {
+  text-align: center;
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+.statNumber {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #4db3b3;
+  margin-bottom: 0.5rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  font-weight: 500;
+}
+
+/* ✅ Companies section */
+.companiesSection {
+  animation: fadeInUp 1s ease-out 0.4s both;
+}
+
+.companiesTitle {
+  font-size: 1rem;
+  color: #7f8c8d;
+  margin-bottom: 2rem;
+  font-weight: 500;
+}
+
+.companiesGrid {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.companyLogo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.6s ease-out both;
+  min-width: 120px;
+}
+
+.companyLogo:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.companyEmoji {
+  font-size: 2rem;
+  filter: grayscale(0.3);
+}
+
+.companyName {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ✅ Testimonials container */
+.testimonialsContainer {
+  animation: fadeInUp 1s ease-out 0.6s both;
+}
+
+.testimonialCard {
+  background: white;
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.testimonialCard::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 60px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.testimonialCard::after {
+  content: '"';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 3rem;
+  color: #4db3b3;
+  font-family: serif;
+}
+
+.testimonialContent {
+  text-align: center;
+}
+
+.testimonialText {
+  font-size: 1.1rem;
+  color: #2c3e50;
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+  font-style: italic;
+  position: relative;
+}
+
+.rating {
+  margin-bottom: 1.5rem;
+}
+
+.star {
+  font-size: 1.2rem;
+  margin: 0 0.1rem;
+}
+
+/* ✅ Author info */
+.authorInfo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.authorAvatar {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #4db3b3, #3a9a9a);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: white;
+  box-shadow: 0 5px 15px rgba(77, 179, 179, 0.3);
+}
+
+.authorDetails {
+  text-align: left;
+}
+
+.authorName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.2rem;
+}
+
+.authorRole {
+  font-size: 0.9rem;
+  color: #4db3b3;
+  font-weight: 500;
+  margin-bottom: 0.1rem;
+}
+
+.authorCompany {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+/* ✅ Testimonial indicators */
+.testimonialIndicators {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  background: #ddd;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.indicatorActive {
+  background: #4db3b3;
+  transform: scale(1.2);
+}
+
+.indicator:hover {
+  background: #3a9a9a;
+}
+
+/* ✅ Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ✅ Responsive design */
+@media (max-width: 768px) {
+  .sectionTitle {
+    font-size: 2.2rem;
+  }
+  
+  .sectionSubtitle {
+    font-size: 1rem;
+    padding: 0 1rem;
+  }
+  
+  .statsContainer {
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+  
+  .statNumber {
+    font-size: 2rem;
+  }
+  
+  .companiesGrid {
+    gap: 1rem;
+  }
+  
+  .companyLogo {
+    min-width: 100px;
+    padding: 0.8rem;
+  }
+  
+  .companyEmoji {
+    font-size: 1.5rem;
+  }
+  
+  .testimonialCard {
+    padding: 2rem 1.5rem;
+  }
+  
+  .testimonialText {
+    font-size: 1rem;
+  }
+  
+  .authorInfo {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.8rem;
+  }
+  
+  .authorDetails {
+    text-align: center;
+  }
+  
+  .authorAvatar {
+    width: 50px;
+    height: 50px;
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .sectionTitle {
+    font-size: 1.8rem;
+  }
+  
+  .statNumber {
+    font-size: 1.8rem;
+  }
+  
+  .companiesGrid {
+    gap: 0.8rem;
+  }
+  
+  .companyLogo {
+    min-width: 80px;
+    padding: 0.6rem;
+  }
+  
+  .companyEmoji {
+    font-size: 1.2rem;
+  }
+  
+  .companyName {
+    font-size: 0.7rem;
+  }
+  
+  .testimonialCard {
+    padding: 1.5rem 1rem;
+  }
+  
+  .testimonialText {
+    font-size: 0.95rem;
+  }
+}

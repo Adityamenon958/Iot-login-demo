@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Button, Modal, Form, Alert } from 'react-bootstrap';
 import styles from './LoginPage.module.css';
-import Logo from "../src/assets/DashboardLogo.png";
+import Logo from "../../assets/DashboardLogo.png";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { SiGmail } from "react-icons/si";
 import { X } from 'lucide-react';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
-import { validateEmail } from './lib/validation';
+import { validateEmail } from '../../lib/validation';
 import "./LoginPage.css";
 import axios from 'axios';
 
