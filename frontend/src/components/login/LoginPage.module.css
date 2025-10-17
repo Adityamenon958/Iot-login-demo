@@ -159,21 +159,25 @@
     }
   }
 
-@media (max-width: 768px) {
+/* Hide indicators on mobile and tablet when columns stack */
+@media (max-width: 991px) {
   .leftIndicator {
-    bottom: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
+    display: none !important; /* Hide when columns turn into rows */
   }
   
   .rightIndicator {
-    bottom: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
+    display: none !important; /* Hide when columns turn into rows */
+  }
+}
+
+/* Additional rule for smaller screens */
+@media (max-width: 768px) {
+  .leftIndicator {
+    display: none !important;
   }
   
-  .scrollText {
-    font-size: 0.7rem;
+  .rightIndicator {
+    display: none !important;
   }
 }
 

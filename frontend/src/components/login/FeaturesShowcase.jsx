@@ -4,16 +4,47 @@ import styles from './FeaturesShowcase.module.css';
 
 const FeaturesShowcase = () => {
   const sectionRef = useRef(null);
+  const headerRef = useRef(null);
   const [visibleFeatures, setVisibleFeatures] = useState([]);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(false);
+
+  // Debug log for state changes
+  useEffect(() => {
+    console.log('isHeaderVisible changed:', isHeaderVisible);
+  }, [isHeaderVisible]);
 
   useEffect(() => {
-    // ✅ Intersection Observer for scroll-triggered animations
-    const observer = new IntersectionObserver(
+    // ✅ Intersection Observer for header animation
+    const headerObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            console.log('Header is visible!', entry.target);
+            setIsHeaderVisible(true);
+          } else {
+            // Reset animation when out of view
+            setIsHeaderVisible(false);
+          }
+        });
+      },
+      { threshold: 0.2 }
+    );
+
+    if (headerRef.current) {
+      headerObserver.observe(headerRef.current);
+    }
+
+    // ✅ Intersection Observer for feature cards
+    const featureObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const featureIndex = parseInt(entry.target.dataset.featureIndex);
             setVisibleFeatures(prev => [...prev, featureIndex]);
+          } else {
+            // Reset animation when out of view
+            const featureIndex = parseInt(entry.target.dataset.featureIndex);
+            setVisibleFeatures(prev => prev.filter(index => index !== featureIndex));
           }
         });
       },
@@ -21,9 +52,12 @@ const FeaturesShowcase = () => {
     );
 
     const featureElements = document.querySelectorAll(`.${styles.featureCard}`);
-    featureElements.forEach(el => observer.observe(el));
+    featureElements.forEach(el => featureObserver.observe(el));
 
-    return () => observer.disconnect();
+    return () => {
+      headerObserver.disconnect();
+      featureObserver.disconnect();
+    };
   }, []);
 
   const features = [
@@ -67,16 +101,25 @@ const FeaturesShowcase = () => {
 
   return (
     <div className={styles.featuresSection} ref={sectionRef}>
-      <Container className="py-5">
-        {/* ✅ Section header */}
+      {/* ✅ Abstract floating shapes */}
+      <div className={styles.abstractShapes}>
+        <div className={styles.abstractShape1}></div>
+        <div className={styles.abstractShape2}></div>
+        <div className={styles.abstractShape3}></div>
+      </div>
+      
+      <Container className="py-5" style={{ position: 'relative', zIndex: 3 }}>
+        {/* ✅ Section header with scroll animation */}
         <Row className="text-center mb-5">
           <Col lg={8} className="mx-auto">
-            <h2 className={styles.sectionTitle}>
-              Why Choose Our Platform?
-            </h2>
-            <p className={styles.sectionSubtitle}>
-              Powerful features designed to streamline your IoT operations and boost productivity
-            </p>
+            <div ref={headerRef} className={styles.headerContainer}>
+              <h2 className={`${styles.sectionTitle} ${isHeaderVisible ? styles.titleAnimated : ''}`}>
+                Why Choose Our Platform?
+              </h2>
+              <p className={`${styles.sectionSubtitle} ${isHeaderVisible ? styles.subtitleAnimated : ''}`}>
+                Powerful features designed to streamline your IoT operations and boost productivity
+              </p>
+            </div>
           </Col>
         </Row>
 
@@ -90,8 +133,9 @@ const FeaturesShowcase = () => {
                 }`}
                 data-feature-index={index}
                 style={{ 
-                  animationDelay: `${index * 0.1}s`,
-                  '--feature-color': feature.color 
+                  animationDelay: `${index * 0.15}s`,
+                  '--feature-color': feature.color,
+                  transitionDelay: `${index * 0.1}s`
                 }}
               >
                 <Card.Body className="text-center p-4">
