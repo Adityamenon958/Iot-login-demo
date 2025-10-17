@@ -1,18 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Container, Row, Col, Card } from 'react-bootstrap';
+import { Container, Row, Col } from 'react-bootstrap';
 import styles from './SocialProofSection.module.css';
+// ✅ Import background image
+import bgImage from '../../assets/bg-image-home.jpg';
 
 const SocialProofSection = () => {
   const sectionRef = useRef(null);
-  const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const [currentTestimonial, setCurrentTestimonial] = useState(0);
 
   const testimonials = [
     {
+      name: "Ruhi Siddique",
+      role: "IoT Engineer",
+      company: "TechSolutions Inc.",
+      content: "Best Online Training Ever! Hi I am Ruhi Siddique, levelUP is a very good place to go if you want to learn. I have taken a lot of classes, including IoT classes. In general, they're all very interesting, and the tutors are very good at answering our questions. They are all-natural and can help women start a small business of their own.",
+      avatar: "👩‍💻",
+      rating: 5
+    },
+    {
       name: "Sarah Johnson",
-      role: "CTO, TechCorp",
+      role: "CTO",
       company: "TechCorp Industries",
-      content: "This platform transformed our IoT operations. We reduced downtime by 40% and improved efficiency across all our manufacturing facilities.",
+      content: "This platform transformed our IoT operations. We reduced downtime by 40% and improved efficiency across all our manufacturing facilities. The real-time monitoring capabilities are game-changing.",
       avatar: "👩‍💼",
       rating: 5
     },
@@ -20,34 +30,10 @@ const SocialProofSection = () => {
       name: "Michael Chen",
       role: "Operations Director",
       company: "SmartManufacturing Co.",
-      content: "The real-time monitoring capabilities are game-changing. We can now predict issues before they happen and save thousands in maintenance costs.",
+      content: "The real-time monitoring capabilities are game-changing. We can now predict issues before they happen and save thousands in maintenance costs. Easy setup, powerful analytics, and excellent support.",
       avatar: "👨‍💻",
       rating: 5
-    },
-    {
-      name: "Emily Rodriguez",
-      role: "IoT Engineer",
-      company: "InnovateTech Solutions",
-      content: "Easy setup, powerful analytics, and excellent support. This is exactly what we needed to scale our IoT infrastructure effectively.",
-      avatar: "👩‍🔬",
-      rating: 5
     }
-  ];
-
-  const companies = [
-    { name: "TechCorp", logo: "🏢" },
-    { name: "SmartManufacturing", logo: "🏭" },
-    { name: "InnovateTech", logo: "💡" },
-    { name: "DataFlow Inc", logo: "📊" },
-    { name: "CloudSystems", logo: "☁️" },
-    { name: "IoT Solutions", logo: "🔗" }
-  ];
-
-  const stats = [
-    { number: "500+", label: "Devices Monitored" },
-    { number: "99.9%", label: "Uptime Guarantee" },
-    { number: "24/7", label: "Support Available" },
-    { number: "50+", label: "Countries Served" }
   ];
 
   useEffect(() => {
@@ -73,101 +59,75 @@ const SocialProofSection = () => {
     if (isVisible) {
       const interval = setInterval(() => {
         setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
-      }, 4000);
+      }, 5000);
 
       return () => clearInterval(interval);
     }
   }, [isVisible, testimonials.length]);
 
+  const nextTestimonial = () => {
+    setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
+  };
+
+  const prevTestimonial = () => {
+    setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+  };
+
   return (
     <div className={styles.socialProofSection} ref={sectionRef}>
-      <Container className="py-5">
-        {/* ✅ Section header */}
-        <Row className="text-center mb-5">
-          <Col lg={8} className="mx-auto">
-            <h2 className={styles.sectionTitle}>
-              Trusted by Industry Leaders
-            </h2>
-            <p className={styles.sectionSubtitle}>
-              Join thousands of companies already using our platform to optimize their IoT operations
-            </p>
-          </Col>
-        </Row>
+      {/* ✅ Content overlay */}
+      <div className={styles.contentOverlay}>
+        <Container className="py-5">
+          {/* ✅ Section header - moved up */}
+          <Row className="text-center mb-4">
+            <Col lg={8} className="mx-auto">
+              <h2 className={`${styles.sectionTitle} ${isVisible ? styles.titleAnimated : ''}`}>
+                Trusted by Industry Leaders
+              </h2>
+              <p className={`${styles.sectionSubtitle} ${isVisible ? styles.subtitleAnimated : ''}`}>
+                Join thousands of companies already using our platform to optimize their IoT operations.
+              </p>
+            </Col>
+          </Row>
 
-        {/* ✅ Stats section */}
-        <Row className="mb-5">
-          <Col className="text-center">
-            <div className={`${styles.statsContainer} ${isVisible ? styles.statsVisible : ''}`}>
-              {stats.map((stat, index) => (
-                <div 
-                  key={index} 
-                  className={styles.statItem}
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div className={styles.statNumber}>{stat.number}</div>
-                  <div className={styles.statLabel}>{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </Col>
-        </Row>
-
-        {/* ✅ Company logos */}
-        <Row className="mb-5">
-          <Col className="text-center">
-            <div className={styles.companiesSection}>
-              <p className={styles.companiesTitle}>Trusted by leading companies</p>
-              <div className={styles.companiesGrid}>
-                {companies.map((company, index) => (
-                  <div 
-                    key={index} 
-                    className={styles.companyLogo}
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <span className={styles.companyEmoji}>{company.logo}</span>
-                    <span className={styles.companyName}>{company.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Col>
-        </Row>
-
-        {/* ✅ Testimonials carousel */}
-        <Row>
-          <Col lg={8} className="mx-auto">
-            <div className={styles.testimonialsContainer}>
-              <div className={styles.testimonialCard}>
-                <div className={styles.testimonialContent}>
-                  <div className={styles.testimonialText}>
-                    "{testimonials[currentTestimonial].content}"
-                  </div>
-                  
-                  {/* ✅ Rating stars */}
-                  <div className={styles.rating}>
-                    {[...Array(testimonials[currentTestimonial].rating)].map((_, i) => (
-                      <span key={i} className={styles.star}>⭐</span>
-                    ))}
-                  </div>
-
-                  {/* ✅ Author info */}
-                  <div className={styles.authorInfo}>
-                    <div className={styles.authorAvatar}>
+          {/* ✅ Testimonial carousel */}
+          <Row>
+            <Col lg={8} className="mx-auto">
+              <div className={styles.testimonialsContainer}>
+                {/* ✅ Navigation arrows */}
+                <button className={styles.navArrow} onClick={prevTestimonial}>
+                  ‹
+                </button>
+                
+                <div className={styles.testimonialCard}>
+                  <div className={styles.testimonialContent}>
+                    {/* ✅ Profile picture */}
+                    <div className={styles.profilePicture}>
                       {testimonials[currentTestimonial].avatar}
                     </div>
-                    <div className={styles.authorDetails}>
-                      <div className={styles.authorName}>
-                        {testimonials[currentTestimonial].name}
-                      </div>
-                      <div className={styles.authorRole}>
-                        {testimonials[currentTestimonial].role}
-                      </div>
-                      <div className={styles.authorCompany}>
-                        {testimonials[currentTestimonial].company}
-                      </div>
+                    
+                    {/* ✅ Name */}
+                    <div className={styles.testimonialName}>
+                      {testimonials[currentTestimonial].name}
+                    </div>
+                    
+                    {/* ✅ Testimonial text */}
+                    <div className={styles.testimonialText}>
+                      "{testimonials[currentTestimonial].content}"
+                    </div>
+                    
+                    {/* ✅ Rating stars */}
+                    <div className={styles.rating}>
+                      {[...Array(testimonials[currentTestimonial].rating)].map((_, i) => (
+                        <span key={i} className={styles.star}>⭐</span>
+                      ))}
                     </div>
                   </div>
                 </div>
+
+                <button className={styles.navArrow} onClick={nextTestimonial}>
+                  ›
+                </button>
               </div>
 
               {/* ✅ Testimonial indicators */}
@@ -182,10 +142,10 @@ const SocialProofSection = () => {
                   />
                 ))}
               </div>
-            </div>
-          </Col>
-        </Row>
-      </Container>
+            </Col>
+          </Row>
+        </Container>
+      </div>
     </div>
   );
 };
