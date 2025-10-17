@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Container, Row, Col, Button } from 'react-bootstrap';
 import styles from './HeroSection.module.css';
+// ✅ Import images properly for production
+import heroDashboard from '../../assets/hero-dashboard.png';
+import heroMobile from '../../assets/hero-mobile-left.png';
+import heroAnalytics from '../../assets/hero-analytics.png';
 
 const HeroSection = () => {
   const heroRef = useRef(null);
@@ -43,19 +47,19 @@ const HeroSection = () => {
   // ✅ Product images data
   const productImages = [
     {
-      src: "/src/assets/hero-dashboard.png",
+      src: heroDashboard,
       alt: "IoT Dashboard - Real-time Monitoring",
       title: "Real-time Dashboard",
       description: "Monitor all your devices in one place"
     },
     {
-      src: "/src/assets/hero-mobile-left.png",
+      src: heroMobile,
       alt: "Mobile IoT App Interface",
       title: "Mobile Access",
       description: "View your IoT devices on the go"
     },
     {
-      src: "/src/assets/hero-analytics.png",
+      src: heroAnalytics,
       alt: "Analytics and Insights",
       title: "Smart Analytics",
       description: "Get insights and predictions from your data"
