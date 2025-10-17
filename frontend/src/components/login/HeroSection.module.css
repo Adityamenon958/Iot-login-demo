@@ -281,12 +281,13 @@
 
 /* ✅ Special styling for mobile image (Image 2) */
 .imageCard2 .imageContainer {
-  height: 280px;
+  height: 200px;
   background: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 10px;
+  overflow: hidden;
 }
 
 .productImage {
@@ -302,6 +303,7 @@
   height: 100%;
   max-width: 100%;
   object-fit: contain;
+  object-position: center;
 }
 
 .imageCard:hover .productImage {
@@ -328,6 +330,7 @@
 .imageCard:hover .imageOverlay {
   transform: translateY(0);
 }
+
 
 .imageTitle {
   font-size: 1.1rem;
@@ -458,6 +461,17 @@
   
   .imageCard2 .imageContainer {
     height: 200px;
+    padding: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .imageCard2 .productImage {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
   }
   
   .ctaButtons {
@@ -500,6 +514,17 @@
   
   .imageCard2 .imageContainer {
     height: 160px;
+    padding: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .imageCard2 .productImage {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
   }
   
   .imageCard1,

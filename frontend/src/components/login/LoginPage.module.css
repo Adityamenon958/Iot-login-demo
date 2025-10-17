@@ -159,21 +159,145 @@
     }
   }
 
-  @media (max-width: 400px) {
-    .loginlogo {
-      width: 8rem; 
-      height: 8rem;
-    }
-    .iotText{
-      font-size: 1.2rem;
-      margin-top: 1rem;
-    }
-
-    .loginPlaceholder{
-      background-color: #4db3b3;
-      width: 17rem;
-     }
-     .loginTitle{
-      color: white;
-     }
+@media (max-width: 768px) {
+  .leftIndicator {
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
   }
+  
+  .rightIndicator {
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .scrollText {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .loginlogo {
+    width: 8rem; 
+    height: 8rem;
+  }
+  .iotText{
+    font-size: 1.2rem;
+    margin-top: 1rem;
+  }
+
+  .loginPlaceholder{
+    background-color: #4db3b3;
+    width: 17rem;
+   }
+   .loginTitle{
+    color: white;
+   }
+   
+   .leftIndicator,
+   .rightIndicator {
+     display: none; /* Hide on very small screens */
+   }
+}
+
+/* ✅ Dual scroll indicators - positioned relative to their parent cards */
+.iotCard {
+  position: relative;
+}
+
+.iotCard2 {
+  position: relative;
+}
+
+.leftIndicator {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  animation: fadeInUp 1s ease-out 1.2s both;
+  z-index: 10;
+}
+
+.rightIndicator {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  animation: fadeInUp 1s ease-out 1.2s both;
+  z-index: 10;
+}
+
+.scrollArrow {
+  width: 2px;
+  height: 30px;
+  background: #4db3b3;
+  position: relative;
+  animation: bounce 2s infinite;
+  border-radius: 1px;
+}
+
+.scrollArrow::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #4db3b3;
+}
+
+.scrollText {
+  font-size: 0.8rem;
+  color: #4db3b3;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ✅ Right indicator with light blue color for visibility */
+.rightIndicator .scrollArrow {
+  background: #C8E8EB; /* Light blue color from image */
+}
+
+.rightIndicator .scrollArrow::after {
+  border-top: 8px solid #C8E8EB; /* Light blue color from image */
+}
+
+.rightIndicator .scrollText {
+  color: #C8E8EB; /* Light blue color from image */
+}
+
+/* ✅ Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}

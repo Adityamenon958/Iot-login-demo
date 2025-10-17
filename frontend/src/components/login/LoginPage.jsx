@@ -203,6 +203,12 @@ const LoginPage = ({ selectedPlan }) => {
                   </div>
                 )}
               </Card.Body>
+              
+              {/* ✅ Left indicator inside iotCard */}
+              <div className={styles.leftIndicator}>
+                <div className={styles.scrollArrow}></div>
+                <span className={styles.scrollText}>Explore Features</span>
+              </div>
             </Card>
           </Col>
 
@@ -229,6 +235,12 @@ const LoginPage = ({ selectedPlan }) => {
                   </Button>
                 </div>
               </Card.Body>
+              
+              {/* ✅ Right indicator inside iotCard2 */}
+              <div className={styles.rightIndicator}>
+                <div className={styles.scrollArrow}></div>
+                <span className={styles.scrollText}>See More</span>
+              </div>
             </Card>
           </Col>
         </Row>
@@ -320,6 +332,7 @@ const LoginPage = ({ selectedPlan }) => {
           </Form>
         </Modal.Body>
       </Modal>
+
     </>
   );
 };
