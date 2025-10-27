@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import LoginPage from './LoginPage';
 import HeroSection from './HeroSection';
 import FeaturesShowcase from './FeaturesShowcase';
+import UseCasesSection from './UseCasesSection';
 import SocialProofSection from './SocialProofSection';
 import PreLoginSubscription from '../../pages/PreLoginSubscription';
 import './LoginCarousel.css';
@@ -65,6 +66,9 @@ export default function LoginCarousel() {
         </div>
         <div className="carousel-slide">
           <FeaturesShowcase />
+        </div>
+        <div className="carousel-slide">
+          <UseCasesSection />
         </div>
         <div className="carousel-slide">
           <SocialProofSection />

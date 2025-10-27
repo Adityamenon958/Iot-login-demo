@@ -37,14 +37,14 @@
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   margin-bottom: 1.5rem;
   opacity: 0;
-  transform: translateY(50px);
-  transition: all 0.8s ease-out;
+  transform: translateY(50px) scale(0.9);
+  transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: opacity, transform;
 }
 
 .titleAnimated {
-  opacity: 1;
-  transform: translateY(0);
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
 }
 
 .sectionSubtitle {
@@ -54,15 +54,15 @@
   max-width: 700px;
   margin: 0 auto;
   opacity: 0;
-  transform: translateY(30px);
-  transition: all 0.8s ease-out 0.3s;
+  transform: translateY(30px) scale(0.95);
+  transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s;
   will-change: opacity, transform;
   text-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
 }
 
 .subtitleAnimated {
-  opacity: 1;
-  transform: translateY(0);
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
 }
 
 /* ✅ Testimonial carousel styles */
@@ -84,10 +84,38 @@
   width: 100%;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ✅ Card animation states */
+.cardVisible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.cardChanging {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: all 0.2s ease-out;
 }
 
 .testimonialContent {
   text-align: center;
+  animation: contentFadeIn 0.6s ease-out 0.2s both;
+}
+
+/* ✅ Content animation */
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .profilePicture {
@@ -158,6 +186,11 @@
   transform: translateY(-50%) scale(1.1);
 }
 
+.navArrow:active {
+  transform: translateY(-50%) scale(0.95);
+  transition: transform 0.1s ease;
+}
+
 .navArrow:first-child {
   left: -60px;
 }
@@ -187,6 +220,17 @@
 .indicatorActive {
   background: white;
   transform: scale(1.2);
+  animation: indicatorPulse 2s ease-in-out infinite;
+}
+
+/* ✅ Indicator pulse animation */
+@keyframes indicatorPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+  }
 }
 
 /* ✅ Animations */
@@ -212,9 +256,9 @@
     padding: 0 1rem;
   }
   
-  /* Disable parallax on smaller devices for performance */
+  /* Keep parallax effect on tablets */
   .socialProofSection {
-    background-attachment: scroll;
+    background-attachment: fixed;
   }
   
   /* Adjust carousel for tablet */
@@ -241,6 +285,11 @@
   .sectionSubtitle {
     font-size: 1.1rem;
     padding: 0 1rem;
+  }
+  
+  /* Keep parallax on mobile for better UX */
+  .socialProofSection {
+    background-attachment: fixed;
   }
   
   /* Mobile carousel adjustments */
@@ -289,6 +338,11 @@
   
   .sectionSubtitle {
     font-size: 1rem;
+  }
+  
+  /* Disable parallax only on very small screens for performance */
+  .socialProofSection {
+    background-attachment: scroll;
   }
   
   /* Extra small mobile adjustments */

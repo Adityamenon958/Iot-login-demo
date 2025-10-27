@@ -1,11 +1,11 @@
-/* ✅ Features Showcase - Clean white background with animated cards */
+/* ✅ Features Showcase - Scroll-based color change (purple to pink) */
 .featuresSection {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
-  background-size: 400% 400%;
-  animation: gradientShift 15s ease infinite;
+  /* Dynamic gradient controlled by scroll - see inline styles in JSX */
+  background-size: 100% 100%;
   position: relative;
   overflow: hidden;
+  transition: background 0.1s ease-out;
 }
 
 .featuresSection::before {
@@ -317,17 +317,7 @@
   }
 }
 
-@keyframes gradientShift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
+/* ✅ Removed gradientShift animation - now using scroll-based color change */
 
 /* ✅ Abstract shape animations */
 @keyframes floatBlob1 {

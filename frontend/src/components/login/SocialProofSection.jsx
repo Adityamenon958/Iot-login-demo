@@ -6,8 +6,11 @@ import bgImage from '../../assets/bg-image-home.jpg';
 
 const SocialProofSection = () => {
   const sectionRef = useRef(null);
+  const titleRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isTitleVisible, setIsTitleVisible] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
+  const [isChanging, setIsChanging] = useState(false);
 
   const testimonials = [
     {
@@ -37,11 +40,13 @@ const SocialProofSection = () => {
   ];
 
   useEffect(() => {
-    // ✅ Intersection Observer for section visibility
+    // ✅ Intersection Observer for section visibility - resets animation every time
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true);
+        } else {
+          setIsVisible(false); // Reset animation when out of view
         }
       },
       { threshold: 0.3 }
@@ -55,22 +60,67 @@ const SocialProofSection = () => {
   }, []);
 
   useEffect(() => {
+    // ✅ Separate observer for title animation
+    const titleObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsTitleVisible(true);
+        } else {
+          setIsTitleVisible(false); // Reset title animation when out of view
+        }
+      },
+      { threshold: 0.2 }
+    );
+
+    if (titleRef.current) {
+      titleObserver.observe(titleRef.current);
+    }
+
+    return () => titleObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
     // ✅ Auto-rotate testimonials when section is visible
     if (isVisible) {
       const interval = setInterval(() => {
-        setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
+        if (!isChanging) {
+          setIsChanging(true);
+          setTimeout(() => {
+            setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
+            setTimeout(() => setIsChanging(false), 100);
+          }, 200);
+        }
       }, 5000);
 
       return () => clearInterval(interval);
     }
-  }, [isVisible, testimonials.length]);
+  }, [isVisible, testimonials.length, isChanging]);
 
   const nextTestimonial = () => {
-    setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
+    if (isChanging) return; // Prevent rapid clicking
+    setIsChanging(true);
+    setTimeout(() => {
+      setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
+      setTimeout(() => setIsChanging(false), 100);
+    }, 200);
   };
 
   const prevTestimonial = () => {
-    setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+    if (isChanging) return; // Prevent rapid clicking
+    setIsChanging(true);
+    setTimeout(() => {
+      setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+      setTimeout(() => setIsChanging(false), 100);
+    }, 200);
+  };
+
+  const goToTestimonial = (index) => {
+    if (isChanging || index === currentTestimonial) return;
+    setIsChanging(true);
+    setTimeout(() => {
+      setCurrentTestimonial(index);
+      setTimeout(() => setIsChanging(false), 100);
+    }, 200);
   };
 
   return (
@@ -81,10 +131,10 @@ const SocialProofSection = () => {
           {/* ✅ Section header - moved up */}
           <Row className="text-center mb-4">
             <Col lg={8} className="mx-auto">
-              <h2 className={`${styles.sectionTitle} ${isVisible ? styles.titleAnimated : ''}`}>
+              <h2 ref={titleRef} className={`${styles.sectionTitle} ${isTitleVisible ? styles.titleAnimated : ''}`}>
                 Trusted by Industry Leaders
               </h2>
-              <p className={`${styles.sectionSubtitle} ${isVisible ? styles.subtitleAnimated : ''}`}>
+              <p className={`${styles.sectionSubtitle} ${isTitleVisible ? styles.subtitleAnimated : ''}`}>
                 Join thousands of companies already using our platform to optimize their IoT operations.
               </p>
             </Col>
@@ -99,7 +149,7 @@ const SocialProofSection = () => {
                   ‹
                 </button>
                 
-                <div className={styles.testimonialCard}>
+                <div className={`${styles.testimonialCard} ${isChanging ? styles.cardChanging : styles.cardVisible}`}>
                   <div className={styles.testimonialContent}>
                     {/* ✅ Profile picture */}
                     <div className={styles.profilePicture}>
@@ -138,7 +188,7 @@ const SocialProofSection = () => {
                     className={`${styles.indicator} ${
                       index === currentTestimonial ? styles.indicatorActive : ''
                     }`}
-                    onClick={() => setCurrentTestimonial(index)}
+                    onClick={() => goToTestimonial(index)}
                   />
                 ))}
               </div>
