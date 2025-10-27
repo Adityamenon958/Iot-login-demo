@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Button, Modal, Form, Alert } from 'react-bootstrap';
 import styles from './LoginPage.module.css';
-import Logo from "../../assets/DashboardLogo.png";
+import Logo from "../../assets/GSN Solutions 1.png";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { SiGmail } from "react-icons/si";

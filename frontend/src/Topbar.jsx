@@ -3,7 +3,7 @@ import { Row, Col, Button, Modal, Image } from 'react-bootstrap';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import styles from './Toopbar.module.css';
-import Dlogo from '../src/assets/DashboardLogo.png';
+import Dlogo from '../src/assets/GSN Solutions 1.png';
 import { Menu, User, LogOut } from 'lucide-react';
 import { generateCompanyInitials } from './lib/userUtils';
 

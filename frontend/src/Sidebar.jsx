@@ -10,7 +10,7 @@ import { PlusSquare } from 'lucide-react';
 import { MdOutlineSubscriptions } from "react-icons/md";
 import { Truck } from 'lucide-react';
 import { PiElevatorDuotone } from "react-icons/pi";
-import Dlogo from './assets/DashboardLogo.png';
+import Dlogo from './assets/GSN Solutions 1.png';
 
 import axios from 'axios';
 

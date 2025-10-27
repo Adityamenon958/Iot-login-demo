@@ -4,7 +4,8 @@ import HeroSection from './HeroSection';
 import FeaturesShowcase from './FeaturesShowcase';
 import UseCasesSection from './UseCasesSection';
 import SocialProofSection from './SocialProofSection';
-import PreLoginSubscription from '../../pages/PreLoginSubscription';
+import SubscriptionSection from './SubscriptionSection';
+import ContactFooter from './ContactFooter';
 import './LoginCarousel.css';
 
 export default function LoginCarousel() {
@@ -74,7 +75,10 @@ export default function LoginCarousel() {
           <SocialProofSection />
         </div>
         <div className="carousel-slide">
-          <PreLoginSubscription />
+          <SubscriptionSection />
+        </div>
+        <div className="carousel-slide">
+          <ContactFooter />
         </div>
       </div>
     </div>

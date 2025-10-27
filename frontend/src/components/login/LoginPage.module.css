@@ -27,7 +27,7 @@
     margin: 0rem;
     width: 100%;
     height: 100%;
-    background-color: rgba(77, 179, 179, 0.3);
+    background-color: rgba(150, 100, 200, 0.25); /* Purple matching logo */
     
     border: none;
   }
@@ -38,7 +38,7 @@
     margin: 0rem;
     width: 100%;
     height: 100%;
-    background-color: #4db3b3;
+    background-color: #764ba2; /* Deep purple matching logo */
     border: none;
   }
   
@@ -243,7 +243,7 @@
 .scrollArrow {
   width: 2px;
   height: 30px;
-  background: #4db3b3;
+  background: #764ba2; /* Purple matching logo */
   position: relative;
   animation: bounce 2s infinite;
   border-radius: 1px;
@@ -259,27 +259,27 @@
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-top: 8px solid #4db3b3;
+  border-top: 8px solid #764ba2; /* Purple matching logo */
 }
 
 .scrollText {
   font-size: 0.8rem;
-  color: #4db3b3;
+  color: #764ba2; /* Purple matching logo */
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* ✅ Right indicator with light blue color for visibility */
+/* ✅ Right indicator with lighter purple for visibility */
 .rightIndicator .scrollArrow {
-  background: #C8E8EB; /* Light blue color from image */
+  background: rgba(255, 255, 255, 0.7); /* White for visibility on purple background */
 }
 
 .rightIndicator .scrollArrow::after {
-  border-top: 8px solid #C8E8EB; /* Light blue color from image */
+  border-top: 8px solid rgba(255, 255, 255, 0.7); /* White for visibility on purple background */
 }
 
 .rightIndicator .scrollText {
-  color: #C8E8EB; /* Light blue color from image */
+  color: rgba(255, 255, 255, 0.9); /* White for visibility on purple background */
 }
 
 /* ✅ Animations */
