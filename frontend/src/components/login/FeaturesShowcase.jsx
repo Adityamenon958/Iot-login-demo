@@ -7,8 +7,6 @@ const FeaturesShowcase = () => {
   const headerRef = useRef(null);
   const [visibleFeatures, setVisibleFeatures] = useState([]);
   const [isHeaderVisible, setIsHeaderVisible] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-
   useEffect(() => {
     // ✅ Intersection Observer for header animation
     const headerObserver = new IntersectionObserver(
@@ -55,45 +53,6 @@ const FeaturesShowcase = () => {
     };
   }, []);
 
-  useEffect(() => {
-    // ✅ Scroll progress tracking for background color change
-    const handleScroll = () => {
-      const section = sectionRef.current;
-      if (!section) return;
-
-      const rect = section.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const sectionHeight = rect.height;
-      
-      // Calculate scroll progress based on section position
-      // When section top is at bottom of viewport (just entering): progress = 0 (purple)
-      // When section bottom is at top of viewport (fully scrolled): progress = 1 (pink)
-      
-      let progress = 0;
-      
-      if (rect.top > viewportHeight) {
-        // Section not yet in view - still purple
-        progress = 0;
-      } else if (rect.bottom < 0) {
-        // Section fully scrolled past - full pink
-        progress = 1;
-      } else {
-        // Section is in viewport - calculate progress
-        // progress goes from 0 (top of section at bottom of viewport) to 1 (bottom of section at top of viewport)
-        const scrollRange = viewportHeight + sectionHeight;
-        const scrolled = viewportHeight - rect.top;
-        progress = Math.max(0, Math.min(1, scrolled / scrollRange));
-      }
-      
-      setScrollProgress(progress);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // Initial calculation
-    
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   const features = [
     {
       icon: "📊",
@@ -133,46 +92,12 @@ const FeaturesShowcase = () => {
     }
   ];
 
-  // ✅ Calculate gradient colors based on scroll progress
-  const purpleColor = "#764ba2"; // Deep purple (start)
-  const pinkColor = "#f093fb"; // Pink (end)
-  
-  // Interpolate between purple and pink based on scroll progress
-  const interpolateColor = (startColor, endColor, progress) => {
-    // Convert hex to RGB
-    const hexToRgb = (hex) => {
-      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-      } : null;
-    };
-    
-    const rgbToHex = (r, g, b) => {
-      return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-    };
-    
-    const startRgb = hexToRgb(startColor);
-    const endRgb = hexToRgb(endColor);
-    
-    if (!startRgb || !endRgb) return startColor;
-    
-    const r = Math.round(startRgb.r + (endRgb.r - startRgb.r) * progress);
-    const g = Math.round(startRgb.g + (endRgb.g - startRgb.g) * progress);
-    const b = Math.round(startRgb.b + (endRgb.b - startRgb.b) * progress);
-    
-    return rgbToHex(r, g, b);
-  };
-  
-  const currentColor = interpolateColor(purpleColor, pinkColor, scrollProgress);
-
   return (
     <div 
       className={styles.featuresSection} 
       ref={sectionRef}
       style={{
-        background: `linear-gradient(135deg, ${purpleColor} 0%, ${currentColor} 50%, ${pinkColor} 100%)`
+        background: `linear-gradient(180deg, #667eea 0%, #764ba2 100%)` /* Reversed gradient: top to bottom */
       }}
     >
       {/* ✅ Abstract floating shapes */}

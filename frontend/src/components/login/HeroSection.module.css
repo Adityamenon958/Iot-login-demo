@@ -2,12 +2,13 @@
 .heroSection {
   min-height: 100vh;
   position: relative;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(0deg, #667eea 0%, #764ba2 100%); /* Bottom to top gradient */
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem 0;
+  margin-bottom: -1px; /* Overlap to remove line */
 }
 
 /* ✅ Animated background elements */
