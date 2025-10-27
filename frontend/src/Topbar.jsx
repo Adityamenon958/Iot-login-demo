@@ -3,7 +3,7 @@ import { Row, Col, Button, Modal, Image } from 'react-bootstrap';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import styles from './Toopbar.module.css';
-import Dlogo from '../src/assets/GSN Solutions 1.png';
+import Dlogo from '../src/assets/GSN Solutions 2.png';
 import { Menu, User, LogOut } from 'lucide-react';
 import { generateCompanyInitials } from './lib/userUtils';
 
@@ -100,7 +100,7 @@ export default function Topbar({ toggleSidebar }) {
       </Col>
       <Col>
         <h4 className={`p-3 ps-0 h-100 d-flex align-items-center ${styles.DlogoText}`}>
-          Internet Of Things
+          {/* GSN Edge */}
         </h4>
       </Col>
       

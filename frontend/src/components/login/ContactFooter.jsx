@@ -143,26 +143,26 @@ const ContactFooter = () => {
       {/* ✅ Stats Section */}
       <div className={styles.statsSection}>
         <Container>
-          <Row className="g-4 text-center">
-            <Col md={3}>
+          <Row className="g-4 text-center justify-content-center">
+            <Col xs={12} sm={6} lg={3}>
               <div className={styles.statCard}>
                 <div className={styles.statNumber}>500+</div>
                 <div className={styles.statLabel}>Active Devices</div>
               </div>
             </Col>
-            <Col md={3}>
+            <Col xs={12} sm={6} lg={3}>
               <div className={styles.statCard}>
                 <div className={styles.statNumber}>100+</div>
                 <div className={styles.statLabel}>Happy Clients</div>
               </div>
             </Col>
-            <Col md={3}>
+            <Col xs={12} sm={6} lg={3}>
               <div className={styles.statCard}>
                 <div className={styles.statNumber}>99.9%</div>
                 <div className={styles.statLabel}>Uptime</div>
               </div>
             </Col>
-            <Col md={3}>
+            <Col xs={12} sm={6} lg={3}>
               <div className={styles.statCard}>
                 <div className={styles.statNumber}>24/7</div>
                 <div className={styles.statLabel}>Support</div>

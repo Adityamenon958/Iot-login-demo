@@ -1039,12 +1039,20 @@ app.post("/api/elevators/log", async (req, res) => {
 // ✅ Recent logs viewer (protected via JWT cookie) - Returns latest log per elevator
 app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
   try {
-    const { elevatorId, companyName, location, limit = 50 } = req.query;
+    const { role, companyName } = req.user; // ✅ Get from JWT token (not query params)
+    const { elevatorId, location, limit = 50 } = req.query;
     
-    // Build filter for aggregation
-    const matchFilter = {};
+    // ✅ 1. Build company filter (exactly like crane endpoints)
+    const companyFilter = role !== "superadmin" ? { elevatorCompany: companyName } : {};
+    
+    // ✅ 2. Build device allowlist from Device collection (ONCE per request)
+    const deviceQuery = role !== "superadmin" ? { companyName } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedDevicesById = new Set(allowedDevices.map(d => d.deviceId));
+    
+    // ✅ 3. Build match filter with company filtering
+    const matchFilter = { ...companyFilter };
     if (elevatorId) matchFilter.elevatorId = elevatorId;
-    if (companyName) matchFilter.elevatorCompany = companyName;
     if (location) matchFilter.location = new RegExp(location, 'i');
     
     // MongoDB aggregation pipeline to get latest log per elevator
@@ -1075,8 +1083,11 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
     
     const logs = await ElevatorEvent.aggregate(pipeline);
     
-    // ✅ Calculate working hours for each elevator
-    const logsWithWorkingHours = await Promise.all(logs.map(async (log) => {
+    // ✅ 4. Apply device allowlist filter (O(1) Set lookup)
+    const filteredLogs = logs.filter(log => allowedDevicesById.has(log.elevatorId));
+    
+    // ✅ Calculate working hours for each elevator (use filteredLogs instead of logs)
+    const logsWithWorkingHours = await Promise.all(filteredLogs.map(async (log) => {
       try {
         // Get all logs for this elevator, sorted by timestamp
         const allLogs = await ElevatorEvent.find({ elevatorId: log.elevatorId }).sort({ timestamp: 1 });
@@ -1341,6 +1352,12 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
       console.log(`🔓 [${requestId}] Superadmin: Showing all companies`);
     }
     
+    // ✅ Build device allowlist from Device collection (ONCE per request)
+    const deviceQuery = userRole !== "superadmin" ? { companyName: userCompany } : {};
+    const allowedDevices = await Device.find(deviceQuery).lean();
+    const allowedDevicesById = new Set(allowedDevices.map(d => d.deviceId));
+    console.log(`📱 [${requestId}] Device allowlist: ${allowedDevicesById.size} devices`);
+    
     // Time range filter (last X hours)
     if (hours) {
       const hoursAgo = new Date(Date.now() - parseInt(hours) * 60 * 60 * 1000);
@@ -1403,14 +1420,18 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
       console.log(`📦 [${requestId}] Fetched ${allLogs.length} paginated logs (no register filtering needed) (took ${Date.now() - fetchStartTime}ms)`);
     }
     
-    // ✅ Apply register-based filtering and search if needed
-    let filteredLogs = allLogs;
+    // ✅ Apply device allowlist filter first (O(1) Set lookup)
+    const deviceFilteredLogs = allLogs.filter(log => allowedDevicesById.has(log.elevatorId));
+    console.log(`🔧 [${requestId}] Device filter: ${allLogs.length} → ${deviceFilteredLogs.length} logs`);
     
-    if ((hasRegisterFilters || hasRegisterSearch) && allLogs.length > 0) {
+    // ✅ Apply register-based filtering and search if needed
+    let filteredLogs = deviceFilteredLogs;
+    
+    if ((hasRegisterFilters || hasRegisterSearch) && deviceFilteredLogs.length > 0) {
       console.log(`🔧 [${requestId}] Applying register-based filters and search...`);
       const filterStartTime = Date.now();
       
-      filteredLogs = allLogs.filter(log => {
+      filteredLogs = deviceFilteredLogs.filter(log => {
         // Skip logs without register data
         if (!log.data || log.data.length < 2) {
           return false;
@@ -1582,7 +1603,7 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
         }
       });
       
-      console.log(`🔧 [${requestId}] Register filtering and search: ${allLogs.length} → ${filteredLogs.length} logs (took ${Date.now() - filterStartTime}ms)`);
+      console.log(`🔧 [${requestId}] Register filtering and search: ${deviceFilteredLogs.length} → ${filteredLogs.length} logs (took ${Date.now() - filterStartTime}ms)`);
     }
     
     if (filteredLogs.length === 0) {

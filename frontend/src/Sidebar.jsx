@@ -159,7 +159,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
                 {companyName || 'Company'}
               </h5>
               <small className={`${styles.sidebarSubtitle}`}>
-                Internet Of Things
+                Edge
               </small>
             </div>
           </div>

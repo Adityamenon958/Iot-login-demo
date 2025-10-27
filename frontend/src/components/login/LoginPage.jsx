@@ -181,7 +181,7 @@ const LoginPage = ({ selectedPlan }) => {
               <Card.Body className="d-flex align-items-center justify-content-center flex-column">
                 <img src={Logo} className={styles.loginlogo} />
                 <Card.Title className={styles.iotText}>
-                  Your Intelligent IoT Dashboard Gateway
+                  GSN Edge
                 </Card.Title>
                 
                 {/* ✅ Plan selection context */}

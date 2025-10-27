@@ -266,6 +266,10 @@
     padding: 2rem 0;
   }
   
+  .statCard {
+    padding: 1.5rem;
+  }
+  
   .statNumber {
     font-size: 2.5rem;
   }
@@ -273,6 +277,18 @@
   .footerLinks,
   .socialLinks {
     justify-content: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .statCard {
+    padding: 1.5rem;
+    margin: 0 auto;
+    max-width: 300px;
+  }
+  
+  .statNumber {
+    font-size: 2rem;
   }
 }
 

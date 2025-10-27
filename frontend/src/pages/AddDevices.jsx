@@ -37,8 +37,11 @@ export default function AddDevice() {
 
         const isAuthorized = (role === "admin" || (role === "superadmin"));
         const hasSubscription = subscriptionStatus === "active";
+        
+        // ✅ Superadmin bypasses subscription check, admin/user need active subscription
+        const shouldRedirect = !isAuthorized || (role !== 'superadmin' && !hasSubscription);
 
-        if (!isAuthorized || !hasSubscription) {
+        if (shouldRedirect) {
           console.warn("Unauthorized or inactive subscription ❌");
           navigate('/dashboard');
         } else {

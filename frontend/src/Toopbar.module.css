@@ -5,11 +5,11 @@
   }
 
   .Dlogo{
-    width: 4rem;
-    height: 4rem;
+    width: 5.5rem;
+    height: 5.5rem;
     padding: 0;
     object-fit: contain;
-    max-height: 4rem;
+    max-height: 5.5rem;
     flex-shrink: 0;
   }
 
