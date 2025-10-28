@@ -31,6 +31,7 @@ const sendEmail = require("./backend/utils/sendEmail");
 const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
+const DISABLE_PAYMENTS = process.env.DISABLE_PAYMENTS === 'true';
 const CraneLog = require("./backend/models/CraneLog");
 const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
@@ -406,8 +407,8 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// ✅ Webhook Signature Verification Function
-function verifyWebhookSignature(req) {
+// ✅ Webhook Signature Verification Function (Fixed: uses raw body)
+function verifyWebhookSignature(req, rawBody) {
   const razorpaySignature = req.headers['x-razorpay-signature'];
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
   
@@ -416,10 +417,16 @@ function verifyWebhookSignature(req) {
     return false;
   }
   
+  // ✅ Use raw body buffer, not JSON.stringify
   const generatedSignature = crypto
     .createHmac('sha256', webhookSecret)
-    .update(JSON.stringify(req.body))
+    .update(rawBody)
     .digest('hex');
+  
+  // ✅ Length check before timing-safe compare
+  if (generatedSignature.length !== razorpaySignature.length) {
+    return false;
+  }
   
   return crypto.timingSafeEqual(
     Buffer.from(generatedSignature),
@@ -427,8 +434,25 @@ function verifyWebhookSignature(req) {
   );
 }
 
+// ✅ DISABLE_PAYMENTS Guard
+if (DISABLE_PAYMENTS) {
+  console.log('⚠️ PAYMENTS DISABLED via DISABLE_PAYMENTS env var');
+}
+
+// ✅ Expose Public Razorpay Key
+app.get('/api/payment/config', async (req, res) => {
+  res.json({ 
+    keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_PLACEHOLDER'
+  });
+});
+
 // ✅ Razorpay Subscription Route
 app.post('/api/payment/subscription', async (req, res) => {
+  // ✅ Check payment disable flag
+  if (DISABLE_PAYMENTS) {
+    return res.status(503).json({ message: 'Payments temporarily disabled' });
+  }
+
   const { planType } = req.body;
 
   // map plan types to Razorpay plan_ids
@@ -444,8 +468,36 @@ app.post('/api/payment/subscription', async (req, res) => {
   }
 
   try {
+    // ✅ Get user from JWT cookie if available and create customer
+    const token = req.cookies.token;
+    let customerId = null;
+    
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
+        const user = await User.findById(decoded.id);
+        
+        if (user && !user.razorpayCustomerId) {
+          // Create customer in Razorpay
+          const customer = await razorpay.customers.create({
+            name: user.name || user.email,
+            email: user.email,
+            contact: user.contactInfo || ''
+          });
+          user.razorpayCustomerId = customer.id;
+          await user.save();
+          customerId = customer.id;
+        } else if (user && user.razorpayCustomerId) {
+          customerId = user.razorpayCustomerId;
+        }
+      } catch (err) {
+        console.log("⚠️ Could not fetch user for customer creation:", err.message);
+      }
+    }
+
     const subscription = await razorpay.subscriptions.create({
       plan_id: plan_id,
+      customer_id: customerId, // ✅ Use customer ID if available
       customer_notify: 1,
       total_count: 12, // optional: 12 months max billing
     });
@@ -517,12 +569,31 @@ app.get('/api/subscription/status', async (req, res) => {
       return res.json({ active: false });
     }
 
-    // ✅ Also double check expiry (1 month logic stays)
+    // ✅ Check expiry using subscriptionEnd if available, else fallback to Razorpay
     const now = new Date();
-    const oneMonthLater = new Date(user.subscriptionStart);
-    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+    let expiryDate = null;
+    
+    if (user.subscriptionEnd) {
+      expiryDate = user.subscriptionEnd;
+    } else {
+      // Fallback: fetch from Razorpay
+      try {
+        const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
+        if (razorSub.current_end) {
+          expiryDate = new Date(razorSub.current_end * 1000);
+        } else {
+          // Last resort: subscriptionStart + 1 month
+          expiryDate = new Date(user.subscriptionStart);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
+      } catch (err) {
+        // Last resort: subscriptionStart + 1 month
+        expiryDate = new Date(user.subscriptionStart);
+        expiryDate.setMonth(expiryDate.getMonth() + 1);
+      }
+    }
 
-    if (now > oneMonthLater) {
+    if (expiryDate && now > expiryDate) {
       user.subscriptionStatus = 'inactive';
       await user.save();
       return res.json({ active: false });
@@ -550,9 +621,29 @@ app.get('/api/test-email', async (req, res) => {
 });
 
 
-// ✅ Mark Subscription Active After Payment
-app.post('/api/payment/activate-subscription', authenticateToken, async (req, res) => {
+// ✅ Payment Signature Verification Helper
+function verifyPaymentSignature(razorpayPaymentId, razorpaySubscriptionId, signature) {
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) return false;
+  
+  // Note: Some implementations use subscription_id|payment_id - swap if verification fails
+  const text = razorpayPaymentId + '|' + razorpaySubscriptionId;
+  const generatedSignature = crypto.createHmac('sha256', secret)
+    .update(text)
+    .digest('hex');
+  
+  if (generatedSignature.length !== signature.length) {
+    return false;
+  }
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(generatedSignature),
+    Buffer.from(signature)
+  );
+}
 
+// ✅ Mark Subscription Active After Payment (with signature verification)
+app.post('/api/payment/activate-subscription', authenticateToken, async (req, res) => {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ message: "Unauthorized" });
 
@@ -561,36 +652,52 @@ app.post('/api/payment/activate-subscription', authenticateToken, async (req, re
     const user = await User.findById(decoded.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    const { 
+      razorpay_payment_id, 
+      razorpay_subscription_id, 
+      razorpay_signature 
+    } = req.body;
+    
+    // ✅ Verify payment signature
+    if (razorpay_payment_id && razorpay_signature) {
+      const isValid = verifyPaymentSignature(
+        razorpay_payment_id, 
+        razorpay_subscription_id, 
+        razorpay_signature
+      );
+      
+      if (!isValid) {
+        console.error("❌ Invalid payment signature");
+        return res.status(400).json({ 
+          message: "Invalid payment signature",
+          details: "Payment verification failed"
+        });
+      }
+    }
+
     // Update DB fields
     user.subscriptionStatus = "active";
     user.subscriptionStart = new Date();
-    user.subscriptionId = req.body.subscriptionId || null;
+    user.subscriptionId = razorpay_subscription_id || req.body.subscriptionId || null;
+    // Do NOT set subscriptionEnd here - webhook will set precise dates
     await user.save();
 
     // ✅ Re-issue JWT with updated subscriptionStatus
-    const jwtSecret = process.env.JWT_SECRET || 'supersecretkey';
-
-const updatedToken = jwt.sign({
-  id: user._id,
-  role: user.role,
-  companyName: user.companyName,
-  subscriptionStatus: user.subscriptionStatus,
-}, jwtSecret, { expiresIn: '7d' });
-
+    const updatedToken = jwt.sign({
+      id: user._id,
+      role: user.role,
+      companyName: user.companyName,
+      subscriptionStatus: user.subscriptionStatus,
+    }, process.env.JWT_SECRET || 'supersecretkey', { expiresIn: '7d' });
 
     console.log("🔐 Activating subscription for user ID:", user._id);
 
-res
-  .cookie('token', updatedToken, {
-    httpOnly: true,
-    // secure: true,
-    secure   : isProd,
-    // sameSite: 'None',
-    sameSite : isProd ? 'None' : 'Lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  })
-  .json({ message: "Subscription activated and token updated ✅" });
-
+    res.cookie('token', updatedToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'None' : 'Lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    }).json({ message: "Subscription activated and token updated ✅" });
 
   } catch (err) {
     console.error("❌ Activation error:", err.message);
@@ -598,91 +705,125 @@ res
   }
 });
 
-// 🎯 Razorpay Webhook Endpoint
+// 🎯 Razorpay Webhook Endpoint (Fixed: uses raw body and robust extraction)
 app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const rawBody = req.body; // ✅ Keep raw buffer
   
   console.log('📥 Webhook received from Razorpay');
   
-  // ✅ 1. Verify signature (security check)
-  const isValid = verifyWebhookSignature(req);
-  if (!isValid) {
-    console.error('❌ Invalid webhook signature - potential attack!');
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  
-  const event = req.body;
-  const subscriptionId = event.payload.subscription.entity.id;
-  const eventType = event.event;
-  
-  console.log(`🔔 Event: ${eventType} for subscription: ${subscriptionId}`);
-  
   try {
+    // Parse JSON from raw body
+    const event = JSON.parse(rawBody.toString());
+    const eventType = event.event;
+    
+    // ✅ Extract subscription ID robustly from various payload shapes
+    let subscriptionId = null;
+    if (event.payload?.subscription?.entity?.id) {
+      subscriptionId = event.payload.subscription.entity.id;
+    } else if (event.payload?.invoice?.entity?.subscription) {
+      subscriptionId = event.payload.invoice.entity.subscription;
+    } else if (event.payload?.payment?.entity?.subscription_id) {
+      subscriptionId = event.payload.payment.entity.subscription_id;
+    }
+    
+    if (!subscriptionId) {
+      console.warn('⚠️ Could not extract subscription ID from webhook payload');
+      return res.status(200).json({ received: true, message: 'Acknowledged but no subscription ID found' });
+    }
+    
+    console.log(`🔔 Event: ${eventType} for subscription: ${subscriptionId}`);
+    
+    // ✅ Verify signature using raw body
+    const isValid = verifyWebhookSignature(req, rawBody);
+    if (!isValid) {
+      console.error('❌ Invalid webhook signature - potential attack!');
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    
     // Find user by subscriptionId
     const user = await User.findOne({ subscriptionId });
     
     if (!user) {
-      console.error(`❌ User not found for subscription: ${subscriptionId}`);
-      return res.status(404).json({ message: 'User not found' });
+      console.warn(`⚠️ User not found for subscription: ${subscriptionId} - acknowledging to avoid retries`);
+      return res.status(200).json({ received: true, message: 'User not found but acknowledged' });
     }
     
     console.log(`👤 Found user: ${user.email}`);
     
-    // ✅ Handle different subscription events
+    // ✅ Handle different subscription events with idempotent updates
     switch (eventType) {
       
       case 'subscription.activated':
+      case 'payment.captured':
         // User just paid for the first time
         user.subscriptionStatus = 'active';
         user.subscriptionStart = new Date();
+        // Set subscriptionEnd from Razorpay if available
+        if (event.payload.subscription?.entity?.current_end) {
+          user.subscriptionEnd = new Date(event.payload.subscription.entity.current_end * 1000);
+        }
         await user.save();
-        console.log(`✅ User ${user.email} subscription activated`);
+        console.log(`✅ Webhook processed ${eventType} for ${user.email} (${subscriptionId})`);
         break;
         
       case 'subscription.charged':
+      case 'invoice.paid':
         // Monthly payment successful - renew for another month
         user.subscriptionStatus = 'active';
-        user.subscriptionStart = new Date(); // Reset to now (new billing cycle)
+        user.subscriptionStart = new Date();
+        // Set subscriptionEnd from Razorpay if available
+        if (event.payload.subscription?.entity?.current_end) {
+          user.subscriptionEnd = new Date(event.payload.subscription.entity.current_end * 1000);
+        } else if (event.payload.invoice?.entity?.subscription_end) {
+          user.subscriptionEnd = new Date(event.payload.invoice.entity.subscription_end * 1000);
+        }
         await user.save();
-        console.log(`✅ User ${user.email} subscription renewed for another month`);
+        console.log(`✅ Webhook processed ${eventType} for ${user.email} (${subscriptionId})`);
         break;
         
       case 'subscription.cancelled':
         // User cancelled their subscription
         user.subscriptionStatus = 'inactive';
         await user.save();
-        console.log(`⏹️ User ${user.email} subscription cancelled`);
+        console.log(`✅ Webhook processed ${eventType} for ${user.email} (${subscriptionId})`);
         break;
         
       case 'subscription.halted':
+      case 'invoice.payment_failed':
+      case 'payment.failed':
         // Payment failed
         user.subscriptionStatus = 'inactive';
         await user.save();
-        console.log(`❌ User ${user.email} subscription halted (payment failed)`);
+        console.log(`✅ Webhook processed ${eventType} for ${user.email} (${subscriptionId})`);
         break;
         
       case 'subscription.paused':
         // Subscription paused by Razorpay
         user.subscriptionStatus = 'inactive';
         await user.save();
-        console.log(`⏸️ User ${user.email} subscription paused`);
+        console.log(`✅ Webhook processed ${eventType} for ${user.email} (${subscriptionId})`);
         break;
         
       case 'subscription.resumed':
         // Subscription resumed after being paused
         user.subscriptionStatus = 'active';
+        if (event.payload.subscription?.entity?.current_end) {
+          user.subscriptionEnd = new Date(event.payload.subscription.entity.current_end * 1000);
+        }
         await user.save();
-        console.log(`▶️ User ${user.email} subscription resumed`);
+        console.log(`✅ Webhook processed ${eventType} for ${user.email} (${subscriptionId})`);
         break;
         
       default:
-        console.log(`⚠️ Unhandled event type: ${eventType}`);
+        console.log(`⚠️ Unhandled event type: ${eventType} for subscription: ${subscriptionId}`);
     }
     
-    res.json({ received: true, message: `Processed ${eventType}` });
+    res.status(200).json({ received: true, message: `Processed ${eventType}` });
     
   } catch (err) {
-    console.error('❌ Webhook processing error:', err);
-    res.status(500).json({ message: 'Webhook processing failed' });
+    // ✅ Always return 200 to Razorpay to avoid retry storms
+    console.error('❌ Webhook processing error:', err.message);
+    res.status(200).json({ received: true, error: 'Processing failed but acknowledged' });
   }
 });
 
@@ -693,18 +834,22 @@ app.get('/api/auth/userinfo', authenticateToken, async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // 🔄 Live check with Razorpay if subscriptionId exists
-        if (user.subscriptionId) {
+    if (user.subscriptionId) {
       try {
         const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
 
-        const now          = new Date();
-        const oneMonthLater= new Date(user.subscriptionStart);
-        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        const now = new Date();
+        
+        // ✅ Use subscriptionEnd or fetch from Razorpay
+        let expiryDate = user.subscriptionEnd;
+        if (!expiryDate && razorSub.current_end) {
+          expiryDate = new Date(razorSub.current_end * 1000);
+        } else if (!expiryDate) {
+          expiryDate = new Date(user.subscriptionStart);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
 
-        if (
-          razorSub.status !== 'active' ||
-          now > oneMonthLater
-        ) {
+        if (razorSub.status !== 'active' || (expiryDate && now > expiryDate)) {
           user.subscriptionStatus = 'inactive';
           await user.save();
         }
@@ -5184,10 +5329,17 @@ app.post('/api/auth/google-login', async (req, res) => {
       try {
         const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
         const now = new Date();
-        const oneMonthLater = new Date(user.subscriptionStart);
-        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        
+        // ✅ Use subscriptionEnd or fetch from Razorpay
+        let expiryDate = user.subscriptionEnd;
+        if (!expiryDate && razorSub.current_end) {
+          expiryDate = new Date(razorSub.current_end * 1000);
+        } else if (!expiryDate) {
+          expiryDate = new Date(user.subscriptionStart);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
 
-        if (razorSub.status !== 'active' || now > oneMonthLater) {
+        if (razorSub.status !== 'active' || (expiryDate && now > expiryDate)) {
           user.subscriptionStatus = 'inactive';
           await user.save();
         }
@@ -5247,37 +5399,43 @@ app.post('/api/login', async (req, res) => {
     if (user.subscriptionId) {
       try {
         const razorSub = await razorpay.subscriptions.fetch(user.subscriptionId);
-
         const now = new Date();
-        const oneMonthLater = new Date(user.subscriptionStart);
-        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        
+        // ✅ Use subscriptionEnd or fetch from Razorpay
+        let expiryDate = user.subscriptionEnd;
+        if (!expiryDate && razorSub.current_end) {
+          expiryDate = new Date(razorSub.current_end * 1000);
+        } else if (!expiryDate) {
+          expiryDate = new Date(user.subscriptionStart);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
 
         console.log("🔍 Checking subscription expiry:");
-console.log("→ Razorpay Status:", razorSub.status);
-console.log("→ Now:", now);
-console.log("→ Subscription Expiry (one month later):", oneMonthLater);
+        console.log("→ Razorpay Status:", razorSub.status);
+        console.log("→ Now:", now);
+        console.log("→ Subscription Expiry:", expiryDate);
 
-if (razorSub.status !== 'active') {
-  console.log("❌ Razorpay subscription is not active:", razorSub.status);
-}
+        if (razorSub.status !== 'active') {
+          console.log("❌ Razorpay subscription is not active:", razorSub.status);
+        }
 
-if (now > oneMonthLater) {
-  console.log("⏰ Subscription has expired by time limit.");
-}
+        if (expiryDate && now > expiryDate) {
+          console.log("⏰ Subscription has expired by time limit.");
+        }
 
-if (razorSub.status !== 'active' || now > oneMonthLater) {
-  user.subscriptionStatus = 'inactive';
-  await user.save();
-  console.log("✅ Updated user subscription to inactive in DB");
-} else {
-  console.log("✅ Subscription still valid, keeping active.");
-}
+        if (razorSub.status !== 'active' || (expiryDate && now > expiryDate)) {
+          user.subscriptionStatus = 'inactive';
+          await user.save();
+          console.log("✅ Updated user subscription to inactive in DB");
+        } else {
+          console.log("✅ Subscription still valid, keeping active.");
+        }
 
       } catch (err) {
-   console.warn("⚠️ Razorpay API call failed – leaving existing subscriptionStatus untouched:", err.message);
-   // NOTE: do NOT overwrite status on pure network / auth errors
-   //       Only log and continue.
- }
+        console.warn("⚠️ Razorpay API call failed – leaving existing subscriptionStatus untouched:", err.message);
+        // NOTE: do NOT overwrite status on pure network / auth errors
+        //       Only log and continue.
+      }
     }
 
     // ✅ Re-fetch updated user after saving

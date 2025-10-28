@@ -18,9 +18,17 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  subscriptionEnd: {
+    type: Date,
+    default: null
+  },
   subscriptionId: {
     type: String,
     default: null,
+  },
+  razorpayCustomerId: {
+    type: String,
+    default: null
   },
 
   // ✅ User Status Field

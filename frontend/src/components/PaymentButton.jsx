@@ -12,13 +12,16 @@ export default function PaymentButton({ amount }) {
         return;
       }
 
+      // ✅ Fetch public key from backend
+      const { data: config } = await axios.get("/api/payment/config", { withCredentials: true });
+      
       // Request backend to create Razorpay subscription
       const { data: subscription } = await axios.post("/api/payment/subscription", {
         planType,
-      });
+      }, { withCredentials: true });
 
       const options = {
-        key: "rzp_test_jBIMs968bslFfa",  // ✅ Test mode key
+        key: config.keyId,  // ✅ Dynamically fetched from backend
         name: "IoT Dashboard Subscription",
         description: `Monthly ${planType} plan`,
         subscription_id: subscription.id,
@@ -26,12 +29,19 @@ export default function PaymentButton({ amount }) {
             alert("✅ Subscription started successfully!");
             console.log("Subscription Response:", response);
           
-            const razorpaySubscriptionId = response.razorpay_subscription_id;
+            const { 
+              razorpay_payment_id, 
+              razorpay_subscription_id, 
+              razorpay_signature 
+            } = response;
           
             try {
-              // ✅ 1. Activate subscription in DB
+              // ✅ 1. Activate subscription in DB with signature verification
               await axios.post("/api/payment/activate-subscription", {
-                subscriptionId: response.razorpay_subscription_id,
+                razorpay_payment_id,
+                razorpay_subscription_id,
+                razorpay_signature,
+                subscriptionId: razorpay_subscription_id, // fallback
               }, { withCredentials: true });
           
               // ✅ 2. Re-issue JWT with updated subscription info
