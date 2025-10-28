@@ -20,6 +20,7 @@ const SimulatorDevice = require('./backend/models/SimulatorDevice');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const Razorpay = require('razorpay');
+const crypto = require('crypto');  // ✅ For webhook signature verification
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const Alarm = require("./backend/models/Alarm"); 
 const app = express();
@@ -405,6 +406,27 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+// ✅ Webhook Signature Verification Function
+function verifyWebhookSignature(req) {
+  const razorpaySignature = req.headers['x-razorpay-signature'];
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  
+  if (!razorpaySignature || !webhookSecret) {
+    console.error('❌ Missing webhook signature or secret');
+    return false;
+  }
+  
+  const generatedSignature = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(JSON.stringify(req.body))
+    .digest('hex');
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(generatedSignature),
+    Buffer.from(razorpaySignature)
+  );
+}
+
 // ✅ Razorpay Subscription Route
 app.post('/api/payment/subscription', async (req, res) => {
   const { planType } = req.body;
@@ -576,8 +598,93 @@ res
   }
 });
 
-
-
+// 🎯 Razorpay Webhook Endpoint
+app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  
+  console.log('📥 Webhook received from Razorpay');
+  
+  // ✅ 1. Verify signature (security check)
+  const isValid = verifyWebhookSignature(req);
+  if (!isValid) {
+    console.error('❌ Invalid webhook signature - potential attack!');
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  
+  const event = req.body;
+  const subscriptionId = event.payload.subscription.entity.id;
+  const eventType = event.event;
+  
+  console.log(`🔔 Event: ${eventType} for subscription: ${subscriptionId}`);
+  
+  try {
+    // Find user by subscriptionId
+    const user = await User.findOne({ subscriptionId });
+    
+    if (!user) {
+      console.error(`❌ User not found for subscription: ${subscriptionId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    console.log(`👤 Found user: ${user.email}`);
+    
+    // ✅ Handle different subscription events
+    switch (eventType) {
+      
+      case 'subscription.activated':
+        // User just paid for the first time
+        user.subscriptionStatus = 'active';
+        user.subscriptionStart = new Date();
+        await user.save();
+        console.log(`✅ User ${user.email} subscription activated`);
+        break;
+        
+      case 'subscription.charged':
+        // Monthly payment successful - renew for another month
+        user.subscriptionStatus = 'active';
+        user.subscriptionStart = new Date(); // Reset to now (new billing cycle)
+        await user.save();
+        console.log(`✅ User ${user.email} subscription renewed for another month`);
+        break;
+        
+      case 'subscription.cancelled':
+        // User cancelled their subscription
+        user.subscriptionStatus = 'inactive';
+        await user.save();
+        console.log(`⏹️ User ${user.email} subscription cancelled`);
+        break;
+        
+      case 'subscription.halted':
+        // Payment failed
+        user.subscriptionStatus = 'inactive';
+        await user.save();
+        console.log(`❌ User ${user.email} subscription halted (payment failed)`);
+        break;
+        
+      case 'subscription.paused':
+        // Subscription paused by Razorpay
+        user.subscriptionStatus = 'inactive';
+        await user.save();
+        console.log(`⏸️ User ${user.email} subscription paused`);
+        break;
+        
+      case 'subscription.resumed':
+        // Subscription resumed after being paused
+        user.subscriptionStatus = 'active';
+        await user.save();
+        console.log(`▶️ User ${user.email} subscription resumed`);
+        break;
+        
+      default:
+        console.log(`⚠️ Unhandled event type: ${eventType}`);
+    }
+    
+    res.json({ received: true, message: `Processed ${eventType}` });
+    
+  } catch (err) {
+    console.error('❌ Webhook processing error:', err);
+    res.status(500).json({ message: 'Webhook processing failed' });
+  }
+});
 
 // ✅ User Info from Token (via Cookie)
 app.get('/api/auth/userinfo', authenticateToken, async (req, res) => {

@@ -18,7 +18,7 @@ export default function PaymentButton({ amount }) {
       });
 
       const options = {
-        key: "rzp_test_jBIMs968bslFfa",
+        key: "rzp_test_jBIMs968bslFfa",  // ✅ Test mode key
         name: "IoT Dashboard Subscription",
         description: `Monthly ${planType} plan`,
         subscription_id: subscription.id,
