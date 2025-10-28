@@ -366,8 +366,13 @@ app.use(cors({
   credentials: true,
 }));
 
-// ✅ Standard JSON parser for all routes
-app.use(express.json());
+// ✅ Standard JSON parser for all routes (capture raw body for webhook signature verification)
+app.use(express.json({ 
+  verify: (req, res, buf) => { 
+    req.rawBody = buf; 
+  }, 
+  limit: '1mb' 
+}));
 app.use(cookieParser());
 
 
@@ -705,15 +710,16 @@ app.post('/api/payment/activate-subscription', authenticateToken, async (req, re
   }
 });
 
-// 🎯 Razorpay Webhook Endpoint (Fixed: uses raw body and robust extraction)
-app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const rawBody = req.body; // ✅ Keep raw buffer
-  
+// 🎯 Razorpay Webhook Endpoint (Fixed: uses captured raw body for signature verification)
+app.post('/api/payment/webhook', async (req, res) => {
   console.log('📥 Webhook received from Razorpay');
   
   try {
-    // Parse JSON from raw body
-    const event = JSON.parse(rawBody.toString());
+    // ✅ Get raw body for signature verification (captured by express.json verify callback)
+    const rawBody = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body), 'utf8'));
+    
+    // ✅ Parse event from body (already parsed by express.json or use req.body)
+    const event = req.body || JSON.parse(rawBody.toString('utf8'));
     const eventType = event.event;
     
     // ✅ Extract subscription ID robustly from various payload shapes
