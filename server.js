@@ -463,7 +463,7 @@ app.post('/api/payment/subscription', async (req, res) => {
   // map plan types to Razorpay plan_ids
   const planMap = {
     standard: 'plan_RYoEBi5zzuFtZN', // ₹99 plan
-    premium: 'plan_QahYvtyIlkGGuA',  // ₹199 plan
+    premium: 'plan_RZC6jyeDfEJyoI',  // ₹199 plan
   };
 
   const plan_id = planMap[planType];
