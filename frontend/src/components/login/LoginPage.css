@@ -27,20 +27,23 @@
 .custom_modal .btn-close {
     background: none;
     border: none;
-    color: #4db3b3;
+    /* ✅ Purple theme color */
+    color: #764ba2;
     font-size: 1.2rem;
     padding: 0.5rem;
     transition: all 0.2s ease;
   }
 
 .custom_modal .btn-close:hover {
-    color: #3a9a9a;
+    /* ✅ Darker purple on hover */
+    color: #667eea;
     transform: scale(1.1);
   }
 
 .custom_modal .btn-close:focus {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(77, 179, 179, 0.25);
+    /* ✅ Purple focus shadow */
+    box-shadow: 0 0 0 2px rgba(118, 75, 162, 0.25);
   }
 
   .custom_label {
@@ -59,15 +62,18 @@
   }
 
   .custom_input:focus {
-    border-color: #4db3b3;
-    box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25);
+    /* ✅ Purple theme focus border */
+    border-color: #764ba2;
+    /* ✅ Purple focus shadow */
+    box-shadow: 0 0 0 0.2rem rgba(118, 75, 162, 0.25);
     outline: none;
   }
 
   .signIn {
     height: 54px;
     border-radius: 1rem;
-    background-color: #4db3b3;
+    /* ✅ Purple theme button background */
+    background-color: #764ba2;
     border: none;
     font-weight: 600;
     font-size: 1rem;
@@ -75,31 +81,38 @@
   }
 
   .signIn:hover {
-    background-color: #3a9a9a;
+    /* ✅ Lighter purple on hover */
+    background-color: #667eea;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(77, 179, 179, 0.3);
+    /* ✅ Purple hover shadow */
+    box-shadow: 0 4px 12px rgba(118, 75, 162, 0.3);
   }
 
   .signIn:focus {
-    background-color: #3a9a9a;
-    box-shadow: 0 0 0 0.2rem rgba(77, 179, 179, 0.25);
+    /* ✅ Lighter purple on focus */
+    background-color: #667eea;
+    /* ✅ Purple focus shadow */
+    box-shadow: 0 0 0 0.2rem rgba(118, 75, 162, 0.25);
   }
 
   .signIn:active {
-    background-color: #2d7a7a;
+    /* ✅ Darker purple when clicked */
+    background-color: #5a3d7d;
     transform: translateY(0);
   }
 
   /* Forgot password link styling */
   .custom_modal a {
-    color: #4db3b3;
+    /* ✅ Purple theme link color */
+    color: #764ba2;
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s ease;
   }
 
   .custom_modal a:hover {
-    color: #3a9a9a;
+    /* ✅ Lighter purple on hover */
+    color: #667eea;
     text-decoration: underline;
   }
 
@@ -119,7 +132,8 @@
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: #4db3b3;
+    /* ✅ Purple theme eye icon color */
+    color: #764ba2;
     cursor: pointer;
     padding: 8px;
     display: flex;
@@ -131,14 +145,18 @@
   }
 
   .password-toggle-btn:hover {
-    color: #3a9a9a;
-    background-color: rgba(77, 179, 179, 0.1);
+    /* ✅ Lighter purple on hover */
+    color: #667eea;
+    /* ✅ Purple hover background */
+    background-color: rgba(118, 75, 162, 0.1);
   }
 
   .password-toggle-btn:focus {
     outline: none;
-    color: #3a9a9a;
-    background-color: rgba(77, 179, 179, 0.15);
+    /* ✅ Lighter purple on focus */
+    color: #667eea;
+    /* ✅ Purple focus background */
+    background-color: rgba(118, 75, 162, 0.15);
   }
 
   /* ✅ Password input error state - custom styling without Bootstrap overlap */

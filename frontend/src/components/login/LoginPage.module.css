@@ -52,7 +52,8 @@
   .loginPlaceholder {
     padding: 2rem;
     text-align: center;
-    background-color: #eefafc;
+    /* ✅ Light pastel purple matching theme */
+    background-color: #e6dff2;
     border-radius: 2rem;
     height: 14rem;
     width: 20rem;
