@@ -33,12 +33,13 @@ function normalizeCode(code) {
 
   const stringCode = String(code).trim().toUpperCase();
 
-  if (stringCode === "" || stringCode === "0") {
+  if (stringCode === "" || stringCode === "0" || stringCode === "000") {
     return "000";
   }
 
   // Left pad purely numeric codes to preserve leading zeros from PDF lookup (e.g., 013A)
-  if (/^\d+$/.test(stringCode) && stringCode.length === 3) {
+  // But skip "000" since it's already handled above
+  if (/^\d+$/.test(stringCode) && stringCode.length === 3 && stringCode !== "000") {
     return stringCode.padStart(4, "0");
   }
 

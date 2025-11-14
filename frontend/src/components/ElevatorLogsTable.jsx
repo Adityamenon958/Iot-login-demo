@@ -615,10 +615,10 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
                     <td>
                       <div>
                         <Badge
-                          bg={row.errorInfo && row.errorInfo.code !== '000' ? 'danger' : 'success'}
+                          bg={row.errorInfo && row.errorInfo.code !== '000' && row.errorInfo.code !== '0000' ? 'danger' : 'success'}
                           style={{ fontSize: '0.75rem' }}
                         >
-                          {row.errorInfo ? row.errorInfo.code : '000'}
+                          {row.errorInfo ? (row.errorInfo.code === '0000' ? '000' : row.errorInfo.code) : '000'}
                         </Badge>
                       </div>
                       <small className="d-block fw-bold mt-1" style={{ fontSize: '0.75rem', color: '#495057' }}>

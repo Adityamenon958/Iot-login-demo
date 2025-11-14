@@ -720,7 +720,8 @@ export default function ElevatorOverview() {
                   title: 'No Reported Error',
                   description: 'System running normally. No active fault codes.'
                 };
-                const isNoIssue = errorInfo.code === '000';
+                // ✅ Check for both "000" and "0000" (backward compatibility) or if title indicates no error
+                const isNoIssue = errorInfo.code === '000' || errorInfo.code === '0000' || errorInfo.title === 'No Reported Error';
 
                 return (
                   <div 
@@ -741,7 +742,8 @@ export default function ElevatorOverview() {
                         borderLeft: `4px solid ${borderColor}`,
                         background: `linear-gradient(to right, ${backgroundFade} 0%, ${backgroundFade} 20%, #f5f5f5 50%, #f5f5f5 100%)`,
                         boxShadow: coloredShadow,
-                        maxHeight: '280px'
+                        maxHeight: '280px',
+                        overflow: 'hidden'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-5px)';
@@ -752,7 +754,7 @@ export default function ElevatorOverview() {
                         e.currentTarget.style.boxShadow = coloredShadow;
                       }}
                     >
-                      <Card.Body className="p-2">
+                      <Card.Body className="p-2" style={{ overflow: 'hidden', wordWrap: 'break-word' }}>
                         <div className="d-flex justify-content-between align-items-start mb-1">
                           <Badge bg="dark" className="px-2 py-1" style={{ fontSize: '0.7rem' }}>
                             {elevator.id}
@@ -841,7 +843,11 @@ export default function ElevatorOverview() {
                             className="d-block"
                             style={{
                               fontSize: '0.7rem',
-                              color: '#495057'
+                              color: '#495057',
+                              wordWrap: 'break-word',
+                              overflowWrap: 'break-word',
+                              whiteSpace: 'normal',
+                              lineHeight: '1.3'
                             }}
                           >
                             {isNoIssue ? 'System running normally.' : errorInfo.title}
