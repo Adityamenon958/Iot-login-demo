@@ -1,0 +1,1151 @@
+{
+  "000": {
+    "title": "No Reported Error",
+    "description": "System running normally. No active fault codes."
+  },
+  "10F": {
+    "title": "Inverter EST - MELD overload",
+    "description": "Inverter EST - MELD overload"
+  },
+  "10E": {
+    "title": "Inverter EST - overload operation",
+    "description": "Inverter EST - overload operation"
+  },
+  "105": {
+    "title": "Inverter EST - E1 board door circuit error",
+    "description": "Inverter EST - E1 board door circuit error"
+  },
+  "101": {
+    "title": "Inverter EST - Hardware overcurrent",
+    "description": "Inverter EST - Hardware overcurrent"
+  },
+  "11F": {
+    "title": "Inverter SFS - Manual overload",
+    "description": "Inverter SFS - Manual overload"
+  },
+  "11D": {
+    "title": "Inverter SFS - overload operation",
+    "description": "Inverter SFS - overload operation"
+  },
+  "118": {
+    "title": "Inverter SFS - anomalous temperature for radiator",
+    "description": "Inverter SFS - anomalous temperature for radiator"
+  },
+  "112": {
+    "title": "Inverter SFS - IPC clear order",
+    "description": "Inverter SFS - IPC clear order"
+  },
+  "111": {
+    "title": "Inverter SFS - INV protective circuit on",
+    "description": "Inverter SFS - INV protective circuit on"
+  },
+  "12E": {
+    "title": "Inverter NFS - overload operation",
+    "description": "Inverter NFS - overload operation"
+  },
+  "12D": {
+    "title": "Inverter NFS - overload operation",
+    "description": "Inverter NFS - overload operation"
+  },
+  "12A": {
+    "title": "Inverter NFS - inverter anomalous temperature",
+    "description": "Inverter NFS - inverter anomalous temperature"
+  },
+  "129": {
+    "title": "Inverter NFS - rectifier anomalous temperature",
+    "description": "Inverter NFS - rectifier anomalous temperature"
+  },
+  "128": {
+    "title": "Inverter NFS - anomalous temperature for radiator",
+    "description": "Inverter NFS - anomalous temperature for radiator"
+  },
+  "13F": {
+    "title": "Inverter NRS - overload operation",
+    "description": "Inverter NRS - overload operation"
+  },
+  "13E": {
+    "title": "Inverter NRS - overload operation",
+    "description": "Inverter NRS - overload operation"
+  },
+  "13D": {
+    "title": "Inverter NRS - overload operation (Regeneration Resistor)",
+    "description": "Inverter NRS - overload operation (Regeneration Resistor)"
+  },
+  "13A": {
+    "title": "Inverter NRS - inverter anomalous temperature",
+    "description": "Inverter NRS - inverter anomalous temperature"
+  },
+  "139": {
+    "title": "Inverter NRS - rectifier anomalous temperature",
+    "description": "Inverter NRS - rectifier anomalous temperature"
+  },
+  "138": {
+    "title": "Inverter NRS - anomalous temperature for radiator",
+    "description": "Inverter NRS - anomalous temperature for radiator"
+  },
+  "132": {
+    "title": "Inverter NRS - Current inspection zero shifting error",
+    "description": "Inverter NRS - Current inspection zero shifting error"
+  },
+  "131": {
+    "title": "Inverter NRS - DC-CT error",
+    "description": "Inverter NRS - DC-CT error"
+  },
+  "204": {
+    "title": "Rectifier EST - Main circuit over voltage",
+    "description": "Rectifier EST - Main circuit over voltage"
+  },
+  "202": {
+    "title": "Rectifier EST - Main circuit charging error",
+    "description": "Rectifier EST - Main circuit charging error"
+  },
+  "211": {
+    "title": "Rectifier SFS - Main circuit under voltage",
+    "description": "Rectifier SFS - Main circuit under voltage"
+  },
+  "235": {
+    "title": "Rectifier NRS - Main circuit under voltage",
+    "description": "Rectifier NRS - Main circuit under voltage"
+  },
+  "233": {
+    "title": "Rectifier NRS - Main circuit charging error inspection",
+    "description": "Rectifier NRS - Main circuit charging error inspection"
+  },
+  "231": {
+    "title": "Rectifier NRS - Main circuit on charging",
+    "description": "Rectifier NRS - Main circuit on charging"
+  },
+  "337": {
+    "title": "Rectifier NRS - E1 board power error",
+    "description": "Rectifier NRS - E1 board power error"
+  },
+  "336": {
+    "title": "Rectifier NRS - Phase lock loop error",
+    "description": "Rectifier NRS - Phase lock loop error"
+  },
+  "333": {
+    "title": "Rectifier NRS - Over current at rectifier side",
+    "description": "Rectifier NRS - Over current at rectifier side"
+  },
+  "413": {
+    "title": "Power SFS - 12V power error",
+    "description": "Power SFS - 12V power error"
+  },
+  "411": {
+    "title": "Power SFS - E1 board power error",
+    "description": "Power SFS - E1 board power error"
+  },
+  "441": {
+    "title": "Power ALT - RAM backup start",
+    "description": "Power ALT - RAM backup start"
+  },
+  "51D": {
+    "title": "Relay SFS - BKP pull-in error",
+    "description": "Relay SFS - BKP pull-in error"
+  },
+  "51C": {
+    "title": "Relay SFS - #LB ON error",
+    "description": "Relay SFS - #LB ON error"
+  },
+  "51B": {
+    "title": "Relay SFS - #5 ON error",
+    "description": "Relay SFS - #5 ON error"
+  },
+  "51A": {
+    "title": "Relay SFS - #BK2 forcible OFF error",
+    "description": "Relay SFS - #BK2 forcible OFF error"
+  },
+  "519": {
+    "title": "Relay SFS - #BK2 OFF error",
+    "description": "Relay SFS - #BK2 OFF error"
+  },
+  "518": {
+    "title": "Relay SFS - #BK2 ON error",
+    "description": "Relay SFS - #BK2 ON error"
+  },
+  "517": {
+    "title": "Relay SFS - #BK1 forcible OFF error",
+    "description": "Relay SFS - #BK1 forcible OFF error"
+  },
+  "516": {
+    "title": "Relay SFS - #BK1 OFF error",
+    "description": "Relay SFS - #BK1 OFF error"
+  },
+  "515": {
+    "title": "Relay SFS - #BK1 ON error",
+    "description": "Relay SFS - #BK1 ON error"
+  },
+  "514": {
+    "title": "Relay SFS - #LB forcible OFF error",
+    "description": "Relay SFS - #LB forcible OFF error"
+  },
+  "513": {
+    "title": "Relay SFS - #LB OFF error",
+    "description": "Relay SFS - #LB OFF error"
+  },
+  "512": {
+    "title": "Relay SFS - #5 forcible OFF error",
+    "description": "Relay SFS - #5 forcible OFF error"
+  },
+  "511": {
+    "title": "Relay SFS - #5 OFF error",
+    "description": "Relay SFS - #5 OFF error"
+  },
+  "53F": {
+    "title": "Relay NRS - BKP pull-in error",
+    "description": "Relay NRS - BKP pull-in error"
+  },
+  "53E": {
+    "title": "Relay NRS - #RL OFF fault",
+    "description": "Relay NRS - #RL OFF fault"
+  },
+  "53D": {
+    "title": "Relay NRS - #RL ON error",
+    "description": "Relay NRS - #RL ON error"
+  },
+  "53C": {
+    "title": "Relay NRS - #BK2 forcible OFF error",
+    "description": "Relay NRS - #BK2 forcible OFF error"
+  },
+  "53B": {
+    "title": "Relay NRS - #BK2 OFF fault",
+    "description": "Relay NRS - #BK2 OFF fault"
+  },
+  "53A": {
+    "title": "Relay NRS - #BK2 ON fault",
+    "description": "Relay NRS - #BK2 ON fault"
+  },
+  "539": {
+    "title": "Relay NRS - #BK1 forcible OFF error",
+    "description": "Relay NRS - #BK1 forcible OFF error"
+  },
+  "538": {
+    "title": "Relay NRS - #BK1 OFF fault",
+    "description": "Relay NRS - #BK1 OFF fault"
+  },
+  "537": {
+    "title": "Relay NRS - #BK1 ON error",
+    "description": "Relay NRS - #BK1 ON error"
+  },
+  "536": {
+    "title": "Relay NRS - #LB forcible OFF error",
+    "description": "Relay NRS - #LB forcible OFF error"
+  },
+  "535": {
+    "title": "Relay NRS - #LB OFF error",
+    "description": "Relay NRS - #LB OFF error"
+  },
+  "534": {
+    "title": "Relay NRS - #LB ON error",
+    "description": "Relay NRS - #LB ON error"
+  },
+  "533": {
+    "title": "Relay NRS - #5 forcible OFF error",
+    "description": "Relay NRS - #5 forcible OFF error"
+  },
+  "532": {
+    "title": "Relay NRS - #5 OFF error",
+    "description": "Relay NRS - #5 OFF error"
+  },
+  "531": {
+    "title": "Relay NRS - #5 ON error",
+    "description": "Relay NRS - #5 ON error"
+  },
+  "54B": {
+    "title": "Relay ALT - DSP side BKON error",
+    "description": "Relay ALT - DSP side BKON error"
+  },
+  "546": {
+    "title": "Relay ALT - #RL OFF error",
+    "description": "Relay ALT - #RL OFF error"
+  },
+  "545": {
+    "title": "Relay ALT - #RL ON error",
+    "description": "Relay ALT - #RL ON error"
+  },
+  "544": {
+    "title": "Relay ALT - #BK2 ON error",
+    "description": "Relay ALT - #BK2 ON error"
+  },
+  "543": {
+    "title": "Relay ALT - #BK1 ON error",
+    "description": "Relay ALT - #BK1 ON error"
+  },
+  "542": {
+    "title": "Relay ALT - #LB ON error",
+    "description": "Relay ALT - #LB ON error"
+  },
+  "541": {
+    "title": "Relay ALT - #5 ON error",
+    "description": "Relay ALT - #5 ON error"
+  },
+  "614": {
+    "title": "Relay SFS - #BK3 forcible OFF error",
+    "description": "Relay SFS - #BK3 forcible OFF error"
+  },
+  "613": {
+    "title": "Relay SFS - #BK3 OFF error",
+    "description": "Relay SFS - #BK3 OFF error"
+  },
+  "612": {
+    "title": "Relay SFS - #BK3 ON error",
+    "description": "Relay SFS - #BK3 ON error"
+  },
+  "611": {
+    "title": "Relay SFS - 60 or 60A error",
+    "description": "Relay SFS - 60 or 60A error"
+  },
+  "63C": {
+    "title": "Relay NRS - #BK3 forcible OFF error",
+    "description": "Relay NRS - #BK3 forcible OFF error"
+  },
+  "63B": {
+    "title": "Relay NRS - #BK3 OFF fault",
+    "description": "Relay NRS - #BK3 OFF fault"
+  },
+  "63A": {
+    "title": "Relay NRS - #BK3 ON fault",
+    "description": "Relay NRS - #BK3 ON fault"
+  },
+  "638": {
+    "title": "Relay NRS - Car top (rear) SSD ON error",
+    "description": "Relay NRS - Car top (rear) SSD ON error"
+  },
+  "637": {
+    "title": "Relay NRS - Car top (rear) SSU ON error",
+    "description": "Relay NRS - Car top (rear) SSU ON error"
+  },
+  "636": {
+    "title": "Relay NRS - Car top (front) SSD ON error",
+    "description": "Relay NRS - Car top (front) SSD ON error"
+  },
+  "635": {
+    "title": "Relay NRS - Car top (front) SSU ON error",
+    "description": "Relay NRS - Car top (front) SSU ON error"
+  },
+  "634": {
+    "title": "Relay NRS - Control panel SSD ON error",
+    "description": "Relay NRS - Control panel SSD ON error"
+  },
+  "633": {
+    "title": "Relay NRS - Control panel SSU ON error",
+    "description": "Relay NRS - Control panel SSU ON error"
+  },
+  "632": {
+    "title": "Relay NRS - HDRN OFF error",
+    "description": "Relay NRS - HDRN OFF error"
+  },
+  "631": {
+    "title": "Relay NRS - HDRN ON error",
+    "description": "Relay NRS - HDRN ON error"
+  },
+  "71F": {
+    "title": "Safety circuit SFS - #29 safety circuit",
+    "description": "Safety circuit SFS - #29 safety circuit"
+  },
+  "71D": {
+    "title": "Safety circuit SFS - Control panel door open",
+    "description": "Safety circuit SFS - Control panel door open"
+  },
+  "719": {
+    "title": "Safety circuit SFS - Maintenance SFS test",
+    "description": "Safety circuit SFS - Maintenance SFS test"
+  },
+  "708": {
+    "title": "Safety circuit EST - Maintenance Auto Operation in Lower Speed",
+    "description": "Safety circuit EST - Maintenance Auto Operation in Lower Speed"
+  },
+  "713": {
+    "title": "Safety circuit SFS - EST acts twice",
+    "description": "Safety circuit SFS - EST acts twice"
+  },
+  "712": {
+    "title": "Safety circuit SFS - Management software error",
+    "description": "Safety circuit SFS - Management software error"
+  },
+  "711": {
+    "title": "Safety circuit SFS - DSP software error",
+    "description": "Safety circuit SFS - DSP software error"
+  },
+  "739": {
+    "title": "Safety circuit NRS - Maintenance operation NRS",
+    "description": "Safety circuit NRS - Maintenance operation NRS"
+  },
+  "735": {
+    "title": "Safety circuit NRS - Unable to restart management function",
+    "description": "Safety circuit NRS - Unable to restart management function"
+  },
+  "734": {
+    "title": "Safety circuit NRS - E-STOP twice",
+    "description": "Safety circuit NRS - E-STOP twice"
+  },
+  "733": {
+    "title": "Safety circuit NRS - E-STOP once",
+    "description": "Safety circuit NRS - E-STOP once"
+  },
+  "732": {
+    "title": "Safety circuit NRS - Unable to restart at DSP side",
+    "description": "Safety circuit NRS - Unable to restart at DSP side"
+  },
+  "731": {
+    "title": "Safety circuit NRS - #89 circuit OFF",
+    "description": "Safety circuit NRS - #89 circuit OFF"
+  },
+  "74F": {
+    "title": "Safety circuit ALT - Group management software",
+    "description": "Safety circuit ALT - Group management software"
+  },
+  "74E": {
+    "title": "Safety circuit ALT - Management software",
+    "description": "Safety circuit ALT - Management software"
+  },
+  "74D": {
+    "title": "Safety circuit ALT - Safety circuit reset command",
+    "description": "Safety circuit ALT - Safety circuit reset command"
+  },
+  "741": {
+    "title": "Safety circuit ALT - E-STOP once",
+    "description": "Safety circuit ALT - E-STOP once"
+  },
+  "803": {
+    "title": "Door EST - Safety door error (for RUS)",
+    "description": "Door EST - Safety door error (for RUS)"
+  },
+  "802": {
+    "title": "Door EST - Hall door open error (for RUS)",
+    "description": "Door EST - Hall door open error (for RUS)"
+  },
+  "801": {
+    "title": "Door EST - Hall door lock shorting inspection",
+    "description": "Door EST - Hall door lock shorting inspection"
+  },
+  "812": {
+    "title": "Door SFS - SS_DKC door open operation (DSP side)",
+    "description": "Door SFS - SS_DKC door open operation (DSP side)"
+  },
+  "811": {
+    "title": "Door SFS - Door open during operation",
+    "description": "Door SFS - Door open during operation"
+  },
+  "827": {
+    "title": "Door NFS - Rear door SDE OFF error",
+    "description": "Door NFS - Rear door SDE OFF error"
+  },
+  "826": {
+    "title": "Door NFS - Front door SDE OFF error",
+    "description": "Door NFS - Front door SDE OFF error"
+  },
+  "825": {
+    "title": "Door NFS - Rear door CLT OFF error",
+    "description": "Door NFS - Rear door CLT OFF error"
+  },
+  "824": {
+    "title": "Door NFS - Front door CLT OFF error",
+    "description": "Door NFS - Front door CLT OFF error"
+  },
+  "823": {
+    "title": "Door NFS - 41DG OFF error",
+    "description": "Door NFS - 41DG OFF error"
+  },
+  "83F": {
+    "title": "Door NRS - SW_CFD41A Hall door lock shorting inspection",
+    "description": "Door NRS - SW_CFD41A Hall door lock shorting inspection"
+  },
+  "835": {
+    "title": "Door NRS - Safety door error (for RUS)",
+    "description": "Door NRS - Safety door error (for RUS)"
+  },
+  "834": {
+    "title": "Door NRS - Hall door open error (for RUS)",
+    "description": "Door NRS - Hall door open error (for RUS)"
+  },
+  "833": {
+    "title": "Door NRS - Rear door OLT OFF error",
+    "description": "Door NRS - Rear door OLT OFF error"
+  },
+  "832": {
+    "title": "Door NRS - Front door OLT OFF error",
+    "description": "Door NRS - Front door OLT OFF error"
+  },
+  "831": {
+    "title": "Door NRS - 41DG ON error",
+    "description": "Door NRS - 41DG ON error"
+  },
+  "84D": {
+    "title": "Door ALT - Rear door OLT OFF error",
+    "description": "Door ALT - Rear door OLT OFF error"
+  },
+  "84C": {
+    "title": "Door ALT - Rear door OLT ON error",
+    "description": "Door ALT - Rear door OLT ON error"
+  },
+  "84B": {
+    "title": "Door ALT - Front door OLT OFF error",
+    "description": "Door ALT - Front door OLT OFF error"
+  },
+  "84A": {
+    "title": "Door ALT - Front door OLT ON error",
+    "description": "Door ALT - Front door OLT ON error"
+  },
+  "849": {
+    "title": "Door ALT - Rear door FG OFF error",
+    "description": "Door ALT - Rear door FG OFF error"
+  },
+  "848": {
+    "title": "Door ALT - Rear door FG ON error",
+    "description": "Door ALT - Rear door FG ON error"
+  },
+  "847": {
+    "title": "Door ALT - Front door FG OFF error",
+    "description": "Door ALT - Front door FG OFF error"
+  },
+  "846": {
+    "title": "Door ALT - Front door FG ON error",
+    "description": "Door ALT - Front door FG ON error"
+  },
+  "845": {
+    "title": "Door ALT - Rear door CLT OFF error",
+    "description": "Door ALT - Rear door CLT OFF error"
+  },
+  "844": {
+    "title": "Door ALT - Rear door CLT ON error",
+    "description": "Door ALT - Rear door CLT ON error"
+  },
+  "843": {
+    "title": "Door ALT - Front door CLT OFF error",
+    "description": "Door ALT - Front door CLT OFF error"
+  },
+  "842": {
+    "title": "Door ALT - Front door CLT ON error",
+    "description": "Door ALT - Front door CLT ON error"
+  },
+  "841": {
+    "title": "Door ALT - Hall door DS door open detected (EN81)",
+    "description": "Door ALT - Hall door DS door open detected (EN81)"
+  },
+  "90B": {
+    "title": "Hoistway EST - Unintentional car movement",
+    "description": "Hoistway EST - Unintentional car movement"
+  },
+  "91F": {
+    "title": "Hoistway SFS - Up moving UL switch acts",
+    "description": "Hoistway SFS - Up moving UL switch acts"
+  },
+  "91E": {
+    "title": "Hoistway SFS - Down moving DL switch acts",
+    "description": "Hoistway SFS - Down moving DL switch acts"
+  },
+  "91D": {
+    "title": "Hoistway SFS - Both UL/DL act",
+    "description": "Hoistway SFS - Both UL/DL act"
+  },
+  "917": {
+    "title": "Hoistway SFS - Rear door RLD OFF error",
+    "description": "Hoistway SFS - Rear door RLD OFF error"
+  },
+  "916": {
+    "title": "Hoistway SFS - Rear door RLU OFF error",
+    "description": "Hoistway SFS - Rear door RLU OFF error"
+  },
+  "915": {
+    "title": "Hoistway SFS - Front door RLD OFF error",
+    "description": "Hoistway SFS - Front door RLD OFF error"
+  },
+  "914": {
+    "title": "Hoistway SFS - Front door RLU OFF error",
+    "description": "Hoistway SFS - Front door RLU OFF error"
+  },
+  "93F": {
+    "title": "Hoistway NRS - Both UL/DL act",
+    "description": "Hoistway NRS - Both UL/DL act"
+  },
+  "93E": {
+    "title": "Hoistway NRS - Both USR/DSR act",
+    "description": "Hoistway NRS - Both USR/DSR act"
+  },
+  "93D": {
+    "title": "Hoistway NRS - Rear door leveling switch error",
+    "description": "Hoistway NRS - Rear door leveling switch error"
+  },
+  "93C": {
+    "title": "Hoistway NRS - Front door leveling switch error",
+    "description": "Hoistway NRS - Front door leveling switch error"
+  },
+  "93B": {
+    "title": "Hoistway NRS - DZ inspection circuit ON/OFF error",
+    "description": "Hoistway NRS - DZ inspection circuit ON/OFF error"
+  },
+  "93A": {
+    "title": "Hoistway NRS - Terminal switch error",
+    "description": "Hoistway NRS - Terminal switch error"
+  },
+  "938": {
+    "title": "Hoistway NRS - Rear door RLD ON error",
+    "description": "Hoistway NRS - Rear door RLD ON error"
+  },
+  "937": {
+    "title": "Hoistway NRS - Rear door RLU ON error",
+    "description": "Hoistway NRS - Rear door RLU ON error"
+  },
+  "936": {
+    "title": "Hoistway NRS - Rear door DZD ON error",
+    "description": "Hoistway NRS - Rear door DZD ON error"
+  },
+  "935": {
+    "title": "Hoistway NRS - Rear door DZU ON error",
+    "description": "Hoistway NRS - Rear door DZU ON error"
+  },
+  "934": {
+    "title": "Hoistway NRS - Front door RLD ON error",
+    "description": "Hoistway NRS - Front door RLD ON error"
+  },
+  "933": {
+    "title": "Hoistway NRS - Front door RLU ON error",
+    "description": "Hoistway NRS - Front door RLU ON error"
+  },
+  "932": {
+    "title": "Hoistway NRS - Front door DZD ON error",
+    "description": "Hoistway NRS - Front door DZD ON error"
+  },
+  "931": {
+    "title": "Hoistway NRS - Front door DZU ON error",
+    "description": "Hoistway NRS - Front door DZU ON error"
+  },
+  "94C": {
+    "title": "Hoistway ALT - Landing door counting error",
+    "description": "Hoistway ALT - Landing door counting error"
+  },
+  "94B": {
+    "title": "Hoistway ALT - DZ inspection circuit ON/OFF error",
+    "description": "Hoistway ALT - DZ inspection circuit ON/OFF error"
+  },
+  "942": {
+    "title": "Hoistway ALT - Logical error of terminal switch activation",
+    "description": "Hoistway ALT - Logical error of terminal switch activation"
+  },
+  "941": {
+    "title": "Hoistway ALT - Terminal switch ON/OFF error",
+    "description": "Hoistway ALT - Terminal switch ON/OFF error"
+  },
+  "95B": {
+    "title": "Hoistway ALT2 - UCMP reset error",
+    "description": "Hoistway ALT2 - UCMP reset error"
+  },
+  "A03": {
+    "title": "Traction EST - W2 board error",
+    "description": "Traction EST - W2 board error"
+  },
+  "A02": {
+    "title": "Traction EST - W2 board not connected",
+    "description": "Traction EST - W2 board not connected"
+  },
+  "A1D": {
+    "title": "Traction SFS - JIKER error",
+    "description": "Traction SFS - JIKER error"
+  },
+  "A1C": {
+    "title": "Traction SFS - Encoder cable OFF",
+    "description": "Traction SFS - Encoder cable OFF"
+  },
+  "A1B": {
+    "title": "Traction SFS - UVW phase loss inspection",
+    "description": "Traction SFS - UVW phase loss inspection"
+  },
+  "A1A": {
+    "title": "Traction SFS - #BK2 forcible OFF",
+    "description": "Traction SFS - #BK2 forcible OFF"
+  },
+  "A19": {
+    "title": "Traction SFS - #BK3 forcible OFF",
+    "description": "Traction SFS - #BK3 forcible OFF"
+  },
+  "A18": {
+    "title": "Traction SFS - #BK1 forcible OFF",
+    "description": "Traction SFS - #BK1 forcible OFF"
+  },
+  "A12": {
+    "title": "Traction SFS - Insufficient brake torque",
+    "description": "Traction SFS - Insufficient brake torque"
+  },
+  "A26": {
+    "title": "Traction NFS - Over current inspection on the drive",
+    "description": "Traction NFS - Over current inspection on the drive"
+  },
+  "A22": {
+    "title": "Traction NFS - DC-CT disconnection error",
+    "description": "Traction NFS - DC-CT disconnection error"
+  },
+  "A21": {
+    "title": "Traction NFS - Motor temperature error",
+    "description": "Traction NFS - Motor temperature error"
+  },
+  "A3F": {
+    "title": "Traction NRS - F phase error",
+    "description": "Traction NRS - F phase error"
+  },
+  "A3E": {
+    "title": "Traction NRS - PM Z phase error",
+    "description": "Traction NRS - PM Z phase error"
+  },
+  "A3D": {
+    "title": "Traction NRS - Magnetic pole not learnt yet",
+    "description": "Traction NRS - Magnetic pole not learnt yet"
+  },
+  "A3C": {
+    "title": "Traction NRS - UVW phase loss inspection",
+    "description": "Traction NRS - UVW phase loss inspection"
+  },
+  "A3B": {
+    "title": "Traction NRS - JIKER error",
+    "description": "Traction NRS - JIKER error"
+  },
+  "A3A": {
+    "title": "Traction NRS - W2 board error",
+    "description": "Traction NRS - W2 board error"
+  },
+  "A39": {
+    "title": "Traction NRS - W2 board not connected",
+    "description": "Traction NRS - W2 board not connected"
+  },
+  "A36": {
+    "title": "Traction NRS - Over current inspection on the drive",
+    "description": "Traction NRS - Over current inspection on the drive"
+  },
+  "A33": {
+    "title": "Traction NRS - Torque not inspected for 15 days",
+    "description": "Traction NRS - Torque not inspected for 15 days"
+  },
+  "A32": {
+    "title": "Traction NRS - Brake error",
+    "description": "Traction NRS - Brake error"
+  },
+  "A31": {
+    "title": "Traction NRS - Motor temperature error",
+    "description": "Traction NRS - Motor temperature error"
+  },
+  "A45": {
+    "title": "Traction ALT - Brake DCCT1 error",
+    "description": "Traction ALT - Brake DCCT1 error"
+  },
+  "A42": {
+    "title": "Traction ALT - Brake DCCT1 disconnects",
+    "description": "Traction ALT - Brake DCCT1 disconnects"
+  },
+  "A41": {
+    "title": "Traction ALT - Brake coil 1 over current",
+    "description": "Traction ALT - Brake coil 1 over current"
+  },
+  "A55": {
+    "title": "Traction ALT2 - Brake DCCT2 error",
+    "description": "Traction ALT2 - Brake DCCT2 error"
+  },
+  "A52": {
+    "title": "Traction ALT2 - Brake DCCT2 disconnects",
+    "description": "Traction ALT2 - Brake DCCT2 disconnects"
+  },
+  "A51": {
+    "title": "Traction ALT2 - Brake coil 2 over current",
+    "description": "Traction ALT2 - Brake coil 2 over current"
+  },
+  "B0F": {
+    "title": "Speed EST - Speed loss at DSP side",
+    "description": "Speed EST - Speed loss at DSP side"
+  },
+  "B0E": {
+    "title": "Speed EST - DSP side over speed",
+    "description": "Speed EST - DSP side over speed"
+  },
+  "B0D": {
+    "title": "Speed EST - Urgent stop at DSP side",
+    "description": "Speed EST - Urgent stop at DSP side"
+  },
+  "B0A": {
+    "title": "Speed EST - Unintentional movement of steel band",
+    "description": "Speed EST - Unintentional movement of steel band"
+  },
+  "B09": {
+    "title": "Speed EST - Slip of safety gear in inspection or retention work",
+    "description": "Speed EST - Slip of safety gear in inspection or retention work"
+  },
+  "B08": {
+    "title": "Speed EST - Slip of steel wire",
+    "description": "Speed EST - Slip of steel wire"
+  },
+  "B07": {
+    "title": "Speed EST - Re-leveling error",
+    "description": "Speed EST - Re-leveling error"
+  },
+  "B05": {
+    "title": "Speed EST - Encoder deviation",
+    "description": "Speed EST - Encoder deviation"
+  },
+  "B04": {
+    "title": "Speed EST - Traction machine stalls",
+    "description": "Speed EST - Traction machine stalls"
+  },
+  "B03": {
+    "title": "Speed EST - Reversal movement",
+    "description": "Speed EST - Reversal movement"
+  },
+  "B02": {
+    "title": "Speed EST - Over speed",
+    "description": "Speed EST - Over speed"
+  },
+  "B01": {
+    "title": "Speed EST - Under speed",
+    "description": "Speed EST - Under speed"
+  },
+  "B18": {
+    "title": "Speed SFS - Manual over speed",
+    "description": "Speed SFS - Manual over speed"
+  },
+  "B14": {
+    "title": "Speed SFS - Beyond travel",
+    "description": "Speed SFS - Beyond travel"
+  },
+  "B13": {
+    "title": "Speed SFS - Deceleration time limit",
+    "description": "Speed SFS - Deceleration time limit"
+  },
+  "B12": {
+    "title": "Speed SFS - Deviation error of speed figure",
+    "description": "Speed SFS - Deviation error of speed figure"
+  },
+  "B11": {
+    "title": "Speed SFS - Under speed",
+    "description": "Speed SFS - Under speed"
+  },
+  "B23": {
+    "title": "Speed NFS - Deceleration time limit (Stop slowly)",
+    "description": "Speed NFS - Deceleration time limit (Stop slowly)"
+  },
+  "B21": {
+    "title": "Speed NFS - Re-leveling time limit",
+    "description": "Speed NFS - Re-leveling time limit"
+  },
+  "B39": {
+    "title": "Speed NRS - Bending quantity of steel band over 2,150,000",
+    "description": "Speed NRS - Bending quantity of steel band over 2,150,000"
+  },
+  "B38": {
+    "title": "Speed NRS - Slip of safety gear in inspection or retention work",
+    "description": "Speed NRS - Slip of safety gear in inspection or retention work"
+  },
+  "B37": {
+    "title": "Speed NRS - FMS failure",
+    "description": "Speed NRS - FMS failure"
+  },
+  "B36": {
+    "title": "Speed NRS - Re-leveling error",
+    "description": "Speed NRS - Re-leveling error"
+  },
+  "B35": {
+    "title": "Speed NRS - Traction machine stalls",
+    "description": "Speed NRS - Traction machine stalls"
+  },
+  "B34": {
+    "title": "Speed NRS - TSD operation",
+    "description": "Speed NRS - TSD operation"
+  },
+  "B33": {
+    "title": "Speed NRS - Floor selector error",
+    "description": "Speed NRS - Floor selector error"
+  },
+  "B32": {
+    "title": "Speed NRS - Operation inspection",
+    "description": "Speed NRS - Operation inspection"
+  },
+  "B31": {
+    "title": "Speed NRS - Comparison between speed and figure (16 times)",
+    "description": "Speed NRS - Comparison between speed and figure (16 times)"
+  },
+  "B49": {
+    "title": "Speed ALT - Unintentional movement of steel band",
+    "description": "Speed ALT - Unintentional movement of steel band"
+  },
+  "B46": {
+    "title": "Speed ALT - TLP operation detected",
+    "description": "Speed ALT - TLP operation detected"
+  },
+  "B44": {
+    "title": "Speed ALT - Magnetic pole not learnt yet",
+    "description": "Speed ALT - Magnetic pole not learnt yet"
+  },
+  "B43": {
+    "title": "Speed ALT - Floor selector deviation error",
+    "description": "Speed ALT - Floor selector deviation error"
+  },
+  "B42": {
+    "title": "Speed ALT - Floor selector deviation warning",
+    "description": "Speed ALT - Floor selector deviation warning"
+  },
+  "B52": {
+    "title": "Speed ALT2 - Bending quantity of steel band within 2,100,000–2,150,000",
+    "description": "Speed ALT2 - Bending quantity of steel band within 2,100,000–2,150,000"
+  },
+  "B51": {
+    "title": "Speed ALT2 - Bending quantity of steel band within 2,100,000–2,150,000",
+    "description": "Speed ALT2 - Bending quantity of steel band within 2,100,000–2,150,000"
+  },
+  "C23": {
+    "title": "Balance NFS - Balance disconnects",
+    "description": "Balance NFS - Balance disconnects"
+  },
+  "C21": {
+    "title": "Balance NFS - Balance error during operation",
+    "description": "Balance NFS - Balance error during operation"
+  },
+  "C34": {
+    "title": "Balance NRS - Balance configuration error",
+    "description": "Balance NRS - Balance configuration error"
+  },
+  "C33": {
+    "title": "Balance NRS - Balance disconnects",
+    "description": "Balance NRS - Balance disconnects"
+  },
+  "C32": {
+    "title": "Balance NRS - Balance error during stop",
+    "description": "Balance NRS - Balance error during stop"
+  },
+  "C31": {
+    "title": "Balance NRS - Balance error during operation",
+    "description": "Balance NRS - Balance error during operation"
+  },
+  "D03": {
+    "title": "DR EST - Speed loss at DSP side",
+    "description": "DR EST - Speed loss at DSP side"
+  },
+  "D02": {
+    "title": "DR EST - Over speed at DSP side",
+    "description": "DR EST - Over speed at DSP side"
+  },
+  "D01": {
+    "title": "DR EST - Urgent stop at DSP side",
+    "description": "DR EST - Urgent stop at DSP side"
+  },
+  "D1C": {
+    "title": "DR SFS - CC_WDT4 times",
+    "description": "DR SFS - CC_WDT4 times"
+  },
+  "D1B": {
+    "title": "DR SFS - CC_WDT5 times",
+    "description": "DR SFS - CC_WDT5 times"
+  },
+  "D14": {
+    "title": "DR SFS - DSP side #D89 disconnects",
+    "description": "DR SFS - DSP side #D89 disconnects"
+  },
+  "D13": {
+    "title": "DR SFS - DSP side #5 disconnects",
+    "description": "DR SFS - DSP side #5 disconnects"
+  },
+  "D12": {
+    "title": "DR SFS - DSP side TSD error",
+    "description": "DR SFS - DSP side TSD error"
+  },
+  "D11": {
+    "title": "DR SFS - DSP side door open operation",
+    "description": "DR SFS - DSP side door open operation"
+  },
+  "D3D": {
+    "title": "DR NRS - CC_WDT3 times",
+    "description": "DR NRS - CC_WDT3 times"
+  },
+  "D31": {
+    "title": "DR NRS - DSP side WDT error",
+    "description": "DR NRS - DSP side WDT error"
+  },
+  "D4F": {
+    "title": "DR ALT - CC_WDT once",
+    "description": "DR ALT - CC_WDT once"
+  },
+  "D4E": {
+    "title": "DR ALT - CC_WDT 2 twice",
+    "description": "DR ALT - CC_WDT 2 twice"
+  },
+  "D4A": {
+    "title": "DR ALT - CC_WDT shields activation of timer",
+    "description": "DR ALT - CC_WDT shields activation of timer"
+  },
+  "D44": {
+    "title": "DR ALT - DSP side #D89 disconnects",
+    "description": "DR ALT - DSP side #D89 disconnects"
+  },
+  "D43": {
+    "title": "DR ALT - DSP side #5 disconnects",
+    "description": "DR ALT - DSP side #5 disconnects"
+  },
+  "D41": {
+    "title": "DR ALT - DSP side WDT shields activation of timer",
+    "description": "DR ALT - DSP side WDT shields activation of timer"
+  },
+  "E39": {
+    "title": "System Config NRS - Control RAM error",
+    "description": "System Config NRS - Control RAM error"
+  },
+  "E37": {
+    "title": "System Config NRS - Speed configuration error",
+    "description": "System Config NRS - Speed configuration error"
+  },
+  "E36": {
+    "title": "System Config NRS - Traction machine configuration fault",
+    "description": "System Config NRS - Traction machine configuration fault"
+  },
+  "E35": {
+    "title": "System Config NRS - ACC code configuration error",
+    "description": "System Config NRS - ACC code configuration error"
+  },
+  "E33": {
+    "title": "System Config NRS - DSP system configuration error",
+    "description": "System Config NRS - DSP system configuration error"
+  },
+  "E32": {
+    "title": "System Config NRS - DSP RAM error",
+    "description": "System Config NRS - DSP RAM error"
+  },
+  "E4F": {
+    "title": "System Config ALT - Time and quantity counting error",
+    "description": "System Config ALT - Time and quantity counting error"
+  },
+  "E47": {
+    "title": "System Config ALT - UCMP validation error",
+    "description": "System Config ALT - UCMP validation error"
+  },
+  "E46": {
+    "title": "System Config ALT - IC validation error (one at least)",
+    "description": "System Config ALT - IC validation error (one at least)"
+  },
+  "E45": {
+    "title": "System Config ALT - BC validation error (one at least)",
+    "description": "System Config ALT - BC validation error (one at least)"
+  },
+  "E44": {
+    "title": "System Config ALT - CS validation error (one at least)",
+    "description": "System Config ALT - CS validation error (one at least)"
+  },
+  "E43": {
+    "title": "System Config ALT - HS validation error (one at least)",
+    "description": "System Config ALT - HS validation error (one at least)"
+  },
+  "E42": {
+    "title": "System Config ALT - GCB validation error",
+    "description": "System Config ALT - GCB validation error"
+  },
+  "E41": {
+    "title": "System Config ALT - P1B validation error",
+    "description": "System Config ALT - P1B validation error"
+  },
+  "F3B": {
+    "title": "Communication NRS - Rear door BC1 error",
+    "description": "Communication NRS - Rear door BC1 error"
+  },
+  "F3A": {
+    "title": "Communication NRS - Front door BC1 error",
+    "description": "Communication NRS - Front door BC1 error"
+  },
+  "F39": {
+    "title": "Communication NRS - Balance error",
+    "description": "Communication NRS - Balance error"
+  },
+  "F38": {
+    "title": "Communication NRS - Rear door DC error",
+    "description": "Communication NRS - Rear door DC error"
+  },
+  "F37": {
+    "title": "Communication NRS - Rear door CS error",
+    "description": "Communication NRS - Rear door CS error"
+  },
+  "F36": {
+    "title": "Communication NRS - Front door DC error",
+    "description": "Communication NRS - Front door DC error"
+  },
+  "F35": {
+    "title": "Communication NRS - Front door CS error",
+    "description": "Communication NRS - Front door CS error"
+  },
+  "F34": {
+    "title": "Communication NRS - SC error",
+    "description": "Communication NRS - SC error"
+  },
+  "F31": {
+    "title": "Communication NRS - P1CL error",
+    "description": "Communication NRS - P1CL error"
+  },
+  "F49": {
+    "title": "Communication ALT - Serial balance error",
+    "description": "Communication ALT - Serial balance error"
+  },
+  "F48": {
+    "title": "Communication ALT - Rear door DC error",
+    "description": "Communication ALT - Rear door DC error"
+  },
+  "F47": {
+    "title": "Communication ALT - Rear door CS error",
+    "description": "Communication ALT - Rear door CS error"
+  },
+  "F46": {
+    "title": "Communication ALT - Front door DC error",
+    "description": "Communication ALT - Front door DC error"
+  },
+  "F45": {
+    "title": "Communication ALT - Front door CS error",
+    "description": "Communication ALT - Front door CS error"
+  },
+  "F44": {
+    "title": "Communication ALT - SC error",
+    "description": "Communication ALT - SC error"
+  },
+  "F41": {
+    "title": "Communication ALT - P1ACL error",
+    "description": "Communication ALT - P1ACL error"
+  },
+  "F5C": {
+    "title": "Communication ALT2 - HIP board not connected",
+    "description": "Communication ALT2 - HIP board not connected"
+  },
+  "F5B": {
+    "title": "Communication ALT2 - Rear door BC4 error",
+    "description": "Communication ALT2 - Rear door BC4 error"
+  },
+  "F5A": {
+    "title": "Communication ALT2 - Rear door BC3 error",
+    "description": "Communication ALT2 - Rear door BC3 error"
+  },
+  "F59": {
+    "title": "Communication ALT2 - Rear door BC2 error",
+    "description": "Communication ALT2 - Rear door BC2 error"
+  },
+  "F58": {
+    "title": "Communication ALT2 - Rear door BC1 error",
+    "description": "Communication ALT2 - Rear door BC1 error"
+  },
+  "F57": {
+    "title": "Communication ALT2 - Front door BC4 error",
+    "description": "Communication ALT2 - Front door BC4 error"
+  },
+  "F56": {
+    "title": "Communication ALT2 - Front door BC3 error (BC for the handicapped)",
+    "description": "Communication ALT2 - Front door BC3 error (BC for the handicapped)"
+  },
+  "F55": {
+    "title": "Communication ALT2 - Front door BC2 error (auxiliary BC)",
+    "description": "Communication ALT2 - Front door BC2 error (auxiliary BC)"
+  },
+  "F54": {
+    "title": "Communication ALT2 - Front door BC1 error",
+    "description": "Communication ALT2 - Front door BC1 error"
+  },
+  "F53": {
+    "title": "Communication ALT2 - Rear door IC error",
+    "description": "Communication ALT2 - Rear door IC error"
+  },
+  "F52": {
+    "title": "Communication ALT2 - Front door IC error",
+    "description": "Communication ALT2 - Front door IC error"
+  },
+  "F51": {
+    "title": "Communication ALT2 - HS error",
+    "description": "Communication ALT2 - HS error"
+  }
+}
+

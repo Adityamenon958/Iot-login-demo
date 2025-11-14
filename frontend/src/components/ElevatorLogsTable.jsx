@@ -21,6 +21,12 @@ const split16BitTo8Bit = (binary16) => {
   };
 };
 
+const DEFAULT_ERROR_INFO = {
+  code: '000',
+  title: 'No Reported Error',
+  description: 'System running normally. No active fault codes.'
+};
+
 // ✅ Format date and time for display
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -44,7 +50,7 @@ const getUniqueValues = (elevators, key) => {
 
 // ✅ Get unique status values
 const getUniqueStatuses = (elevators) => {
-  const statuses = elevators.map(e => e.errorCode || 'Normal');
+  const statuses = elevators.map(e => e.priorityStatus || 'Unknown');
   return [...new Set(statuses)].filter(Boolean).sort();
 };
 
@@ -215,6 +221,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
             overallStatus = 'inactive';
           }
           
+          const errorInfo = log.errorInfo || DEFAULT_ERROR_INFO;
+
           return {
             _id: `${log.elevatorId}-${log.timestamp}-${log._id}`,
             timestamp: log.timestamp,
@@ -225,7 +233,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
             floor: floor,
             inService: serviceStatus.includes('In Service'),
             inMaintenance: serviceStatus.includes('Maintenance ON'),
-            errorCode: priorityStatus,
+            errorInfo,
+            errorCode: errorInfo.code,
             priorityColor: priorityColor,
             // Status data for the new StatusDisplay component
             serviceStatus: serviceStatus,
@@ -566,8 +575,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
                 <th style={{ textAlign: 'center' }}>
                   Maintenance
                 </th>
-                <th>
-                  Status / Error
+                <th style={{ minWidth: '200px' }}>
+                  Error Code
                 </th>
                 <th style={{ textAlign: 'center', minWidth: '180px' }}>
                   Elevator Status
@@ -604,9 +613,17 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
                       </Badge>
                     </td>
                     <td>
-                      <Badge bg={getStatusBadgeColor(row.priorityColor)} style={{ fontSize: '0.75rem' }}>
-                        {row.errorCode}
-                      </Badge>
+                      <div>
+                        <Badge
+                          bg={row.errorInfo && row.errorInfo.code !== '000' ? 'danger' : 'success'}
+                          style={{ fontSize: '0.75rem' }}
+                        >
+                          {row.errorInfo ? row.errorInfo.code : '000'}
+                        </Badge>
+                      </div>
+                      <small className="d-block fw-bold mt-1" style={{ fontSize: '0.75rem', color: '#495057' }}>
+                        {row.errorInfo ? row.errorInfo.title : DEFAULT_ERROR_INFO.title}
+                      </small>
                     </td>
                     <td style={{ verticalAlign: 'top', padding: '8px' }}>
                       <StatusDisplay 

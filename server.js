@@ -23,6 +23,7 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');  // ✅ For webhook signature verification
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const Alarm = require("./backend/models/Alarm"); 
+const { getErrorDetails, normalizeCode } = require("./backend/utils/errorCodeLookup");
 const app = express();
 const PORT = process.env.PORT || 8080;
 /**  In-memory latch: { uid: true | false }  */
@@ -1262,12 +1263,15 @@ app.post("/api/elevators/log", async (req, res) => {
         }
       }
 
+      const normalizedCode = normalizeCode(it.errorCode ?? it.error_code ?? it.code);
+
       const processedDoc = {
         elevatorCompany: it.elevatorCompany || null,
         elevatorId: it.elevatorId || it.DeviceID || null,
         location: it.location || "Unknown Location",
         timestamp: tsDate,
-        data: dataArray
+        data: dataArray,
+        errorCode: normalizedCode
       };
       
       return processedDoc;
@@ -1517,6 +1521,8 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
 
         const response = {
           ...log,
+          errorCode: normalizeCode(log.errorCode),
+          errorInfo: getErrorDetails(log.errorCode),
           workingHours: {
             total: totalWorkingHours,
             formatted: workingHoursText.trim(),
@@ -1831,6 +1837,20 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
               matchesSearch = true;
             }
 
+            // ✅ Search in error code and lookup details
+            const normalizedErrorCode = normalizeCode(log.errorCode || '000');
+            if (normalizedErrorCode.toLowerCase().includes(searchLower)) {
+              matchesSearch = true;
+            } else {
+              const errorDetails = getErrorDetails(log.errorCode);
+              if (
+                (errorDetails.title && errorDetails.title.toLowerCase().includes(searchLower)) ||
+                (errorDetails.description && errorDetails.description.toLowerCase().includes(searchLower))
+              ) {
+                matchesSearch = true;
+              }
+            }
+
             // ✅ Search in floor number (numeric search)
             if (!isNaN(search) && floor.toString().includes(search)) {
               console.log(`🔍 [${requestId}] Floor search match: search="${search}", floor=${floor}, logId=${log._id}`);
@@ -1899,8 +1919,14 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
       console.log(`✅ [${requestId}] Returning ${finalLogs.length} paginated logs (no filtering applied)`);
     }
     
+    const enrichedLogs = finalLogs.map((log) => ({
+      ...log,
+      errorCode: normalizeCode(log.errorCode),
+      errorInfo: getErrorDetails(log.errorCode)
+    }));
+
     res.json({ 
-      logs: finalLogs, 
+      logs: enrichedLogs, 
       total: totalCount, 
       limit: parseInt(limit), 
       offset: parseInt(offset), 

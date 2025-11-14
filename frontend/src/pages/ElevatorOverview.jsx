@@ -326,6 +326,7 @@ export default function ElevatorOverview() {
             data: log.data,
             workingHours: log.workingHours, // ✅ Pass through working hours from backend
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
+            errorInfo: log.errorInfo,
             ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus, registerBits
           };
         });
@@ -377,6 +378,7 @@ export default function ElevatorOverview() {
             data: log.data,
             workingHours: log.workingHours, // ✅ Pass through working hours from backend
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
+            errorInfo: log.errorInfo,
             ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus
           };
         });
@@ -713,6 +715,12 @@ export default function ElevatorOverview() {
 
                 const backgroundFade = getBackgroundFade(elevator.priorityColor);
                 const coloredShadow = getColoredShadow(elevator.priorityColor);
+                const errorInfo = elevator.errorInfo || {
+                  code: '000',
+                  title: 'No Reported Error',
+                  description: 'System running normally. No active fault codes.'
+                };
+                const isNoIssue = errorInfo.code === '000';
 
                 return (
                   <div 
@@ -760,15 +768,11 @@ export default function ElevatorOverview() {
                           </p>
                         </div>
 
-                        {/* Floor Display */}
-                        <div className="mb-1">
+                        {/* Floor and Service Status */}
+                        <div className="mb-1 d-flex align-items-center gap-2 flex-wrap">
                           <small className="fw-bold text-primary" style={{ fontSize: '0.8rem' }}>
                             Floor: {elevator.floor}
                           </small>
-                        </div>
-
-                        {/* In Service / Out of Service */}
-                        <div className="mb-0">
                           <small className="fw-bold" style={{ 
                             fontSize: '0.8rem',
                             color: elevator.serviceStatus.includes('In Service') ? '#28a745' : '#dc3545'
@@ -821,6 +825,28 @@ export default function ElevatorOverview() {
                             )}
                           </>
                         )}
+
+                        {/* Elevator Error Code */}
+                        <div className="mt-2">
+                          <small
+                            className="fw-bold d-block"
+                            style={{
+                              fontSize: '0.8rem',
+                              color: isNoIssue ? '#198754' : '#dc3545'
+                            }}
+                          >
+                            {isNoIssue ? 'No Active Errors' : `Error Code: ${errorInfo.code}`}
+                          </small>
+                          <small
+                            className="d-block"
+                            style={{
+                              fontSize: '0.7rem',
+                              color: '#495057'
+                            }}
+                          >
+                            {isNoIssue ? 'System running normally.' : errorInfo.title}
+                          </small>
+                        </div>
 
                         {/* Last Update */}
                         <div className="mt-1">
