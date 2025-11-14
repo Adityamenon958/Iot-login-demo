@@ -37,12 +37,8 @@ function normalizeCode(code) {
     return "000";
   }
 
-  // Left pad purely numeric codes to preserve leading zeros from PDF lookup (e.g., 013A)
-  // But skip "000" since it's already handled above
-  if (/^\d+$/.test(stringCode) && stringCode.length === 3 && stringCode !== "000") {
-    return stringCode.padStart(4, "0");
-  }
-
+  // ✅ Return code as-is - no padding needed since lookup table has exact codes
+  // Codes like "833", "105", "10F" are stored exactly as provided
   return stringCode;
 }
 
