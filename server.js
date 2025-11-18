@@ -1666,6 +1666,9 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     const hasRegisterSearch = search && search.trim().length > 0;
     
     let allLogs;
+    let totalMatchingCount = 0; // ✅ Total count for pagination
+    let uniqueElevatorIdsFromAllMatching = []; // ✅ Store unique IDs for dropdown
+    
     if (hasRegisterFilters || hasRegisterSearch) {
       // ✅ Fetch ALL logs if register-based filtering is needed
       allLogs = await ElevatorEvent.find(filter)
@@ -1674,7 +1677,24 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
         .maxTimeMS(10000);
       console.log(`📦 [${requestId}] Fetched ${allLogs.length} total logs for register filtering (took ${Date.now() - fetchStartTime}ms)`);
     } else {
-      // ✅ Apply pagination directly if no register filtering needed (performance optimization)
+      // ✅ First, count total matching logs (with device allowlist applied)
+      // Fetch all matching logs (just IDs and elevatorId for efficiency)
+      const allMatchingLogs = await ElevatorEvent.find(filter)
+        .select('_id elevatorId')
+        .lean()
+        .maxTimeMS(10000);
+      
+      // Apply device allowlist filter and count
+      const deviceFilteredLogsForCount = allMatchingLogs.filter(log => allowedDevicesById.has(log.elevatorId));
+      totalMatchingCount = deviceFilteredLogsForCount.length;
+      
+      // ✅ Extract unique elevator IDs from all matching logs (for dropdown)
+      uniqueElevatorIdsFromAllMatching = [...new Set(deviceFilteredLogsForCount.map(log => log.elevatorId).filter(Boolean))].sort();
+      
+      console.log(`📊 [${requestId}] Total matching logs (with device filter): ${totalMatchingCount}`);
+      console.log(`📋 [${requestId}] Unique elevator IDs from all matching: ${uniqueElevatorIdsFromAllMatching.length} elevators`);
+      
+      // ✅ Now fetch the actual paginated page
       allLogs = await ElevatorEvent.find(filter)
         .sort({ [sortBy]: sortOrder })
         .skip(parseInt(offset))
@@ -1886,15 +1906,32 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     
     if (filteredLogs.length === 0) {
       console.log(`✅ [${requestId}] No logs found after filtering, returning empty array`);
+      // ✅ Extract unique elevator IDs even when no logs (for empty state dropdown)
+      let uniqueElevatorIds = [];
+      if (!hasRegisterFilters && !hasRegisterSearch) {
+        uniqueElevatorIds = uniqueElevatorIdsFromAllMatching;
+      }
       return res.json({ 
         logs: [], 
         total: 0, 
         limit: parseInt(limit), 
         offset: parseInt(offset),
         hasMore: false,
+        uniqueElevatorIds: uniqueElevatorIds,
         timing: Date.now() - startTime
       });
     }
+    
+    // ✅ Extract unique elevator IDs from all filtered logs (before pagination)
+    let uniqueElevatorIds = [];
+    if (hasRegisterFilters || hasRegisterSearch) {
+      // ✅ Extract from all filtered logs (register filtering case)
+      uniqueElevatorIds = [...new Set(filteredLogs.map(log => log.elevatorId).filter(Boolean))].sort();
+    } else {
+      // ✅ Use the pre-extracted unique IDs from the count query (no register filtering case)
+      uniqueElevatorIds = uniqueElevatorIdsFromAllMatching;
+    }
+    console.log(`📋 [${requestId}] Unique elevator IDs: ${uniqueElevatorIds.length} elevators`);
     
     // ✅ Handle pagination based on whether register filtering was applied
     let finalLogs, totalCount, hasMore;
@@ -1913,10 +1950,12 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     } else {
       // ✅ No register filtering - logs are already paginated
       finalLogs = filteredLogs;
-      totalCount = filteredLogs.length; // This is approximate since we only fetched one page
-      hasMore = filteredLogs.length === parseInt(limit); // If we got exactly the limit, there might be more
+      // ✅ Use the pre-calculated total count (with device allowlist applied)
+      totalCount = totalMatchingCount;
+      // ✅ Calculate hasMore based on actual total count
+      hasMore = (parseInt(offset) + filteredLogs.length) < totalMatchingCount;
       
-      console.log(`✅ [${requestId}] Returning ${finalLogs.length} paginated logs (no filtering applied)`);
+      console.log(`✅ [${requestId}] Returning ${finalLogs.length} paginated logs (total: ${totalMatchingCount}, offset: ${parseInt(offset)}, hasMore: ${hasMore})`);
     }
     
     const enrichedLogs = finalLogs.map((log) => ({
@@ -1931,6 +1970,7 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
       limit: parseInt(limit), 
       offset: parseInt(offset), 
       hasMore,
+      uniqueElevatorIds: uniqueElevatorIds,
       timing: totalTime
     });
     

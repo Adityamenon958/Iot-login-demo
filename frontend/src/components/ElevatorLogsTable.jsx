@@ -62,6 +62,7 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [searchResultsCount, setSearchResultsCount] = useState(0);
+  const [uniqueElevatorIds, setUniqueElevatorIds] = useState([]); // ✅ All unique elevator IDs from filtered results
   
   // ✅ State for search, filters, sorting, pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -248,6 +249,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
         setTotalCount(response.data.total || 0);
         setHasMore(response.data.hasMore || false);
         setSearchResultsCount(processedElevators.length);
+        // ✅ Store unique elevator IDs from all filtered results (not just current page)
+        setUniqueElevatorIds(response.data.uniqueElevatorIds || []);
       }
     } catch (err) {
       console.error('Error fetching elevator data:', err);
@@ -379,7 +382,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
   };
 
   // ✅ Get unique options for filters
-  const elevatorIds = getUniqueValues(elevators, 'id');
+  // ✅ Use uniqueElevatorIds from backend (all filtered results) instead of current page only
+  const elevatorIds = uniqueElevatorIds.length > 0 ? uniqueElevatorIds : getUniqueValues(elevators, 'id');
   const statuses = getUniqueStatuses(elevators);
 
   return (
