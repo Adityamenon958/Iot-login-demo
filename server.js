@@ -6413,15 +6413,16 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
         const reg66H = reg66Split.high;
         const reg66L = reg66Split.low;
         
+        // ✅ Check errorCode instead of register bits for error detection
+        const normalizedErrorCode = normalizeCode(lastLogBefore.errorCode);
+        const hasActiveError = normalizedErrorCode && 
+                              normalizedErrorCode !== '000' && 
+                              normalizedErrorCode !== '0000';
+        
         globalInitialState = {
           isWorking: reg66H[7] === '1',        // In Service
           isMaintenance: reg66H[5] === '1',    // Maintenance ON
-          hasError: reg66H[4] === '1' ||       // Overload
-                   reg66H[1] === '1' ||        // Earthquake
-                   reg66L[3] === '1' ||        // OEPS
-                   reg66L[7] === '1' ||        // Fire Return
-                   reg66L[6] === '1' ||        // Fire Return In Place
-                   reg66H[6] === '0'           // Comm Fault
+          hasError: hasActiveError              // Based on errorCode field
         };
       }
     }
@@ -6467,15 +6468,16 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
           const reg66H = reg66Split.high;
           const reg66L = reg66Split.low;
           
+          // ✅ Check errorCode instead of register bits for error detection
+          const normalizedErrorCode = normalizeCode(log.errorCode);
+          const hasActiveError = normalizedErrorCode && 
+                                normalizedErrorCode !== '000' && 
+                                normalizedErrorCode !== '0000';
+          
           const newState = {
             isWorking: reg66H[7] === '1',        // In Service
             isMaintenance: reg66H[5] === '1',    // Maintenance ON
-            hasError: reg66H[4] === '1' ||       // Overload
-                     reg66H[1] === '1' ||        // Earthquake
-                     reg66L[3] === '1' ||        // OEPS
-                     reg66L[7] === '1' ||        // Fire Return
-                     reg66L[6] === '1' ||        // Fire Return In Place
-                     reg66H[6] === '0'           // Comm Fault
+            hasError: hasActiveError              // Based on errorCode field
           };
           
           // Check if state changed
