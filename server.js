@@ -38,14 +38,14 @@ const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess"
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 const ElevatorEvent = require("./backend/models/ElevatorEvent");
 
-// ✅ SIMULATOR: Database-backed data simulator for testing
-const ENABLE_SIMULATOR = process.env.NODE_ENV === 'production';
+// ✅ SIMULATOR: Enabled only when ENABLE_SIMULATOR=true (env var)
+const ENABLE_SIMULATOR = process.env.ENABLE_SIMULATOR === 'true';
 
 // ✅ Log simulator status
 if (ENABLE_SIMULATOR) {
-  console.log('[sim] 🚀 Simulator enabled in production mode');
+  console.log('[sim] 🚀 Simulator enabled (ENABLE_SIMULATOR=true)');
 } else {
-  console.log('[sim] ⏸️ Simulator disabled in development mode');
+  console.log('[sim] ⏸️ Simulator disabled (set ENABLE_SIMULATOR=true to enable)');
 }
 
 // Simulator state management (timers only - devices stored in database)
@@ -57,17 +57,18 @@ const simulatorProfiles = {
   B: { working: [1, 0], maintenance: [0, 1], idle: [0, 0] }
 };
 
-// ✅ Build exact payload matching gateway format
+// ✅ Build exact payload matching gateway format (crane only)
 function buildSimulatorPayload(device) {
   const timestamp = Math.floor(Date.now() / 1000);
   const timestampStr = device.padTimestamp ? `   ${timestamp}` : `${timestamp}`;
   
-  // Apply jitter if enabled
-  let lat = device.latitude;
-  let lon = device.longitude;
+  const lat = (device.latitude != null) ? device.latitude : 0;
+  const lon = (device.longitude != null) ? device.longitude : 0;
+  let latVal = lat;
+  let lonVal = lon;
   if (device.jitter) {
-    lat += (Math.random() - 0.5) * 0.0004; // ±0.0002
-    lon += (Math.random() - 0.5) * 0.0004;
+    latVal += (Math.random() - 0.5) * 0.0004; // ±0.0002
+    lonVal += (Math.random() - 0.5) * 0.0004;
   }
   
   const profile = simulatorProfiles[device.profile] || simulatorProfiles.A;
@@ -75,22 +76,22 @@ function buildSimulatorPayload(device) {
   
   return [
     { 
-      craneCompany: device.name, // Use name field from database
-      DeviceID: device.deviceId, // Use deviceId field from database
+      craneCompany: device.name,
+      DeviceID: device.deviceId,
       dataType: "Gps", 
       Timestamp: timestampStr, 
-      data: `[${lat.toFixed(6)},${lon.toFixed(6)}]` 
+      data: `[${latVal.toFixed(6)},${lonVal.toFixed(6)}]` 
     },
     { 
-      craneCompany: device.name, // Use name field from database
-      DeviceID: device.deviceId, // Use deviceId field from database
+      craneCompany: device.name,
+      DeviceID: device.deviceId,
       dataType: "maintenance", 
       Timestamp: timestampStr, 
       data: `[${maintenance}]` 
     },
     { 
-      craneCompany: device.name, // Use name field from database
-      DeviceID: device.deviceId, // Use deviceId field from database
+      craneCompany: device.name,
+      DeviceID: device.deviceId,
       Timestamp: timestampStr, 
       dataType: "Ignition", 
       data: `[${ignition}]` 
@@ -98,7 +99,45 @@ function buildSimulatorPayload(device) {
   ];
 }
 
-// ✅ Simulator tick function - posts data to /api/crane/log
+// ✅ Elevator register bits (same meaning as ElevatorOverview.jsx)
+// Reg65: high byte = floor (0-24), low byte = primary status. Reg66: service + power.
+// If overrideReg65/overrideReg66/overrideErrorCode are set on device, use those for demo.
+function buildElevatorPayload(device) {
+  let reg65;
+  let reg66;
+  if (device.overrideReg65 != null && Number.isFinite(Number(device.overrideReg65))) {
+    reg65 = Math.max(0, Math.min(65535, Number(device.overrideReg65)));
+  } else {
+    const floor = Math.min(24, Math.max(0, device.elevatorCurrentFloor != null ? device.elevatorCurrentFloor : 0));
+    reg65 = (floor << 8) | 0;
+  }
+  if (device.overrideReg66 != null && Number.isFinite(Number(device.overrideReg66))) {
+    reg66 = Math.max(0, Math.min(65535, Number(device.overrideReg66)));
+  } else {
+    let reg66High = 0, reg66Low = 0;
+    if (device.state === 'working') {
+      reg66High |= (1 << 7);
+      reg66High |= (1 << 6);
+      reg66High |= (1 << 3);
+      reg66Low |= (1 << 4);
+    } else if (device.state === 'maintenance') {
+      reg66High |= (1 << 5);
+    }
+    reg66 = (reg66High << 8) | reg66Low;
+  }
+  const payload = {
+    elevatorCompany: device.name,
+    elevatorId: device.deviceId,
+    location: device.location || 'Demo Location',
+    timestamp: Math.floor(Date.now() / 1000),
+    data: [String(reg65), String(reg66)]
+  };
+  const errCode = device.overrideErrorCode != null ? String(device.overrideErrorCode).trim() : '';
+  if (errCode !== '') payload.errorCode = errCode;
+  return payload;
+}
+
+// ✅ Simulator tick - crane → /api/crane/log, elevator → /api/elevators/log (floor cycles 0..24)
 async function simulatorTick(deviceId) {
   try {
     const device = await SimulatorDevice.findOne({ deviceId }).lean();
@@ -107,20 +146,39 @@ async function simulatorTick(deviceId) {
       stopSimulator(deviceId);
       return;
     }
-    
+
+    const deviceType = device.deviceType || 'crane';
+
+    if (deviceType === 'elevator') {
+      const payload = [buildElevatorPayload(device)];
+      const response = await fetch(`http://localhost:${PORT}/api/elevators/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        const nextFloor = ((device.elevatorCurrentFloor != null ? device.elevatorCurrentFloor : 0) + 1) % 25; // 0..24 then 0
+        await SimulatorDevice.updateOne({ deviceId }, { elevatorCurrentFloor: nextFloor });
+        console.log(`[sim] ✅ Elevator ${deviceId}: posted floor ${device.elevatorCurrentFloor} (${device.state}), next ${nextFloor}`);
+      } else {
+        console.error(`[sim] ❌ Elevator ${deviceId} post failed: ${response.status}`);
+      }
+      return;
+    }
+
+    // Crane
     const payload = buildSimulatorPayload(device);
-    
-    // ✅ Post to existing crane log endpoint (use localhost for Node.js fetch)
     const response = await fetch(`http://localhost:${PORT}/api/crane/log`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
     if (response.ok) {
-      console.log(`[sim] ✅ Posted data for ${deviceId}: ${device.state} at [${device.latitude.toFixed(6)}, ${device.longitude.toFixed(6)}]`);
+      const lat = (device.latitude != null) ? device.latitude : 0;
+      const lon = (device.longitude != null) ? device.longitude : 0;
+      console.log(`[sim] ✅ Crane ${deviceId}: ${device.state} at [${lat.toFixed(6)}, ${lon.toFixed(6)}]`);
     } else {
-      console.error(`[sim] ❌ Failed to post data for ${deviceId}: ${response.status}`);
+      console.error(`[sim] ❌ Crane ${deviceId} post failed: ${response.status}`);
     }
   } catch (err) {
     console.error(`[sim] ❌ Simulator tick error for ${deviceId}:`, err.message);
@@ -1222,15 +1280,27 @@ app.post("/api/crane/log", async (req, res) => {
   }
 });
 
+// ✅ Helper: allow simulator (localhost) even when ELEVATOR_DATA_DISABLED is true
+function isLocalElevatorRequest(req) {
+  const ip = req.ip || req.connection?.remoteAddress || '';
+  const forwarded = req.get('x-forwarded-for');
+  const check = (s) => s === '127.0.0.1' || s === '::1' || s === '::ffff:127.0.0.1';
+  if (check(ip)) return true;
+  if (forwarded) {
+    const first = forwarded.split(',')[0].trim();
+    if (check(first)) return true;
+  }
+  return false;
+}
+
 // ✅ Elevator data ingestion endpoint
 app.post("/api/elevators/log", async (req, res) => {
   const requestId = Date.now() + Math.random().toString(36).substr(2, 9);
   
-  // ✅ TEMPORARY: Stop receiving elevator data
   const ELEVATOR_DATA_DISABLED = process.env.ELEVATOR_DATA_DISABLED === 'true';
-  
-  if (ELEVATOR_DATA_DISABLED) {
-    console.log(`⏸️ [${requestId}] ELEVATOR DATA TEMPORARILY DISABLED - Rejecting request`);
+  // ✅ When disabled, reject external gateways but allow simulator (localhost)
+  if (ELEVATOR_DATA_DISABLED && !isLocalElevatorRequest(req)) {
+    console.log(`⏸️ [${requestId}] ELEVATOR DATA DISABLED - Rejecting external request`);
     return res.status(503).json({ 
       message: "Elevator data collection temporarily disabled",
       requestId: requestId
@@ -4867,7 +4937,7 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
 
 // ✅ SIMULATOR ENDPOINTS (superadmin only)
 if (ENABLE_SIMULATOR) {
-  // ✅ POST: Add simulated crane device
+  // ✅ POST: Add simulated device (crane or elevator)
   app.post('/api/sim/add', authenticateToken, async (req, res) => {
     try {
       const { role } = req.user;
@@ -4875,48 +4945,70 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
       
-      const { craneCompany, DeviceID, latitude, longitude, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
+      const { deviceType, craneCompany, elevatorCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
+      const effectiveType = (deviceType === 'elevator') ? 'elevator' : 'crane';
+      const companyName = effectiveType === 'elevator' ? (elevatorCompany || craneCompany) : craneCompany;
       
-      // ✅ Debug logging
-      console.log('[sim] 📝 Received data:', { craneCompany, DeviceID, latitude, longitude, state, frequencyMinutes, padTimestamp, profile, jitter });
-      
-      // ✅ Validation
-      if (!craneCompany || !DeviceID || latitude === undefined || longitude === undefined || !state) {
-        return res.status(400).json({ error: 'Missing required fields' });
+      if (!companyName || !DeviceID || !state) {
+        return res.status(400).json({ error: 'Missing required fields (company, DeviceID, state)' });
       }
-      
       if (!['working', 'idle', 'maintenance'].includes(state)) {
         return res.status(400).json({ error: 'Invalid state. Must be working, idle, or maintenance' });
       }
       
-      if (!['A', 'B'].includes(profile)) {
-        return res.status(400).json({ error: 'Invalid profile. Must be A or B' });
-      }
-      
       const validFrequencies = [1, 2, 5, 10, 15, 30];
-      const frequencyNum = parseInt(frequencyMinutes);
-      console.log('[sim] 🔍 Frequency validation:', { frequencyMinutes, frequencyNum, isValid: validFrequencies.includes(frequencyNum) });
+      const frequencyNum = parseInt(frequencyMinutes, 10);
       if (!validFrequencies.includes(frequencyNum)) {
         return res.status(400).json({ error: 'Invalid frequency. Must be 1, 2, 5, 10, 15, or 30 minutes' });
       }
       
-      // ✅ Create device config
+      if (effectiveType === 'elevator') {
+        if (!location || String(location).trim() === '') {
+          return res.status(400).json({ error: 'Elevator requires location' });
+        }
+        const device = new SimulatorDevice({
+          deviceId: DeviceID,
+          name: companyName.trim(),
+          latitude: 0,
+          longitude: 0,
+          deviceType: 'elevator',
+          location: String(location).trim(),
+          state,
+          frequencyMinutes: frequencyNum,
+          padTimestamp: false,
+          jitter: false,
+          profile: 'A',
+          isRunning: false,
+          elevatorCurrentFloor: 0
+        });
+        await device.save();
+        console.log(`[sim] ✅ Added elevator simulator: ${DeviceID} (${state}) at ${location}`);
+        return res.json({ success: true, device: device.toObject() });
+      }
+      
+      // Crane
+      if (latitude === undefined || longitude === undefined) {
+        return res.status(400).json({ error: 'Crane requires latitude and longitude' });
+      }
+      if (profile && !['A', 'B'].includes(profile)) {
+        return res.status(400).json({ error: 'Invalid profile. Must be A or B' });
+      }
       const device = new SimulatorDevice({
         deviceId: DeviceID,
-        name: DeviceID, // Use DeviceID as name for now
+        name: companyName.trim(),
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
+        deviceType: 'crane',
+        location: '',
         state,
-        frequencyMinutes: parseInt(frequencyMinutes),
-        padTimestamp: padTimestamp !== false, // default true
+        frequencyMinutes: frequencyNum,
+        padTimestamp: padTimestamp !== false,
         profile: profile || 'A',
-        jitter: jitter === true, // default false
+        jitter: jitter === true,
         isRunning: false
       });
-      
       await device.save();
-      console.log(`[sim] ✅ Added simulated device: ${DeviceID} (${state}) at [${latitude}, ${longitude}]`);
-      
+      console.log(`[sim] ✅ Added crane simulator: ${DeviceID} (${state}) at [${latitude}, ${longitude}]`);
       res.json({ success: true, device: device.toObject() });
     } catch (err) {
       console.error('[sim] ❌ Add device error:', err);
@@ -4966,7 +5058,7 @@ if (ENABLE_SIMULATOR) {
     }
   });
   
-  // ✅ POST: Update device configuration
+  // ✅ POST: Update device configuration (crane or elevator)
   app.post('/api/sim/update', authenticateToken, async (req, res) => {
     try {
       const { role } = req.user;
@@ -4974,7 +5066,7 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
       
-      const { craneCompany, DeviceID, latitude, longitude, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
+      const { craneCompany, elevatorCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
       if (!DeviceID) {
         return res.status(400).json({ error: 'DeviceID is required' });
       }
@@ -4984,25 +5076,26 @@ if (ENABLE_SIMULATOR) {
         return res.status(404).json({ error: 'Device not found' });
       }
       
-                      // ✅ Update fields if provided
-                if (craneCompany !== undefined) device.name = craneCompany;
-                if (latitude !== undefined) device.latitude = parseFloat(latitude);
-                if (longitude !== undefined) device.longitude = parseFloat(longitude);
-                if (state && ['working', 'idle', 'maintenance'].includes(state)) device.state = state;
-                if (frequencyMinutes !== undefined) {
-                  const freq = parseInt(frequencyMinutes);
-                  if ([1, 2, 5, 10, 15, 30].includes(freq)) {
-                    device.frequencyMinutes = freq;
-                  }
-                }
-                if (padTimestamp !== undefined) device.padTimestamp = padTimestamp;
-                if (profile && ['A', 'B'].includes(profile)) device.profile = profile;
-                if (jitter !== undefined) device.jitter = jitter;
+      const effectiveType = (device.deviceType === 'elevator') ? 'elevator' : 'crane';
+      const companyName = elevatorCompany !== undefined ? elevatorCompany : craneCompany;
+      if (companyName !== undefined) device.name = companyName;
+      if (state && ['working', 'idle', 'maintenance'].includes(state)) device.state = state;
+      if (frequencyMinutes !== undefined) {
+        const freq = parseInt(frequencyMinutes, 10);
+        if ([1, 2, 5, 10, 15, 30].includes(freq)) device.frequencyMinutes = freq;
+      }
+      if (effectiveType === 'elevator') {
+        if (location !== undefined) device.location = String(location).trim();
+      } else {
+        if (latitude !== undefined) device.latitude = parseFloat(latitude);
+        if (longitude !== undefined) device.longitude = parseFloat(longitude);
+        if (padTimestamp !== undefined) device.padTimestamp = padTimestamp;
+        if (profile && ['A', 'B'].includes(profile)) device.profile = profile;
+        if (jitter !== undefined) device.jitter = jitter;
+      }
       
-      // ✅ Save changes to database
       await device.save();
       
-      // ✅ If device is running, restart with new frequency
       if (simulatorTimers.has(DeviceID)) {
         await stopSimulator(DeviceID);
         await startSimulator(DeviceID);
@@ -5026,17 +5119,57 @@ if (ENABLE_SIMULATOR) {
       
       const devices = await SimulatorDevice.find({}).lean();
       
-      // ✅ Add isRunning status from timers
+      // ✅ Add isRunning and backward-compat fields; deviceType/location for elevator
       const devicesWithStatus = devices.map(device => ({
         ...device,
-        DeviceID: device.deviceId, // Maintain backward compatibility
-        craneCompany: device.name, // Maintain backward compatibility
+        DeviceID: device.deviceId,
+        craneCompany: device.name,
+        deviceType: device.deviceType || 'crane',
+        location: device.location || '',
+        elevatorCurrentFloor: device.elevatorCurrentFloor,
         isRunning: simulatorTimers.has(device.deviceId)
       }));
       
       res.json({ devices: devicesWithStatus });
     } catch (err) {
       console.error('[sim] ❌ List devices error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Set live override for elevator (Reg65, Reg66, errorCode) – for demo
+  app.post('/api/sim/elevator-override', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      const { DeviceID, overrideReg65, overrideReg66, overrideErrorCode } = req.body;
+      if (!DeviceID) {
+        return res.status(400).json({ error: 'DeviceID is required' });
+      }
+      const device = await SimulatorDevice.findOne({ deviceId: DeviceID });
+      if (!device) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+      if (device.deviceType !== 'elevator') {
+        return res.status(400).json({ error: 'Only elevator devices support live override' });
+      }
+      if (overrideReg65 !== undefined) {
+        device.overrideReg65 = overrideReg65 === null || overrideReg65 === '' ? null : Number(overrideReg65);
+      }
+      if (overrideReg66 !== undefined) {
+        device.overrideReg66 = overrideReg66 === null || overrideReg66 === '' ? null : Number(overrideReg66);
+      }
+      if (overrideErrorCode !== undefined) {
+        const v = overrideErrorCode === null || overrideErrorCode === '' ? null : String(overrideErrorCode).trim();
+        device.overrideErrorCode = v === '' ? null : v;
+      }
+      await device.save();
+      console.log(`[sim] ✅ Elevator override ${DeviceID}: reg65=${device.overrideReg65}, reg66=${device.overrideReg66}, errorCode=${device.overrideErrorCode}`);
+      res.json({ success: true, device: device.toObject() });
+    } catch (err) {
+      console.error('[sim] ❌ Elevator override error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

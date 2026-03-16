@@ -107,10 +107,8 @@ function App() {
           </RouteGuard>
         } />
         
-        {/* ✅ Simulator Route - Superadmin only in production */}
-        {process.env.NODE_ENV === 'production' && (
-          <Route path="simulator" element={<Simulator />} />
-        )}
+        {/* ✅ Simulator Route - Superadmin only (sidebar controls visibility) */}
+        <Route path="simulator" element={<Simulator />} />
       </Route>
     </Routes>
   );

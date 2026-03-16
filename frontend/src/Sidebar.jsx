@@ -214,8 +214,8 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             </Button>
           )}
 
-          {/* ✅ Simulator - Superadmin only in production */}
-          {role === "superadmin" && process.env.NODE_ENV === 'production' && (
+          {/* ✅ Simulator - Superadmin only (backend uses ENABLE_SIMULATOR to run timers) */}
+          {role === "superadmin" && (
             <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/simulator' ? styles.active : ''}`} onClick={() => navigate('/dashboard/simulator')}>
               <Activity size={20} className="me-2" />
               Simulator
