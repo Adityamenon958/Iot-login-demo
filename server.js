@@ -114,16 +114,26 @@ function buildElevatorPayload(device) {
   if (device.overrideReg66 != null && Number.isFinite(Number(device.overrideReg66))) {
     reg66 = Math.max(0, Math.min(65535, Number(device.overrideReg66)));
   } else {
-    let reg66High = 0, reg66Low = 0;
+    // NOTE: These constants are chosen to match the existing frontend decoder
+    // in ElevatorOverview.jsx (processElevatorData), so that:
+    // - Normal -> In Service + Comm Normal + Automatic + Normal Power
+    // - Maintenance -> Maintenance ON
+    // - Idle -> all bits 0 (Out of Service)
     if (device.state === 'working') {
-      reg66High |= (1 << 7);
-      reg66High |= (1 << 6);
-      reg66High |= (1 << 3);
-      reg66Low |= (1 << 4);
+      // High (66H): bits for In Service, Comm Normal, Automatic
+      // Low  (66L): bit for Normal Power
+      const high = 0b00010011;   // indexes 3,6,7 set
+      const low  = 0b00001000;   // index 4 set
+      reg66 = (high << 8) | low; // 4872 decimal
     } else if (device.state === 'maintenance') {
-      reg66High |= (1 << 5);
+      // High: Maintenance ON only
+      const high = 0b00000100;   // index 5 set
+      const low  = 0;
+      reg66 = (high << 8) | low; // 1024 decimal
+    } else {
+      // Idle / out of service: all bits 0
+      reg66 = 0;
     }
-    reg66 = (reg66High << 8) | reg66Low;
   }
   const payload = {
     elevatorCompany: device.name,
@@ -5119,7 +5129,7 @@ if (ENABLE_SIMULATOR) {
       
       const devices = await SimulatorDevice.find({}).lean();
       
-      // ✅ Add isRunning and backward-compat fields; deviceType/location for elevator
+      // ✅ Add isRunning, overrides, and backward-compat fields; deviceType/location for elevator
       const devicesWithStatus = devices.map(device => ({
         ...device,
         DeviceID: device.deviceId,
@@ -5127,6 +5137,9 @@ if (ENABLE_SIMULATOR) {
         deviceType: device.deviceType || 'crane',
         location: device.location || '',
         elevatorCurrentFloor: device.elevatorCurrentFloor,
+        overrideReg65: device.overrideReg65 ?? null,
+        overrideReg66: device.overrideReg66 ?? null,
+        overrideErrorCode: device.overrideErrorCode ?? null,
         isRunning: simulatorTimers.has(device.deviceId)
       }));
       

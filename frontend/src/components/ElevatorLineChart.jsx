@@ -141,11 +141,17 @@ const ElevatorLineChart = ({ selectedElevator, timeRange, visibleLines = { worki
           }
         });
 
-        // ✅ Create all datasets first
+        // ✅ Small vertical offset (in hours) so overlapping lines stay visible
+        const OFFSET_WORKING = 0;
+        const OFFSET_MAINTENANCE = 0.01;   // ~36 sec
+        const OFFSET_ERROR = 0.02;         // ~1.2 min
+
+        // ✅ Create all datasets with offset so same-path lines don't hide each other
         const allDatasets = [
           {
             label: 'Working Hours',
-            data: apiData.map(point => point.workingHours || 0),
+            data: apiData.map(point => (point.workingHours || 0) + OFFSET_WORKING),
+            _offset: OFFSET_WORKING,
             borderColor: '#28a745',
             backgroundColor: 'rgba(40, 167, 69, 0.1)',
             borderWidth: 2,
@@ -159,7 +165,8 @@ const ElevatorLineChart = ({ selectedElevator, timeRange, visibleLines = { worki
           },
           {
             label: 'Maintenance Hours',
-            data: apiData.map(point => point.maintenanceHours || 0),
+            data: apiData.map(point => (point.maintenanceHours || 0) + OFFSET_MAINTENANCE),
+            _offset: OFFSET_MAINTENANCE,
             borderColor: '#ffc107',
             backgroundColor: 'rgba(255, 193, 7, 0.1)',
             borderWidth: 2,
@@ -173,7 +180,8 @@ const ElevatorLineChart = ({ selectedElevator, timeRange, visibleLines = { worki
           },
           {
             label: 'Error Hours',
-            data: apiData.map(point => point.errorHours || 0),
+            data: apiData.map(point => (point.errorHours || 0) + OFFSET_ERROR),
+            _offset: OFFSET_ERROR,
             borderColor: '#dc3545',
             backgroundColor: 'rgba(220, 53, 69, 0.1)',
             borderWidth: 2,
@@ -236,15 +244,17 @@ const ElevatorLineChart = ({ selectedElevator, timeRange, visibleLines = { worki
             return context[0].label;
           },
           label: function(context) {
-            const value = context.parsed.y;
+            // Show real value (subtract display offset used to separate overlapping lines)
+            const offset = context.dataset._offset ?? 0;
+            const value = Math.max(0, context.parsed.y - offset);
             let formattedValue;
-            
+
             if (value === 0) {
               formattedValue = '0h';
             } else {
               const hours = Math.floor(value);
               const minutes = Math.round((value - hours) * 60);
-              
+
               if (hours === 0 && minutes === 0) {
                 formattedValue = '0h';
               } else if (hours === 0) {
@@ -255,7 +265,7 @@ const ElevatorLineChart = ({ selectedElevator, timeRange, visibleLines = { worki
                 formattedValue = `${hours}h ${minutes}m`;
               }
             }
-            
+
             return `${context.dataset.label}: ${formattedValue}`;
           }
         }

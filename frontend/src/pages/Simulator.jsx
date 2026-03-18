@@ -268,7 +268,21 @@ export default function Simulator() {
     // Infer preset from existing overrideReg66 if present, else auto
     let reg66Preset = 'auto';
     if (device.overrideReg66 != null) {
-      reg66Preset = 'custom';
+      const val = Number(device.overrideReg66);
+      // Match the same constants used in server.js buildElevatorPayload
+      const normalVal = 4872;     // working: In Service + Comm Normal + Automatic + Normal Power
+      const maintenanceVal = 1024; // maintenance: Maintenance ON
+      const outOfServiceVal = 0;   // idle: all bits 0
+
+      if (val === normalVal) {
+        reg66Preset = 'normal';
+      } else if (val === maintenanceVal) {
+        reg66Preset = 'maintenance';
+      } else if (val === outOfServiceVal) {
+        reg66Preset = 'outOfService';
+      } else {
+        reg66Preset = 'custom';
+      }
     }
     setOverrideForm({
       overrideReg65: device.overrideReg65 != null ? String(device.overrideReg65) : '',
@@ -291,15 +305,11 @@ export default function Simulator() {
           nextOverrideReg66 = '';
         } else if (preset === 'normal') {
           // Normal: In Service + Comm Normal + Automatic + Normal Power
-          // Bits: high byte: bit7, bit6, bit3; low byte: bit4
-          const high = (1 << 7) | (1 << 6) | (1 << 3);
-          const low = (1 << 4);
-          nextOverrideReg66 = String((high << 8) | low);
+          // Use same constant as backend (server.js buildElevatorPayload)
+          nextOverrideReg66 = String(4872);
         } else if (preset === 'maintenance') {
           // Maintenance: Maintenance ON
-          const high = (1 << 5);
-          const low = 0;
-          nextOverrideReg66 = String((high << 8) | low);
+          nextOverrideReg66 = String(1024);
         } else if (preset === 'outOfService') {
           // Out of service: all bits 0
           nextOverrideReg66 = '0';

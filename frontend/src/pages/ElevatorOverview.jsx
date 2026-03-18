@@ -317,6 +317,15 @@ export default function ElevatorOverview() {
         // Process each elevator's data
         const processedElevators = response.data.logs.map(log => {
           const processedData = processElevatorData(log.data);
+
+          // ✅ NEW: Derive error state purely from errorCode (via errorInfo.code), not priority scoring
+          const code = log.errorInfo?.code;
+          const hasErrorCode = code && code !== '000' && code !== '0000';
+          const overallStatus =
+            hasErrorCode
+              ? 'error'
+              : (processedData.overallStatus === 'error' ? 'active' : processedData.overallStatus);
+
           return {
             id: log.elevatorId,
             company: log.elevatorCompany,
@@ -327,7 +336,8 @@ export default function ElevatorOverview() {
             workingHours: log.workingHours, // ✅ Pass through working hours from backend
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
             errorInfo: log.errorInfo,
-            ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus, registerBits
+            ...processedData,
+            overallStatus // ✅ Override overallStatus based only on errorCode
           };
         });
         
@@ -369,6 +379,15 @@ export default function ElevatorOverview() {
         // Process each elevator's data (same logic as before)
         const processedElevators = response.data.logs.map(log => {
           const processedData = processElevatorData(log.data);
+
+          // ✅ NEW: Derive error state purely from errorCode (via errorInfo.code), not priority scoring
+          const code = log.errorInfo?.code;
+          const hasErrorCode = code && code !== '000' && code !== '0000';
+          const overallStatus =
+            hasErrorCode
+              ? 'error'
+              : (processedData.overallStatus === 'error' ? 'active' : processedData.overallStatus);
+
           return {
             id: log.elevatorId,
             company: log.elevatorCompany,
@@ -379,7 +398,8 @@ export default function ElevatorOverview() {
             workingHours: log.workingHours, // ✅ Pass through working hours from backend
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
             errorInfo: log.errorInfo,
-            ...processedData // floor, primaryStatus, serviceStatus, powerStatus, overallStatus
+            ...processedData,
+            overallStatus // ✅ Override overallStatus based only on errorCode
           };
         });
         
@@ -498,14 +518,6 @@ export default function ElevatorOverview() {
 
   return (
     <Col xs={12} md={9} lg={10} xl={10} className={`${styles.mainCO} p-3`}>
-      {/* Header */}
-      <div className="mb-4">
-        <h4 className="mb-1 fw-bold">Elevator Dashboard</h4>
-         <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
-           Periodic monitoring of elevator systems
-         </p>
-      </div>
-
       {/* Top Status Cards - Blue Theme */}
       <Row className="mb-0">
         <Col xs={12} md={4} className="mb-3">
