@@ -8,7 +8,11 @@ const connectDB = async () => {
   }
 
   try {
-    await mongoose.connect(uri);
+    // ✅ family: 4 = use IPv4 only — Azure App Service often fails IPv6 routes to Atlas (ReplicaSetNoPrimary / Unknown servers)
+    await mongoose.connect(uri, {
+      family: 4,
+      serverSelectionTimeoutMS: 45000,
+    });
     console.log('✅ MongoDB Connected');
   } catch (err) {
     console.error('❌ MongoDB Connection Failed:', err.message);
