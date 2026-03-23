@@ -321,10 +321,14 @@ export default function ElevatorOverview() {
           // ✅ NEW: Derive error state purely from errorCode (via errorInfo.code), not priority scoring
           const code = log.errorInfo?.code;
           const hasErrorCode = code && code !== '000' && code !== '0000';
-          const overallStatus =
-            hasErrorCode
-              ? 'error'
-              : (processedData.overallStatus === 'error' ? 'active' : processedData.overallStatus);
+          const hasMaintenance = processedData.serviceStatus.includes('Maintenance ON');
+          const hasInService = processedData.serviceStatus.includes('In Service');
+          const cardState = hasErrorCode && hasMaintenance
+            ? 'maintenance_error'
+            : (hasMaintenance && hasInService
+              ? 'maintenance_inservice'
+              : (hasMaintenance ? 'maintenance' : (hasErrorCode ? 'error' : 'normal')));
+          const overallStatus = hasErrorCode ? 'error' : 'active';
 
           return {
             id: log.elevatorId,
@@ -337,6 +341,10 @@ export default function ElevatorOverview() {
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
             errorInfo: log.errorInfo,
             ...processedData,
+            hasErrorCode,
+            hasMaintenance,
+            hasInService,
+            cardState,
             overallStatus // ✅ Override overallStatus based only on errorCode
           };
         });
@@ -383,10 +391,14 @@ export default function ElevatorOverview() {
           // ✅ NEW: Derive error state purely from errorCode (via errorInfo.code), not priority scoring
           const code = log.errorInfo?.code;
           const hasErrorCode = code && code !== '000' && code !== '0000';
-          const overallStatus =
-            hasErrorCode
-              ? 'error'
-              : (processedData.overallStatus === 'error' ? 'active' : processedData.overallStatus);
+          const hasMaintenance = processedData.serviceStatus.includes('Maintenance ON');
+          const hasInService = processedData.serviceStatus.includes('In Service');
+          const cardState = hasErrorCode && hasMaintenance
+            ? 'maintenance_error'
+            : (hasMaintenance && hasInService
+              ? 'maintenance_inservice'
+              : (hasMaintenance ? 'maintenance' : (hasErrorCode ? 'error' : 'normal')));
+          const overallStatus = hasErrorCode ? 'error' : 'active';
 
           return {
             id: log.elevatorId,
@@ -399,6 +411,10 @@ export default function ElevatorOverview() {
             maintenanceHours: log.maintenanceHours, // ✅ Pass through maintenance hours from backend
             errorInfo: log.errorInfo,
             ...processedData,
+            hasErrorCode,
+            hasMaintenance,
+            hasInService,
+            cardState,
             overallStatus // ✅ Override overallStatus based only on errorCode
           };
         });
@@ -684,49 +700,40 @@ export default function ElevatorOverview() {
                   }}
                 >
                   {individualElevators.map((elevator) => {
-                // ✅ Get color mapping based on priority
-                const getPriorityColor = (color) => {
-                  const colorMap = {
-                    'red': '#dc3545',      // Critical/Emergency
-                    'orange': '#fd7e14',   // Maintenance/Inspection  
-                    'yellow': '#ffc107',   // Warning
-                    'green': '#198754',    // Normal/Running
-                    'blue': '#0d6efd',     // Info/Mode
-                    'gray': '#6c757d'      // Standby/Out of Service
+                // ✅ Card color logic: errorCode + maintenance bit
+                // normal -> green, maintenance -> yellow, error -> red, both -> split yellow/red
+                const getCardStyles = (state) => {
+                  const styleMap = {
+                    normal: {
+                      borderColor: '#198754',
+                      background: 'linear-gradient(to right, rgba(25, 135, 84, 0.25) 0%, rgba(25, 135, 84, 0.25) 20%, #f5f5f5 50%, #f5f5f5 100%)',
+                      shadow: '0 4px 15px rgba(25, 135, 84, 0.3), 0 2px 8px rgba(25, 135, 84, 0.2)'
+                    },
+                    maintenance: {
+                      borderColor: '#ffc107',
+                      background: 'linear-gradient(to right, rgba(255, 193, 7, 0.25) 0%, rgba(255, 193, 7, 0.25) 20%, #f5f5f5 50%, #f5f5f5 100%)',
+                      shadow: '0 4px 15px rgba(255, 193, 7, 0.3), 0 2px 8px rgba(255, 193, 7, 0.2)'
+                    },
+                    error: {
+                      borderColor: '#dc3545',
+                      background: 'linear-gradient(to right, rgba(220, 53, 69, 0.25) 0%, rgba(220, 53, 69, 0.25) 20%, #f5f5f5 50%, #f5f5f5 100%)',
+                      shadow: '0 4px 15px rgba(220, 53, 69, 0.3), 0 2px 8px rgba(220, 53, 69, 0.2)'
+                    },
+                    maintenance_error: {
+                      borderColor: '#dc3545',
+                      background: 'linear-gradient(to right, rgba(255, 193, 7, 0.22) 0%, rgba(255, 193, 7, 0.18) 16%, rgba(255, 193, 7, 0.10) 30%, rgba(220, 53, 69, 0.10) 44%, rgba(220, 53, 69, 0.18) 58%, rgba(220, 53, 69, 0.22) 72%, #f5f5f5 100%)',
+                      shadow: '0 4px 15px rgba(255, 193, 7, 0.18), 0 4px 15px rgba(220, 53, 69, 0.18), 0 2px 8px rgba(220, 53, 69, 0.15)'
+                    },
+                    maintenance_inservice: {
+                      borderColor: '#198754',
+                      background: 'linear-gradient(to right, rgba(255, 193, 7, 0.40) 0%, rgba(255, 193, 7, 0.34) 16%, rgba(255, 193, 7, 0.22) 30%, rgba(25, 135, 84, 0.22) 44%, rgba(25, 135, 84, 0.34) 58%, rgba(25, 135, 84, 0.40) 72%, #f5f5f5 100%)',
+                      shadow: '0 4px 15px rgba(255, 193, 7, 0.24), 0 4px 15px rgba(25, 135, 84, 0.24), 0 2px 8px rgba(25, 135, 84, 0.18)'
+                    }
                   };
-                  return colorMap[color] || '#6c757d';
+                  return styleMap[state] || styleMap.normal;
                 };
 
-                const borderColor = getPriorityColor(elevator.priorityColor);
-
-                // ✅ Get background fade color based on priority
-                const getBackgroundFade = (color) => {
-                  const fadeMap = {
-                    'red': 'rgba(220, 53, 69, 0.25)',      // Critical/Emergency
-                    'orange': 'rgba(253, 126, 20, 0.25)',   // Maintenance/Inspection
-                    'yellow': 'rgba(255, 193, 7, 0.25)',    // Warning
-                    'green': 'rgba(25, 135, 84, 0.25)',     // Normal/Running
-                    'blue': 'rgba(13, 110, 253, 0.25)',     // Info/Mode
-                    'gray': 'rgba(108, 117, 125, 0.25)'     // Standby/Out of Service
-                  };
-                  return fadeMap[color] || 'rgba(108, 117, 125, 0.25)';
-                };
-
-                // ✅ Get colored shadow based on priority
-                const getColoredShadow = (color) => {
-                  const shadowMap = {
-                    'red': '0 4px 15px rgba(220, 53, 69, 0.3), 0 2px 8px rgba(220, 53, 69, 0.2)',
-                    'orange': '0 4px 15px rgba(253, 126, 20, 0.3), 0 2px 8px rgba(253, 126, 20, 0.2)',
-                    'yellow': '0 4px 15px rgba(255, 193, 7, 0.3), 0 2px 8px rgba(255, 193, 7, 0.2)',
-                    'green': '0 4px 15px rgba(25, 135, 84, 0.3), 0 2px 8px rgba(25, 135, 84, 0.2)',
-                    'blue': '0 4px 15px rgba(13, 110, 253, 0.3), 0 2px 8px rgba(13, 110, 253, 0.2)',
-                    'gray': '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)'
-                  };
-                  return shadowMap[color] || '0 4px 15px rgba(108, 117, 125, 0.3), 0 2px 8px rgba(108, 117, 125, 0.2)';
-                };
-
-                const backgroundFade = getBackgroundFade(elevator.priorityColor);
-                const coloredShadow = getColoredShadow(elevator.priorityColor);
+                const cardStyles = getCardStyles(elevator.cardState);
                 const errorInfo = elevator.errorInfo || {
                   code: '000',
                   title: 'No Reported Error',
@@ -751,19 +758,19 @@ export default function ElevatorOverview() {
                         transition: 'all 0.3s ease',
                         cursor: 'pointer',
                         backgroundColor: '#f5f5f5',
-                        borderLeft: `4px solid ${borderColor}`,
-                        background: `linear-gradient(to right, ${backgroundFade} 0%, ${backgroundFade} 20%, #f5f5f5 50%, #f5f5f5 100%)`,
-                        boxShadow: coloredShadow,
+                        borderLeft: `4px solid ${cardStyles.borderColor}`,
+                        background: cardStyles.background,
+                        boxShadow: cardStyles.shadow,
                         maxHeight: '280px',
                         overflow: 'hidden'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-5px)';
-                        e.currentTarget.style.boxShadow = `${coloredShadow}, 0 8px 25px rgba(0,0,0,0.15)`;
+                        e.currentTarget.style.boxShadow = `${cardStyles.shadow}, 0 8px 25px rgba(0,0,0,0.15)`;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = coloredShadow;
+                        e.currentTarget.style.boxShadow = cardStyles.shadow;
                       }}
                     >
                       <Card.Body className="p-2" style={{ overflow: 'hidden', wordWrap: 'break-word' }}>
