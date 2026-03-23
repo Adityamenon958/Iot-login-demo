@@ -6527,6 +6527,20 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
       });
     }
 
+    // ✅ Create time buckets using IST-aligned day boundaries for non-hourly views.
+    // This avoids the 5h30m drift that appears when bucketing by UTC days.
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const startOfISTDay = (value) => {
+      const shifted = new Date(value.getTime() + IST_OFFSET_MS);
+      return new Date(Date.UTC(
+        shifted.getUTCFullYear(),
+        shifted.getUTCMonth(),
+        shifted.getUTCDate()
+      ) - IST_OFFSET_MS);
+    };
+    const formatISTDateKey = (value) =>
+      new Date(value.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+
     // ✅ Create time buckets using the SAME approach as crane timeseries
     const buckets = [];
     const msPerDay = 24 * 60 * 60 * 1000;
@@ -6546,30 +6560,33 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
         cursor = new Date(hourStart.getTime() + 60 * 60 * 1000);
       }
     } else if (finalGranularity === 'daily') {
-      // Daily buckets - use UTC to avoid timezone issues
-      let cursor = new Date(start);
-      while (cursor <= new Date(end)) {
-        const dayStart = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()));
+      // Daily buckets - align to IST day boundaries
+      const rangeEnd = new Date(end);
+      let cursor = startOfISTDay(new Date(start));
+      while (cursor <= rangeEnd) {
+        const dayStart = new Date(cursor);
         const dayEnd = new Date(dayStart.getTime() + msPerDay);
         buckets.push({
           start: dayStart,
-          end: dayEnd > new Date(end) ? new Date(end) : dayEnd,
-          label: dayStart.toISOString().slice(0, 10)
+          end: dayEnd > rangeEnd ? rangeEnd : dayEnd,
+          label: formatISTDateKey(dayStart)
         });
-        cursor = new Date(dayStart.getTime() + msPerDay);
+        cursor = new Date(dayEnd);
       }
     } else {
-      // Weekly buckets - use UTC to avoid timezone issues
-      let cursor = new Date(start);
-      while (cursor <= new Date(end)) {
-        const weekStart = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()));
+      // Weekly buckets - align to IST day boundaries
+      const rangeEnd = new Date(end);
+      let cursor = startOfISTDay(new Date(start));
+      while (cursor <= rangeEnd) {
+        const weekStart = new Date(cursor);
         const weekEnd = new Date(weekStart.getTime() + 7 * msPerDay);
+        const weekStartIST = new Date(weekStart.getTime() + IST_OFFSET_MS);
         buckets.push({
           start: weekStart,
-          end: weekEnd > new Date(end) ? new Date(end) : weekEnd,
-          label: `Week of ${weekStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+          end: weekEnd > rangeEnd ? rangeEnd : weekEnd,
+          label: `Week of ${weekStartIST.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
         });
-        cursor = new Date(weekStart.getTime() + 7 * msPerDay);
+        cursor = new Date(weekEnd);
       }
     }
     
@@ -6709,17 +6726,12 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
                 // ✅ Carry over final state to next period
                 carryOverState = { ...currentState };
                 
-                // ✅ FIX: Add 5h 30m offset only for current day in 7d/30d ranges (not 24h range)
-                const today = new Date().toISOString().slice(0, 10);
-                const isCurrentDay = bucket.label === today || bucket.label.includes(today);
-                const timezoneOffset = (isCurrentDay && finalGranularity !== 'hourly') ? 5.5 : 0;
-                
                 results.push({
                   date: bucket.label,
-                  workingHours: Math.round((workingHours + timezoneOffset) * 100) / 100,
-                  maintenanceHours: Math.round((maintenanceHours + timezoneOffset) * 100) / 100,
-                  errorHours: Math.round((errorHours + timezoneOffset) * 100) / 100,
-                  totalHours: Math.round((workingHours + maintenanceHours + errorHours + (timezoneOffset * 3)) * 100) / 100,
+                  workingHours: Math.round(workingHours * 100) / 100,
+                  maintenanceHours: Math.round(maintenanceHours * 100) / 100,
+                  errorHours: Math.round(errorHours * 100) / 100,
+                  totalHours: Math.round((workingHours + maintenanceHours + errorHours) * 100) / 100,
                   logCount: groupLogs.length
                 });
     }
