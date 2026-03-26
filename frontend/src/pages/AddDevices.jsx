@@ -25,6 +25,15 @@ export default function AddDevice() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortByDateAsc, setSortByDateAsc] = useState(false);
 
+  const [elevatorZones, setElevatorZones] = useState([]);
+  const [elevatorZoneId, setElevatorZoneId] = useState('');
+  const [newZoneName, setNewZoneName] = useState('');
+  const [newZoneCompany, setNewZoneCompany] = useState('');
+  const [showZoneEditModal, setShowZoneEditModal] = useState(false);
+  const [editingZone, setEditingZone] = useState(null);
+  const [editZoneName, setEditZoneName] = useState('');
+  const [hasElevatorOverviewAccess, setHasElevatorOverviewAccess] = useState(false);
+
   useEffect(() => {
     const fetchAuth = async () => {
       try {
@@ -34,6 +43,18 @@ export default function AddDevice() {
         setRole(role);
         setCompanyName(companyName);
         setAuthCompanyName(companyName);
+
+        if (role === 'admin' || role === 'superadmin') {
+          try {
+            const accessRes = await axios.get('/api/check-dashboard-access/elevatorOverview', { withCredentials: true });
+            setHasElevatorOverviewAccess(Boolean(accessRes.data?.hasAccess));
+          } catch (accessErr) {
+            console.error('Elevator overview access check failed:', accessErr.message);
+            setHasElevatorOverviewAccess(false);
+          }
+        } else {
+          setHasElevatorOverviewAccess(false);
+        }
 
         const isAuthorized = (role === "admin" || (role === "superadmin"));
         const hasSubscription = subscriptionStatus === "active";
@@ -77,6 +98,15 @@ export default function AddDevice() {
     }
   };
 
+  const fetchElevatorZones = async () => {
+    try {
+      const res = await axios.get('/api/elevator-zones', { withCredentials: true });
+      setElevatorZones(res.data || []);
+    } catch (e) {
+      console.error('Error fetching elevator zones:', e);
+    }
+  };
+
   useEffect(() => {
     // ✅ Auto-generate UID only in add mode
     if (!isEditMode && companyName && deviceId) {
@@ -96,6 +126,102 @@ export default function AddDevice() {
     }
   }, [role, companyName]);
 
+  const canManageZones = (role === 'admin' || role === 'superadmin') && hasElevatorOverviewAccess;
+
+  useEffect(() => {
+    if (canManageZones) {
+      fetchElevatorZones();
+    } else {
+      setElevatorZones([]);
+    }
+  }, [canManageZones]);
+
+  useEffect(() => {
+    if (role === 'superadmin' && authCompanyName) {
+      setNewZoneCompany((prev) => prev || authCompanyName);
+    }
+  }, [role, authCompanyName]);
+
+  const handleCreateZone = async (e) => {
+    e.preventDefault();
+    if (!newZoneName.trim()) {
+      alert('Enter a zone name');
+      return;
+    }
+    if (role === 'superadmin' && !newZoneCompany.trim()) {
+      alert('Enter the company name this zone belongs to');
+      return;
+    }
+    try {
+      await axios.post(
+        '/api/elevator-zones',
+        {
+          name: newZoneName.trim(),
+          ...(role === 'superadmin' ? { companyName: newZoneCompany.trim() } : {}),
+        },
+        { withCredentials: true }
+      );
+      setNewZoneName('');
+      await fetchElevatorZones();
+      alert('Zone created');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to create zone');
+    }
+  };
+
+  const handleDeleteZone = async (zone) => {
+    if (role !== 'admin' && role !== 'superadmin') return;
+    if (role === 'admin' && zone.companyName !== authCompanyName) {
+      alert('You can only delete zones in your own company.');
+      return;
+    }
+    if (!window.confirm(`Delete zone "${zone.name}"? Elevators in this zone will become unassigned.`)) return;
+    try {
+      await axios.delete(`/api/elevator-zones/${zone._id}`, { withCredentials: true });
+      await fetchElevatorZones();
+      fetchDevices(role === 'superadmin' ? null : authCompanyName);
+      alert('Zone deleted');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to delete zone');
+    }
+  };
+
+  const openEditZone = (zone) => {
+    if (role !== 'admin' && role !== 'superadmin') return;
+    if (role === 'admin' && zone.companyName !== authCompanyName) {
+      alert('You can only edit zones in your own company.');
+      return;
+    }
+    setEditingZone(zone);
+    setEditZoneName(zone.name);
+    setShowZoneEditModal(true);
+  };
+
+  const handleSaveEditZone = async (e) => {
+    e.preventDefault();
+    if (!editingZone || !editZoneName.trim()) return;
+    try {
+      await axios.patch(
+        `/api/elevator-zones/${editingZone._id}`,
+        { name: editZoneName.trim() },
+        { withCredentials: true }
+      );
+      setShowZoneEditModal(false);
+      setEditingZone(null);
+      await fetchElevatorZones();
+      fetchDevices(role === 'superadmin' ? null : authCompanyName);
+      alert('Zone updated');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to update zone');
+    }
+  };
+
+  const zonesForCompany = (cn) =>
+    elevatorZones.filter((z) => z.companyName === cn);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isEditMode) {
@@ -106,6 +232,9 @@ export default function AddDevice() {
       }
 
       const formData = { companyName, uid, deviceId, deviceType };
+      if (String(deviceType).toLowerCase() === 'elevator' && elevatorZoneId) {
+        formData.elevatorZoneId = elevatorZoneId;
+      }
 
       try {
         const response = await axios.post('/api/devices', formData, { withCredentials: true });
@@ -114,6 +243,7 @@ export default function AddDevice() {
         alert(response.data.message);
         setDeviceId('');
         setDeviceType('');
+        setElevatorZoneId('');
         setShowModal(false);
       } catch (error) {
         console.error('Error submitting form:', error);
@@ -129,6 +259,11 @@ export default function AddDevice() {
         // Backend supports superadmin changing companyName; admin cannot
         const payload = { deviceId, deviceType };
         if (role === 'superadmin' && companyName) payload.companyName = companyName;
+        if (String(deviceType).toLowerCase() === 'elevator') {
+          payload.elevatorZoneId = elevatorZoneId || null;
+        } else {
+          payload.elevatorZoneId = null;
+        }
         await axios.put(`/api/devices/${editingDevice._id}`, payload, { withCredentials: true });
         alert('Device updated successfully!');
         setShowModal(false);
@@ -139,6 +274,7 @@ export default function AddDevice() {
         setUid('');
         setDeviceId('');
         setDeviceType('');
+        setElevatorZoneId('');
         fetchDevices(role === 'superadmin' ? null : authCompanyName);
       } catch (error) {
         console.error('Error updating device:', error);
@@ -165,6 +301,8 @@ export default function AddDevice() {
     setUid(dev.uid);
     setDeviceId(dev.deviceId || '');
     setDeviceType(dev.deviceType || '');
+    const zid = dev.elevatorZoneId?._id || dev.elevatorZoneId || '';
+    setElevatorZoneId(zid ? String(zid) : '');
     setShowModal(true);
   };
 
@@ -200,6 +338,7 @@ export default function AddDevice() {
     setUid('');
     setDeviceId('');
     setDeviceType('');
+    setElevatorZoneId('');
   };
 
   const filteredDevices = devices
@@ -258,10 +397,128 @@ export default function AddDevice() {
               {/* ✅ Free text input instead of dropdown */}
               <Form.Control type="text" value={deviceType} onChange={(e) => setDeviceType(e.target.value)} required className="custom_input1" />
             </Form.Group>
+            {String(deviceType).toLowerCase() === 'elevator' && canManageZones && (
+              <Form.Group className="my-1">
+                <Form.Label className="custom_label1">Elevator zone (optional)</Form.Label>
+                <Form.Select
+                  className="custom_input1"
+                  value={elevatorZoneId}
+                  onChange={(e) => setElevatorZoneId(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {zonesForCompany(companyName).map((z) => (
+                    <option key={z._id} value={z._id}>
+                      {z.name}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            )}
             <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">{isEditMode ? 'Save Changes' : 'Submit'}</Button>
           </Form>
         </Modal.Body>
       </Modal>
+
+      {canManageZones && (
+        <>
+          <Modal show={showZoneEditModal} onHide={() => { setShowZoneEditModal(false); setEditingZone(null); }} centered>
+            <Modal.Header closeButton>
+              <Modal.Title>Edit zone</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <Form onSubmit={handleSaveEditZone}>
+                <Form.Group className="mb-2">
+                  <Form.Label>Zone name</Form.Label>
+                  <Form.Control
+                    value={editZoneName}
+                    onChange={(e) => setEditZoneName(e.target.value)}
+                    required
+                    className="custom_input1"
+                  />
+                </Form.Group>
+                <Button type="submit" variant="primary">Save</Button>
+              </Form>
+            </Modal.Body>
+          </Modal>
+
+          <Row className="mt-4 mb-2">
+            <Col xs={12}>
+              <h4 className="mb-3">Elevator zones</h4>
+              <p className="text-muted small mb-2">
+                Create zones here, then assign elevator devices to a zone in <strong>Manage Device</strong>.
+              </p>
+              <Form onSubmit={handleCreateZone} className="d-flex flex-wrap gap-2 align-items-end mb-3">
+                {role === 'superadmin' && (
+                  <Form.Group>
+                    <Form.Label className="small">Company</Form.Label>
+                    <Form.Control
+                      className="custom_input1"
+                      style={{ minWidth: 180 }}
+                      value={newZoneCompany}
+                      onChange={(e) => setNewZoneCompany(e.target.value)}
+                      placeholder="Company name"
+                      required
+                    />
+                  </Form.Group>
+                )}
+                <Form.Group>
+                  <Form.Label className="small">New zone name</Form.Label>
+                  <Form.Control
+                    className="custom_input1"
+                    style={{ minWidth: 220 }}
+                    value={newZoneName}
+                    onChange={(e) => setNewZoneName(e.target.value)}
+                    placeholder="e.g. Cloud9 Hospital — Goregaon"
+                    required
+                  />
+                </Form.Group>
+                <Button type="submit" variant="outline-primary" size="sm">
+                  Add zone
+                </Button>
+              </Form>
+              <Table size="sm" bordered responsive className="mb-0">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    {role === 'superadmin' && <th>Company</th>}
+                    <th style={{ width: 140 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(role === 'superadmin'
+                    ? elevatorZones
+                    : elevatorZones.filter((z) => z.companyName === authCompanyName)
+                  ).length === 0 ? (
+                    <tr>
+                      <td colSpan={role === 'superadmin' ? 3 : 2} className="text-center text-muted">
+                        No zones yet
+                      </td>
+                    </tr>
+                  ) : (
+                    (role === 'superadmin'
+                      ? elevatorZones
+                      : elevatorZones.filter((z) => z.companyName === authCompanyName)
+                    ).map((z) => (
+                      <tr key={z._id}>
+                        <td>{z.name}</td>
+                        {role === 'superadmin' && <td>{z.companyName}</td>}
+                        <td>
+                          <Button size="sm" variant="link" className="p-0 me-2" onClick={() => openEditZone(z)}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="link" className="p-0 text-danger" onClick={() => handleDeleteZone(z)}>
+                            Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </Col>
+          </Row>
+        </>
+      )}
 
       <Row className="mt-4">
         <h4 className="mt-3">Existing Devices</h4>
@@ -299,6 +556,7 @@ export default function AddDevice() {
                   <th>Device ID</th>
                   <th>Type</th>
                   <th>Company</th>
+                  <th>Zone</th>
                   {(role === 'admin' || role === 'superadmin') && (
                     <th>Actions</th>
                   )}
@@ -307,7 +565,7 @@ export default function AddDevice() {
               <tbody>
                 {filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan={role === 'admin' || role === 'superadmin' ? 6 : 5} className="text-center">No matching devices</td>
+                    <td colSpan={role === 'admin' || role === 'superadmin' ? 7 : 6} className="text-center">No matching devices</td>
                   </tr>
                 ) : (
                   filteredDevices.map((dev, index) => (
@@ -317,6 +575,11 @@ export default function AddDevice() {
                       <td>{dev.deviceId}</td>
                       <td>{dev.deviceType}</td>
                       <td>{dev.companyName}</td>
+                      <td>
+                        {String(dev.deviceType || '').toLowerCase() === 'elevator' && dev.elevatorZoneId?.name
+                          ? dev.elevatorZoneId.name
+                          : '—'}
+                      </td>
                       {(role === 'admin' || role === 'superadmin') && (
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <div className="d-flex align-items-center gap-2">

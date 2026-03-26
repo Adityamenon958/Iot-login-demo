@@ -54,7 +54,14 @@ const getUniqueStatuses = (elevators) => {
   return [...new Set(statuses)].filter(Boolean).sort();
 };
 
-export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshing, lastRefreshTime }) {
+export default function ElevatorLogsTable({
+  timeRange,
+  setTimeRange,
+  isRefreshing,
+  lastRefreshTime,
+  elevatorZoneId = '',
+  zoneUnassigned = false,
+}) {
   // ✅ State for data fetching
   const [elevators, setElevators] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +101,8 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
           sortBy: sortConfig.key,
           sortDirection: sortConfig.direction,
           search: debouncedSearchTerm,
+          ...(elevatorZoneId ? { elevatorZoneId } : {}),
+          ...(zoneUnassigned ? { zoneUnassigned: 'true' } : {}),
           ...filters
         }
       });
@@ -268,10 +277,14 @@ export default function ElevatorLogsTable({ timeRange, setTimeRange, isRefreshin
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [elevatorZoneId, zoneUnassigned]);
+
   // ✅ Fetch data when dependencies change
   useEffect(() => {
     fetchElevatorData();
-  }, [currentPage, rowsPerPage, timeRange, sortConfig, debouncedSearchTerm, filters]);
+  }, [currentPage, rowsPerPage, timeRange, sortConfig, debouncedSearchTerm, filters, elevatorZoneId, zoneUnassigned]);
 
   // ✅ Helper function to format time ago
   const formatTimeAgo = (date) => {

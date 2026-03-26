@@ -33,10 +33,43 @@ const { alarmEmail } = require("./backend/utils/emailTemplates");
 
 const isProd = process.env.NODE_ENV === 'production';
 const DISABLE_PAYMENTS = process.env.DISABLE_PAYMENTS === 'true';
+const BYPASS_SUBSCRIPTION_CHECK = process.env.BYPASS_SUBSCRIPTION_CHECK === 'true';
 const CraneLog = require("./backend/models/CraneLog");
 const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess");
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 const ElevatorEvent = require("./backend/models/ElevatorEvent");
+const ElevatorZone = require("./backend/models/ElevatorZone");
+
+function getEffectiveSubscriptionStatus(user) {
+  return BYPASS_SUBSCRIPTION_CHECK ? 'active' : (user.subscriptionStatus || 'inactive');
+}
+
+/** Limit device allowlist by optional zone filter (elevators only when filter active). */
+function getDeviceAllowlistSet(allowedDevices, query) {
+  const elevatorZoneId = query.elevatorZoneId;
+  const zoneUnassigned = query.zoneUnassigned;
+  const allIds = new Set(allowedDevices.map((d) => d.deviceId));
+
+  if (elevatorZoneId && String(elevatorZoneId).trim()) {
+    const filtered = allowedDevices.filter(
+      (d) =>
+        String(d.deviceType || "").toLowerCase() === "elevator" &&
+        d.elevatorZoneId &&
+        String(d.elevatorZoneId) === String(elevatorZoneId)
+    );
+    return new Set(filtered.map((d) => d.deviceId));
+  }
+
+  if (zoneUnassigned === "true") {
+    const filtered = allowedDevices.filter(
+      (d) =>
+        String(d.deviceType || "").toLowerCase() === "elevator" && !d.elevatorZoneId
+    );
+    return new Set(filtered.map((d) => d.deviceId));
+  }
+
+  return allIds;
+}
 
 // ✅ SIMULATOR: Enabled only when ENABLE_SIMULATOR=true (env var)
 const ENABLE_SIMULATOR = process.env.ENABLE_SIMULATOR === 'true';
@@ -594,7 +627,7 @@ app.post('/api/auth/update-subscription', authenticateToken, async (req, res) =>
       id: user._id,
       role: user.role,
       companyName: user.companyName,
-      subscriptionStatus: user.subscriptionStatus,
+      subscriptionStatus: getEffectiveSubscriptionStatus(user),
     };
 
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -621,6 +654,10 @@ app.get('/api/subscription/status', async (req, res) => {
   if (!token) return res.status(401).json({ message: "Unauthorized" });
 
   try {
+    if (BYPASS_SUBSCRIPTION_CHECK) {
+      return res.json({ active: true, status: 'active' });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
     const user = await User.findById(decoded.id);
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -761,7 +798,7 @@ app.post('/api/payment/activate-subscription', authenticateToken, async (req, re
       id: user._id,
       role: user.role,
       companyName: user.companyName,
-      subscriptionStatus: user.subscriptionStatus,
+      subscriptionStatus: getEffectiveSubscriptionStatus(user),
     }, process.env.JWT_SECRET || 'supersecretkey', { expiresIn: '7d' });
 
     console.log("🔐 Activating subscription for user ID:", user._id);
@@ -945,7 +982,7 @@ app.get('/api/auth/userinfo', authenticateToken, async (req, res) => {
       role: user.role,
       companyName: user.companyName,
       contactInfo: user.contactInfo,
-      subscriptionStatus: user.subscriptionStatus,
+      subscriptionStatus: getEffectiveSubscriptionStatus(user),
       subscriptionStart: user.subscriptionStart,
       isActive: user.isActive,
       createdAt: user.createdAt,
@@ -1011,13 +1048,31 @@ app.get('/api/devices/count/by-company', async (req, res) => {
 // ✅ Device Routes
 app.post('/api/devices', async (req, res) => {
   try {
-    const { companyName, uid, deviceId, deviceType } = req.body;
+    const { companyName, uid, deviceId, deviceType, elevatorZoneId } = req.body;
 
     if (!companyName || !uid || !deviceId || !deviceType) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const newDevice = new Device({ companyName, uid, deviceId, deviceType });
+    let zoneIdToSet = null;
+    if (elevatorZoneId) {
+      if (String(deviceType).toLowerCase() !== 'elevator') {
+        return res.status(400).json({ message: 'elevatorZoneId is only valid for elevator device type' });
+      }
+      const zone = await ElevatorZone.findById(elevatorZoneId);
+      if (!zone || zone.companyName !== companyName) {
+        return res.status(400).json({ message: 'Invalid elevator zone for this company' });
+      }
+      zoneIdToSet = zone._id;
+    }
+
+    const newDevice = new Device({
+      companyName,
+      uid,
+      deviceId,
+      deviceType,
+      ...(zoneIdToSet ? { elevatorZoneId: zoneIdToSet } : {}),
+    });
 
     await newDevice.save();
     res.status(201).json({ message: 'Device added successfully' });
@@ -1031,7 +1086,7 @@ app.get('/api/devices', async (req, res) => {
   const companyName = req.query.companyName;
   try {
     const query = companyName ? { companyName } : {};
-    const devices = await Device.find(query);
+    const devices = await Device.find(query).populate('elevatorZoneId', 'name companyName');
     res.json(devices);
   } catch (error) {
     console.error('Error fetching devices:', error);
@@ -1055,14 +1110,39 @@ app.put('/api/devices/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const { companyName, deviceId, deviceType } = req.body || {};
+    const { companyName, deviceId, deviceType, elevatorZoneId } = req.body || {};
     const update = {};
     // superadmin can change companyName
     if (companyName !== undefined && actorRole === 'superadmin') update.companyName = companyName;
     if (deviceId !== undefined) update.deviceId = deviceId;
     if (deviceType !== undefined) update.deviceType = deviceType;
 
-    const updated = await Device.findByIdAndUpdate(req.params.id, update, { new: true });
+    const nextCompany =
+      companyName !== undefined && actorRole === 'superadmin'
+        ? companyName
+        : targetDevice.companyName;
+    const effectiveType =
+      deviceType !== undefined ? deviceType : targetDevice.deviceType;
+
+    if (elevatorZoneId !== undefined) {
+      if (elevatorZoneId === null || elevatorZoneId === '') {
+        update.elevatorZoneId = null;
+      } else {
+        if (String(effectiveType).toLowerCase() !== 'elevator') {
+          return res.status(400).json({ message: 'elevatorZoneId is only valid for elevator devices' });
+        }
+        const zone = await ElevatorZone.findById(elevatorZoneId);
+        if (!zone || zone.companyName !== nextCompany) {
+          return res.status(400).json({ message: 'Invalid elevator zone for this company' });
+        }
+        update.elevatorZoneId = zone._id;
+      }
+    }
+
+    const updated = await Device.findByIdAndUpdate(req.params.id, update, { new: true }).populate(
+      'elevatorZoneId',
+      'name companyName'
+    );
     return res.json({ success: true, message: 'Device updated successfully', device: updated });
   } catch (err) {
     console.error('Update device error:', err.message);
@@ -1207,11 +1287,114 @@ app.delete('/api/devices/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const deleted = await Device.findByIdAndDelete(req.params.id);
+    const deleted =     await Device.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Device not found' });
     res.json({ message: 'Device deleted successfully' });
   } catch (err) {
     console.error("❌ Delete failed:", err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ✅ Elevator zones: group elevator devices by site/region (admin CRUD; any logged-in user can list own company)
+const ensureElevatorZoneAdmin = (req, res) => {
+  const role = req.user?.role;
+  if (!role || (role !== 'admin' && role !== 'superadmin')) {
+    res.status(403).json({ message: 'Forbidden' });
+    return false;
+  }
+  return true;
+};
+
+app.get('/api/elevator-zones', authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const qCompany = req.query.companyName;
+    const filter = {};
+    if (role === 'superadmin') {
+      if (qCompany) filter.companyName = qCompany;
+    } else {
+      filter.companyName = companyName;
+    }
+    const zones = await ElevatorZone.find(filter).sort({ name: 1 }).lean();
+    res.json(zones);
+  } catch (err) {
+    console.error('List elevator zones error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/api/elevator-zones', authenticateToken, async (req, res) => {
+  if (!ensureElevatorZoneAdmin(req, res)) return;
+  try {
+    const { role, companyName } = req.user;
+    const { name, companyName: bodyCompany } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: 'Zone name is required' });
+    }
+    const targetCompany =
+      role === 'superadmin' ? bodyCompany || companyName : companyName;
+    if (!targetCompany) {
+      return res.status(400).json({ message: 'companyName is required for superadmin' });
+    }
+    const zone = await ElevatorZone.create({
+      companyName: targetCompany,
+      name: String(name).trim(),
+    });
+    res.status(201).json(zone);
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'A zone with this name already exists for this company' });
+    }
+    console.error('Create elevator zone error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.patch('/api/elevator-zones/:id', authenticateToken, async (req, res) => {
+  if (!ensureElevatorZoneAdmin(req, res)) return;
+  try {
+    const zone = await ElevatorZone.findById(req.params.id);
+    if (!zone) return res.status(404).json({ message: 'Zone not found' });
+    const { role, companyName } = req.user;
+    if (role !== 'superadmin' && zone.companyName !== companyName) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const { name } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: 'Zone name is required' });
+    }
+    const conflict = await ElevatorZone.findOne({
+      companyName: zone.companyName,
+      name: String(name).trim(),
+      _id: { $ne: zone._id },
+    });
+    if (conflict) {
+      return res.status(400).json({ message: 'A zone with this name already exists' });
+    }
+    zone.name = String(name).trim();
+    await zone.save();
+    res.json(zone);
+  } catch (err) {
+    console.error('Patch elevator zone error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.delete('/api/elevator-zones/:id', authenticateToken, async (req, res) => {
+  if (!ensureElevatorZoneAdmin(req, res)) return;
+  try {
+    const zone = await ElevatorZone.findById(req.params.id);
+    if (!zone) return res.status(404).json({ message: 'Zone not found' });
+    const { role, companyName } = req.user;
+    if (role !== 'superadmin' && zone.companyName !== companyName) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    await Device.updateMany({ elevatorZoneId: zone._id }, { $unset: { elevatorZoneId: 1 } });
+    await ElevatorZone.findByIdAndDelete(zone._id);
+    res.json({ message: 'Zone deleted; elevators unassigned from this zone' });
+  } catch (err) {
+    console.error('Delete elevator zone error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -1390,7 +1573,7 @@ app.get("/api/elevators/recent", authenticateToken, async (req, res) => {
     // ✅ 2. Build device allowlist from Device collection (ONCE per request)
     const deviceQuery = role !== "superadmin" ? { companyName } : {};
     const allowedDevices = await Device.find(deviceQuery).lean();
-    const allowedDevicesById = new Set(allowedDevices.map(d => d.deviceId));
+    const allowedDevicesById = getDeviceAllowlistSet(allowedDevices, req.query);
     
     // ✅ 3. Build match filter with company filtering
     const matchFilter = { ...companyFilter };
@@ -1699,7 +1882,7 @@ app.get("/api/elevators/all-logs", authenticateToken, async (req, res) => {
     // ✅ Build device allowlist from Device collection (ONCE per request)
     const deviceQuery = userRole !== "superadmin" ? { companyName: userCompany } : {};
     const allowedDevices = await Device.find(deviceQuery).lean();
-    const allowedDevicesById = new Set(allowedDevices.map(d => d.deviceId));
+    const allowedDevicesById = getDeviceAllowlistSet(allowedDevices, req.query);
     console.log(`📱 [${requestId}] Device allowlist: ${allowedDevicesById.size} devices`);
     
     // Time range filter (last X hours)
@@ -5572,7 +5755,7 @@ app.post('/api/auth/google-login', async (req, res) => {
       id: user._id,
       role: user.role,
       companyName: user.companyName,
-      subscriptionStatus: user.subscriptionStatus || "inactive"
+      subscriptionStatus: getEffectiveSubscriptionStatus(user)
     };
 
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET || "supersecretkey", { expiresIn: '1h' });
@@ -5665,7 +5848,7 @@ app.post('/api/login', async (req, res) => {
         id: user._id,
         role: user.role,
         companyName: user.companyName,
-        subscriptionStatus: user.subscriptionStatus || "inactive"
+        subscriptionStatus: getEffectiveSubscriptionStatus(user)
       },
       process.env.JWT_SECRET || "supersecretkey",
       { expiresIn: '2h' }
@@ -5684,7 +5867,7 @@ app.post('/api/login', async (req, res) => {
         message: "Login successful ✅",
         role: user.role,
         companyName: user.companyName,
-        subscriptionStatus: user.subscriptionStatus || "inactive"
+        subscriptionStatus: getEffectiveSubscriptionStatus(user)
       });
 
   } catch (err) {

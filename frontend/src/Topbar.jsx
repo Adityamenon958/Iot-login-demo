@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Button, Modal, Image } from 'react-bootstrap';
+import { Row, Col, Button, Modal, Dropdown } from 'react-bootstrap';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import styles from './Toopbar.module.css';
 import Dlogo from '../src/assets/GSN Solutions 2.png';
 import { Menu, User, LogOut } from 'lucide-react';
 import { generateCompanyInitials } from './lib/userUtils';
+import { IoGlobeOutline } from 'react-icons/io5';
 
-export default function Topbar({ toggleSidebar }) {
+export default function Topbar({ toggleSidebar, zoneFilter, onZoneChange }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [elevatorZones, setElevatorZones] = useState([]);
+  const [animateZoneHint, setAnimateZoneHint] = useState(false);
   
   // ✅ Tooltip states
   const [showTooltip, setShowTooltip] = useState(false);
@@ -31,6 +35,32 @@ export default function Topbar({ toggleSidebar }) {
 
     fetchUserInfo();
   }, []);
+
+  const showElevatorZoneFilter = location.pathname === '/dashboard/elevator-overview';
+
+  useEffect(() => {
+    if (!showElevatorZoneFilter) return;
+
+    const fetchElevatorZones = async () => {
+      try {
+        const res = await axios.get('/api/elevator-zones', { withCredentials: true });
+        setElevatorZones(res.data || []);
+      } catch (err) {
+        console.error('Failed to fetch elevator zones in topbar:', err.message);
+        setElevatorZones([]);
+      }
+    };
+
+    fetchElevatorZones();
+  }, [showElevatorZoneFilter]);
+
+  useEffect(() => {
+    if (!showElevatorZoneFilter) return;
+
+    setAnimateZoneHint(true);
+    const timer = setTimeout(() => setAnimateZoneHint(false), 3000);
+    return () => clearTimeout(timer);
+  }, [showElevatorZoneFilter]);
 
   // ✅ Handle logout
   const handleLogout = async () => {
@@ -88,8 +118,8 @@ export default function Topbar({ toggleSidebar }) {
 
   return (
     <>
-    <Row className={`${styles.topbar} align-items-center`}>
-      <Col xs="auto" className="d-flex align-items-center">
+    <Row className={`${styles.topbar} align-items-center mb-0`}>
+      <Col xs="auto" className={styles.leftControlCol}>
         <Button
           className={` me-2 ${styles.burgerButton}`}
           onClick={toggleSidebar}
@@ -98,14 +128,66 @@ export default function Topbar({ toggleSidebar }) {
         </Button>
         <img src={Dlogo} className={`${styles.Dlogo}`} alt="Logo" />
       </Col>
+
+      {showElevatorZoneFilter && (
+        <Col xs="auto" className={styles.zoneControlColLeft}>
+          <div className={styles.zoneControlWrap}>
+            <Dropdown align="start">
+              <Dropdown.Toggle
+                as="button"
+                className={`${styles.zoneSelectButton} ${animateZoneHint ? styles.zoneAttentionOnce : ''}`}
+                aria-label="Filter by zone"
+              >
+                <IoGlobeOutline className={styles.zoneButtonIcon} />
+                {(() => {
+                  if (zoneFilter === '__unassigned__') return 'Unassigned only';
+                  if (!zoneFilter) return 'All zones';
+                  const selected = elevatorZones.find((z) => z._id === zoneFilter);
+                  if (!selected) return 'All zones';
+                  return userInfo?.role === 'superadmin'
+                    ? `${selected.companyName} - ${selected.name}`
+                    : selected.name;
+                })()}
+              </Dropdown.Toggle>
+              <Dropdown.Menu className={styles.zoneDropdownMenu}>
+                <Dropdown.Item
+                  className={styles.zoneDropdownItem}
+                  active={zoneFilter === ''}
+                  onClick={() => onZoneChange('')}
+                >
+                  All zones
+                </Dropdown.Item>
+                <Dropdown.Item
+                  className={styles.zoneDropdownItem}
+                  active={zoneFilter === '__unassigned__'}
+                  onClick={() => onZoneChange('__unassigned__')}
+                >
+                  Unassigned only
+                </Dropdown.Item>
+                {elevatorZones.map((z) => (
+                  <Dropdown.Item
+                    key={z._id}
+                    className={styles.zoneDropdownItem}
+                    active={zoneFilter === z._id}
+                    onClick={() => onZoneChange(z._id)}
+                  >
+                    {userInfo?.role === 'superadmin' ? `${z.companyName} - ${z.name}` : z.name}
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown>
+          </div>
+        </Col>
+      )}
+
       <Col>
-        <h4 className={`p-3 ps-0 h-100 d-flex align-items-center ${styles.DlogoText}`}>
+        <h4 className={`mb-0 ps-0 d-flex align-items-center ${styles.DlogoText}`}>
           {/* GSN Edge */}
         </h4>
       </Col>
       
       {/* ✅ Profile Picture Section */}
-      <Col xs="auto" className="d-flex align-items-center pe-3">
+      <Col xs="auto" className={styles.profileControlCol}>
         <div 
           ref={profileRef}
           className={styles.profilePicture}

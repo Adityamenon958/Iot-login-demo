@@ -18,6 +18,12 @@ const deviceSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // ✅ Optional: elevator devices can belong to one zone (ElevatorZone)
+  elevatorZoneId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ElevatorZone',
+    default: null,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Device', deviceSchema);

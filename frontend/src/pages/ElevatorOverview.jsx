@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Col, Row, Card, Badge, Spinner, Form, Dropdown } from 'react-bootstrap';
+import { useOutletContext } from 'react-router-dom';
 
 // ✅ CSS for Live badge animation
 const livePulseStyle = `
@@ -290,10 +291,18 @@ export default function ElevatorOverview() {
   // ✅ State for chart elevator selection
   const [selectedElevator, setSelectedElevator] = useState(null);
 
+  const { zoneFilter = '', setZoneFilter = () => {} } = useOutletContext() || {};
+
   // ✅ Background refresh states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isIndividualRefreshing, setIsIndividualRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(null);
+
+  const zoneApiParams = () => {
+    if (zoneFilter === '__unassigned__') return { zoneUnassigned: 'true' };
+    if (zoneFilter) return { elevatorZoneId: zoneFilter };
+    return {};
+  };
 
   // ✅ Fetch data for historical logs table (ALL LOGS with pagination)
   const fetchElevatorData = async (isBackgroundRefresh = false) => {
@@ -309,7 +318,8 @@ export default function ElevatorOverview() {
         params: { 
           limit: 50,            // Fetch 50 logs (reduced from 500 for performance testing)
           offset: 0,            // Start from beginning
-          hours: tableTimeRange      // Table time range filter
+          hours: tableTimeRange,      // Table time range filter
+          ...zoneApiParams(),
         }
       });
       
@@ -380,7 +390,7 @@ export default function ElevatorOverview() {
       
       const response = await axios.get('/api/elevators/recent', {
         withCredentials: true,
-        params: { limit: 50 }
+        params: { limit: 50, ...zoneApiParams() }
       });
       
       if (response.data && response.data.logs) {
@@ -420,14 +430,6 @@ export default function ElevatorOverview() {
         });
         
         setIndividualElevators(processedElevators);
-        
-        // ✅ Set selectedElevator to the elevator with the latest log (if not already set)
-        if (!selectedElevator && processedElevators.length > 0) {
-          const latestElevator = processedElevators.reduce((latest, current) => {
-            return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
-          });
-          setSelectedElevator(latestElevator.id);
-        }
       }
     } catch (err) {
       console.error('❌ Error fetching individual elevator data:', err);
@@ -454,7 +456,7 @@ export default function ElevatorOverview() {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [tableTimeRange]); // Re-fetch when table time range changes
+  }, [tableTimeRange, zoneFilter]); // Re-fetch when table time range or zone changes
 
   // ✅ Fetch individual elevator data on component mount and set up auto-refresh
   useEffect(() => {
@@ -466,7 +468,22 @@ export default function ElevatorOverview() {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, []); // No dependencies - runs once on mount
+  }, [zoneFilter]);
+
+  // ✅ Keep chart selection valid when zone or list changes
+  useEffect(() => {
+    if (individualElevators.length === 0) {
+      setSelectedElevator(null);
+      return;
+    }
+    const ids = new Set(individualElevators.map((e) => e.id));
+    if (!selectedElevator || !ids.has(selectedElevator)) {
+      const latest = individualElevators.reduce((a, b) =>
+        new Date(b.timestamp) > new Date(a.timestamp) ? b : a
+      );
+      setSelectedElevator(latest.id);
+    }
+  }, [individualElevators, selectedElevator]);
 
   // ✅ Calculate stats from individual elevator data (latest status per elevator)
   const stats = useMemo(() => {
@@ -1036,6 +1053,8 @@ export default function ElevatorOverview() {
           setTimeRange={setTableTimeRange}
           isRefreshing={isRefreshing}
           lastRefreshTime={lastRefreshTime}
+          elevatorZoneId={zoneFilter && zoneFilter !== '__unassigned__' ? zoneFilter : ''}
+          zoneUnassigned={zoneFilter === '__unassigned__'}
         />
       )}
 

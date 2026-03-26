@@ -12,6 +12,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [zoneFilter, setZoneFilter] = useState(() => localStorage.getItem('elevatorOverviewZoneFilter') || '');
 
   useEffect(() => {
     const verifyAuth = async () => {
@@ -29,15 +30,23 @@ const Dashboard = () => {
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
   const closeSidebar = () => setSidebarOpen(false);
 
+  useEffect(() => {
+    localStorage.setItem('elevatorOverviewZoneFilter', zoneFilter);
+  }, [zoneFilter]);
+
   if (!authChecked) return null; // Optional: Add loader
 
   return (
     <Container fluid className={styles.dashboard}>
-      <Topbar toggleSidebar={toggleSidebar} />
+      <Topbar
+        toggleSidebar={toggleSidebar}
+        zoneFilter={zoneFilter}
+        onZoneChange={setZoneFilter}
+      />
       <Row className="flex-grow-1">
         <Sidebar isOpen={sidebarOpen} closeSidebar={closeSidebar} />
         <Col className="p-0">
-        <Outlet />
+        <Outlet context={{ zoneFilter, setZoneFilter }} />
         </Col>
       </Row>
     </Container>

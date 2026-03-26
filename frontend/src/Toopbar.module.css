@@ -1,7 +1,9 @@
 .topbar {
     background-color: #ffffff;
-    height: 4.5rem;
+    height: 3.75rem;
     align-items: center;
+    margin-bottom: 0 !important;
+    flex-wrap: nowrap;
   }
 
   .Dlogo{
@@ -16,6 +18,157 @@
   .DlogoText{
     color: #4db3b3;
   }
+
+.zoneSelectButton {
+  width: 210px;
+  border: 1px solid #3f8fd6;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4a9ee0 0%, #67b8f1 100%);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0;
+  height: 42px;
+  padding-left: 2.35rem;
+  padding-right: 2rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.zoneButtonIcon {
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: #eaf4ff;
+  pointer-events: none;
+}
+
+.zoneSelectButton::after {
+  content: "▾";
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  color: #eaf4ff;
+  pointer-events: none;
+}
+
+.zoneSelectButton:focus,
+.zoneSelectButton:focus-visible,
+.zoneSelectButton:hover,
+.zoneSelectButton:active {
+  border-color: #3a86cc;
+  box-shadow: 0 0 0 0.15rem rgba(79, 164, 234, 0.25);
+  background: linear-gradient(135deg, #4496d7 0%, #5eafe8 100%);
+  color: #ffffff;
+}
+
+.zoneAttentionOnce {
+  animation: zoneAttentionPulse 2.6s ease-out 1;
+}
+
+@keyframes zoneAttentionPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(103, 184, 241, 0);
+  }
+  35% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 8px rgba(103, 184, 241, 0.25);
+  }
+  70% {
+    transform: scale(1.01);
+    box-shadow: 0 0 0 14px rgba(103, 184, 241, 0.08);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(103, 184, 241, 0);
+  }
+}
+
+.zoneControlCol {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.zoneControlColLeft {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 8.0rem !important;
+}
+
+.zoneControlWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.zoneControlWrap :global(.dropdown-toggle)::after {
+  display: none !important;
+}
+
+.zoneDropdownMenu {
+  margin-top: 0.35rem !important;
+  border: 1px solid #d9dee3;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  padding: 0.35rem;
+  min-width: 320px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.zoneDropdownItem {
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.95rem;
+  color: #2f3743;
+}
+
+.zoneDropdownItem:hover {
+  background-color: #eef4ff;
+  color: #1f2a37;
+}
+
+.zoneDropdownMenu :global(.dropdown-item.active),
+.zoneDropdownMenu :global(.dropdown-item:active) {
+  background-color: #2a6bc7 !important;
+  color: #ffffff !important;
+}
+
+.leftControlCol {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.profileControlCol {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  padding-right: 1rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
 
   /* ✅ Burger Button Styles */
   .burgerButton {
