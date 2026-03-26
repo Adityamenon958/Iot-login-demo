@@ -405,7 +405,7 @@ export default function ElevatorLogsTable({
         <Row className="align-items-center">
           <Col xs={12} md={6}>
             <h6 className="mb-0 fw-bold">
-              📊 Elevator Activity Logs
+               Elevator Activity Logs
               <small className="text-muted ms-2" style={{ fontSize: '0.8rem', fontWeight: 'normal' }}>
                 ({paginatedData.length} {paginatedData.length === 1 ? 'log' : 'logs'})
               </small>

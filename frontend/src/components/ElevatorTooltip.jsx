@@ -20,7 +20,7 @@ function formatElevatorList(elevators, maxDisplay = 8) {
 }
 
 // ✅ Elevator Tooltip Component
-export default function ElevatorTooltip({ elevators, title, children, placement = 'top' }) {
+export default function ElevatorTooltip({ elevators, title, children, placement = 'bottom' }) {
   if (!elevators || elevators.length === 0) {
     return children;
   }

@@ -9,6 +9,119 @@ const livePulseStyle = `
     50% { opacity: 0.5; }
     100% { opacity: 1; }
   }
+
+  @keyframes statsCardEnter {
+    0% {
+      opacity: 0;
+      transform: translateY(10px) scale(0.99);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes statsCardShine {
+    0% {
+      transform: translateX(-160%) skewX(-18deg);
+      opacity: 0;
+    }
+    20% {
+      opacity: 0.38;
+    }
+    70% {
+      opacity: 0.22;
+    }
+    100% {
+      transform: translateX(220%) skewX(-18deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes detailCardShine {
+    0% {
+      transform: translateX(-170%) skewX(-16deg);
+      opacity: 0;
+    }
+    25% {
+      opacity: 0.75;
+    }
+    100% {
+      transform: translateX(230%) skewX(-16deg);
+      opacity: 0;
+    }
+  }
+
+  .elevator-stat-card {
+    position: relative;
+    overflow: hidden;
+    animation: statsCardEnter 0.55s ease-out both;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+    will-change: transform;
+  }
+
+  .elevator-stat-card::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    left: -35%;
+    width: 56%;
+    height: 140%;
+    background: linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.52) 45%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+    animation: statsCardShine 1.45s ease-out both;
+    animation-delay: var(--shine-delay, 0.28s);
+  }
+
+  .elevator-stat-card .card-body {
+    position: relative;
+    z-index: 2;
+  }
+
+  .elevator-detail-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .elevator-detail-card::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    left: -30%;
+    width: 52%;
+    height: 145%;
+    background: linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.92) 40%,
+      rgba(179, 223, 255, 0.62) 52%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+    animation: detailCardShine 1.65s ease-out 1 both;
+    animation-delay: var(--detail-shine-delay, 0.35s);
+  }
+
+  .elevator-detail-card .card-body {
+    position: relative;
+    z-index: 2;
+  }
+
+  .elevator-stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
+  }
+
+  .elevator-stat-delay-1 { animation-delay: 0.04s; --shine-delay: 0.26s; }
+  .elevator-stat-delay-2 { animation-delay: 0.14s; --shine-delay: 0.36s; }
+  .elevator-stat-delay-3 { animation-delay: 0.24s; --shine-delay: 0.46s; }
 `;
 import axios from 'axios';
 import styles from "./MainContent.module.css";
@@ -555,7 +668,7 @@ export default function ElevatorOverview() {
       <Row className="mb-0">
         <Col xs={12} md={4} className="mb-3">
           <ElevatorTooltip elevators={stats.activeList} title="Active Elevators">
-            <Card className="h-100 border-0 shadow-lg" style={{ 
+            <Card className="h-100 border-0 shadow-lg elevator-stat-card elevator-stat-delay-1" style={{ 
               background: "linear-gradient(135deg, #1a5f7a 0%, #4facfe 100%)",
               minHeight: '120px',
               borderRadius: '15px'
@@ -581,7 +694,7 @@ export default function ElevatorOverview() {
 
         <Col xs={12} md={4} className="mb-3">
           <ElevatorTooltip elevators={stats.inactiveList} title="Inactive Elevators">
-            <Card className="h-100 border-0 shadow-lg" style={{ 
+            <Card className="h-100 border-0 shadow-lg elevator-stat-card elevator-stat-delay-2" style={{ 
               background: "linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%)",
               minHeight: '120px',
               borderRadius: '15px'
@@ -607,7 +720,7 @@ export default function ElevatorOverview() {
 
         <Col xs={12} md={4} className="mb-3">
           <ElevatorTooltip elevators={stats.errorList} title="Error Status">
-            <Card className="h-100 border-0 shadow-lg" style={{ 
+            <Card className="h-100 border-0 shadow-lg elevator-stat-card elevator-stat-delay-3" style={{ 
               background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
               minHeight: '120px',
               borderRadius: '15px'
@@ -716,35 +829,35 @@ export default function ElevatorOverview() {
                     minHeight: '300px'
                   }}
                 >
-                  {individualElevators.map((elevator) => {
+                  {individualElevators.map((elevator, index) => {
                 // ✅ Card color logic: errorCode + maintenance bit
                 // normal -> green, maintenance -> yellow, error -> red, both -> split yellow/red
                 const getCardStyles = (state) => {
                   const styleMap = {
                     normal: {
                       borderColor: '#198754',
-                      background: 'linear-gradient(to right, rgba(25, 135, 84, 0.25) 0%, rgba(25, 135, 84, 0.25) 20%, #f5f5f5 50%, #f5f5f5 100%)',
-                      shadow: '0 4px 15px rgba(25, 135, 84, 0.3), 0 2px 8px rgba(25, 135, 84, 0.2)'
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f4f9ff 52%, #e8f3ff 100%)',
+                      shadow: '0 6px 18px rgba(61, 132, 196, 0.16), 0 2px 8px rgba(61, 132, 196, 0.10)'
                     },
                     maintenance: {
-                      borderColor: '#ffc107',
-                      background: 'linear-gradient(to right, rgba(255, 193, 7, 0.25) 0%, rgba(255, 193, 7, 0.25) 20%, #f5f5f5 50%, #f5f5f5 100%)',
-                      shadow: '0 4px 15px rgba(255, 193, 7, 0.3), 0 2px 8px rgba(255, 193, 7, 0.2)'
+                      borderColor: '#f59e0b',
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f3f9ff 50%, #e7f2ff 100%)',
+                      shadow: '0 6px 18px rgba(70, 138, 201, 0.18), 0 2px 8px rgba(70, 138, 201, 0.12)'
                     },
                     error: {
                       borderColor: '#dc3545',
-                      background: 'linear-gradient(to right, rgba(220, 53, 69, 0.25) 0%, rgba(220, 53, 69, 0.25) 20%, #f5f5f5 50%, #f5f5f5 100%)',
-                      shadow: '0 4px 15px rgba(220, 53, 69, 0.3), 0 2px 8px rgba(220, 53, 69, 0.2)'
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f4f9ff 50%, #e8f2ff 100%)',
+                      shadow: '0 6px 18px rgba(76, 142, 203, 0.18), 0 2px 8px rgba(76, 142, 203, 0.12)'
                     },
                     maintenance_error: {
                       borderColor: '#dc3545',
-                      background: 'linear-gradient(to right, rgba(255, 193, 7, 0.22) 0%, rgba(255, 193, 7, 0.18) 16%, rgba(255, 193, 7, 0.10) 30%, rgba(220, 53, 69, 0.10) 44%, rgba(220, 53, 69, 0.18) 58%, rgba(220, 53, 69, 0.22) 72%, #f5f5f5 100%)',
-                      shadow: '0 4px 15px rgba(255, 193, 7, 0.18), 0 4px 15px rgba(220, 53, 69, 0.18), 0 2px 8px rgba(220, 53, 69, 0.15)'
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f2f8ff 45%, #e6f1ff 100%)',
+                      shadow: '0 6px 18px rgba(72, 136, 199, 0.2), 0 2px 8px rgba(72, 136, 199, 0.12)'
                     },
                     maintenance_inservice: {
                       borderColor: '#198754',
-                      background: 'linear-gradient(to right, rgba(255, 193, 7, 0.40) 0%, rgba(255, 193, 7, 0.34) 16%, rgba(255, 193, 7, 0.22) 30%, rgba(25, 135, 84, 0.22) 44%, rgba(25, 135, 84, 0.34) 58%, rgba(25, 135, 84, 0.40) 72%, #f5f5f5 100%)',
-                      shadow: '0 4px 15px rgba(255, 193, 7, 0.24), 0 4px 15px rgba(25, 135, 84, 0.24), 0 2px 8px rgba(25, 135, 84, 0.18)'
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f4f9ff 48%, #e7f2ff 100%)',
+                      shadow: '0 6px 18px rgba(58, 129, 193, 0.18), 0 2px 8px rgba(58, 129, 193, 0.11)'
                     }
                   };
                   return styleMap[state] || styleMap.normal;
@@ -769,8 +882,9 @@ export default function ElevatorOverview() {
                     }}
                   >
                     <Card 
-                      className="h-100 border-0 elevator-card position-relative" 
+                      className="h-100 border-0 elevator-card elevator-detail-card position-relative" 
                       style={{ 
+                        '--detail-shine-delay': `${0.25 + (index % 6) * 0.12}s`,
                         borderRadius: '12px',
                         transition: 'all 0.3s ease',
                         cursor: 'pointer',
