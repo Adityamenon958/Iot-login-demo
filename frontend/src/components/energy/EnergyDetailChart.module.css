@@ -1,0 +1,52 @@
+.chartCard {
+  border: none;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  height: 100%;
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.chartTitle {
+  font-weight: 700;
+  margin: 0;
+}
+
+.rangePills {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pill {
+  border: 1px solid #dee2e6;
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.pillActive {
+  background: #0d6efd;
+  border-color: #0d6efd;
+  color: #fff;
+}
+
+.chartWrap {
+  min-height: 280px;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #6c757d;
+}

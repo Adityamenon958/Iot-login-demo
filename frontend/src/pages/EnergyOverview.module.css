@@ -1,0 +1,126 @@
+.page {
+  padding: 1.25rem 1.5rem 2rem;
+}
+
+.viewContainer {
+  position: relative;
+  min-height: 60vh;
+}
+
+.fleetLayer,
+.detailLayer {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.fleetLayer:not(.layerActive) {
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+.detailLayer:not(.layerActive) {
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+.layerActive {
+  opacity: 1;
+  transform: translateY(0);
+  position: relative;
+  pointer-events: auto;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.pageTitle {
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  color: #1a1a2e;
+}
+
+.pageSubtitle {
+  margin: 0.25rem 0 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.headerMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.liveBadge {
+  animation: energyPulse 2s ease-in-out infinite;
+}
+
+@keyframes energyPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.sectionTitle {
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #1a1a2e;
+}
+
+.emptyState {
+  background: #fff;
+  border-radius: 1rem;
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.backBtn {
+  padding-left: 0;
+  margin-bottom: 1rem;
+  text-decoration: none;
+  font-weight: 600;
+  color: #0d6efd;
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.detailTitle {
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  color: #1a1a2e;
+}
+
+.breadcrumb {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: 1rem;
+  }
+}

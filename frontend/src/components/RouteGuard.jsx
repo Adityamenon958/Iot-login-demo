@@ -22,6 +22,7 @@ export default function RouteGuard({ children, requiredAccess }) {
         // Tier 1: Dashboard/Overview (Highest Priority)
         { access: 'craneOverview', path: '/dashboard/crane-overview' },
         { access: 'elevatorOverview', path: '/dashboard/elevator-overview' },
+        { access: 'energyOverview', path: '/dashboard/energy-overview' },
         { access: 'reports', path: '/dashboard/reports' },
         
         // Tier 2: Device Management (Medium Priority)  

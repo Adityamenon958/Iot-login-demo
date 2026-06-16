@@ -18,6 +18,7 @@ import DynamicDb from './components/DynamicDb';
 import CraneDashboard from './pages/CraneDashboard';
 import CraneOverview from './pages/CraneOverview';
 import ElevatorOverview from './pages/ElevatorOverview';
+import EnergyOverview from './pages/EnergyOverview';
 import Simulator from './pages/Simulator';
 
 function App() {
@@ -60,6 +61,12 @@ function App() {
         <Route path="elevator-overview" element={
           <RouteGuard requiredAccess="elevatorOverview">
             <ElevatorOverview />
+          </RouteGuard>
+        } />
+
+        <Route path="energy-overview" element={
+          <RouteGuard requiredAccess="energyOverview">
+            <EnergyOverview />
           </RouteGuard>
         } />
         

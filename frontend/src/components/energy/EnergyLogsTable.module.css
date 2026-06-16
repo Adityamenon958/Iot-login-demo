@@ -1,0 +1,24 @@
+.tableCard {
+  border: none;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.title {
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.table {
+  font-size: 0.85rem;
+  margin-bottom: 0;
+}
+
+.code {
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.selectedRow {
+  background-color: rgba(13, 110, 253, 0.08) !important;
+}

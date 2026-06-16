@@ -6,6 +6,13 @@ import { Edit, Trash2 } from 'lucide-react';
 import styles from './MainContent.module.css';
 import './MainContent.css';
 
+const DEVICE_TYPES = [
+  { value: 'levelSensor', label: 'Level Sensor' },
+  { value: 'crane', label: 'Crane' },
+  { value: 'elevator', label: 'Elevator' },
+  { value: 'energyMeter', label: 'Energy Meter' },
+];
+
 export default function AddDevice() {
   const navigate = useNavigate();
 
@@ -27,6 +34,11 @@ export default function AddDevice() {
 
   const [elevatorZones, setElevatorZones] = useState([]);
   const [elevatorZoneId, setElevatorZoneId] = useState('');
+  const [siteName, setSiteName] = useState('');
+  const [plantName, setPlantName] = useState('');
+  const [machineName, setMachineName] = useState('');
+  const [location, setLocation] = useState('');
+  const [phaseType, setPhaseType] = useState('single');
   const [newZoneName, setNewZoneName] = useState('');
   const [newZoneCompany, setNewZoneCompany] = useState('');
   const [showZoneEditModal, setShowZoneEditModal] = useState(false);
@@ -235,6 +247,13 @@ export default function AddDevice() {
       if (String(deviceType).toLowerCase() === 'elevator' && elevatorZoneId) {
         formData.elevatorZoneId = elevatorZoneId;
       }
+      if (String(deviceType).toLowerCase() === 'energymeter') {
+        formData.siteName = siteName;
+        formData.plantName = plantName;
+        formData.machineName = machineName;
+        formData.location = location;
+        formData.phaseType = phaseType;
+      }
 
       try {
         const response = await axios.post('/api/devices', formData, { withCredentials: true });
@@ -244,6 +263,11 @@ export default function AddDevice() {
         setDeviceId('');
         setDeviceType('');
         setElevatorZoneId('');
+        setSiteName('');
+        setPlantName('');
+        setMachineName('');
+        setLocation('');
+        setPhaseType('single');
         setShowModal(false);
       } catch (error) {
         console.error('Error submitting form:', error);
@@ -264,6 +288,13 @@ export default function AddDevice() {
         } else {
           payload.elevatorZoneId = null;
         }
+        if (String(deviceType).toLowerCase() === 'energymeter') {
+          payload.siteName = siteName;
+          payload.plantName = plantName;
+          payload.machineName = machineName;
+          payload.location = location;
+          payload.phaseType = phaseType;
+        }
         await axios.put(`/api/devices/${editingDevice._id}`, payload, { withCredentials: true });
         alert('Device updated successfully!');
         setShowModal(false);
@@ -275,6 +306,11 @@ export default function AddDevice() {
         setDeviceId('');
         setDeviceType('');
         setElevatorZoneId('');
+        setSiteName('');
+        setPlantName('');
+        setMachineName('');
+        setLocation('');
+        setPhaseType('single');
         fetchDevices(role === 'superadmin' ? null : authCompanyName);
       } catch (error) {
         console.error('Error updating device:', error);
@@ -302,7 +338,12 @@ export default function AddDevice() {
     setDeviceId(dev.deviceId || '');
     setDeviceType(dev.deviceType || '');
     const zid = dev.elevatorZoneId?._id || dev.elevatorZoneId || '';
-    setElevatorZoneId(zid ? String(zid) : '');
+    setElevatorZoneId(zid);
+    setSiteName(dev.siteName || '');
+    setPlantName(dev.plantName || '');
+    setMachineName(dev.machineName || '');
+    setLocation(dev.location || '');
+    setPhaseType(dev.phaseType || 'single');
     setShowModal(true);
   };
 
@@ -339,6 +380,11 @@ export default function AddDevice() {
     setDeviceId('');
     setDeviceType('');
     setElevatorZoneId('');
+    setSiteName('');
+    setPlantName('');
+    setMachineName('');
+    setLocation('');
+    setPhaseType('single');
   };
 
   const filteredDevices = devices
@@ -394,8 +440,22 @@ export default function AddDevice() {
             </Form.Group>
             <Form.Group className="my-1">
               <Form.Label className="custom_label1">Device Type</Form.Label>
-              {/* ✅ Free text input instead of dropdown */}
-              <Form.Control type="text" value={deviceType} onChange={(e) => setDeviceType(e.target.value)} required className="custom_input1" />
+              <Form.Select
+                value={deviceType}
+                onChange={(e) => setDeviceType(e.target.value)}
+                required
+                className="custom_input1"
+              >
+                <option value="">Select device type...</option>
+                {DEVICE_TYPES.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+                {isEditMode &&
+                  deviceType &&
+                  !DEVICE_TYPES.some((t) => t.value === deviceType) && (
+                    <option value={deviceType}>{deviceType} (legacy)</option>
+                  )}
+              </Form.Select>
             </Form.Group>
             {String(deviceType).toLowerCase() === 'elevator' && canManageZones && (
               <Form.Group className="my-1">
@@ -413,6 +473,33 @@ export default function AddDevice() {
                   ))}
                 </Form.Select>
               </Form.Group>
+            )}
+            {String(deviceType).toLowerCase() === 'energymeter' && (
+              <>
+                <Form.Group className="my-1">
+                  <Form.Label className="custom_label1">Site name</Form.Label>
+                  <Form.Control type="text" value={siteName} onChange={(e) => setSiteName(e.target.value)} className="custom_input1" />
+                </Form.Group>
+                <Form.Group className="my-1">
+                  <Form.Label className="custom_label1">Plant name</Form.Label>
+                  <Form.Control type="text" value={plantName} onChange={(e) => setPlantName(e.target.value)} className="custom_input1" />
+                </Form.Group>
+                <Form.Group className="my-1">
+                  <Form.Label className="custom_label1">Machine name</Form.Label>
+                  <Form.Control type="text" value={machineName} onChange={(e) => setMachineName(e.target.value)} className="custom_input1" />
+                </Form.Group>
+                <Form.Group className="my-1">
+                  <Form.Label className="custom_label1">Location</Form.Label>
+                  <Form.Control type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="custom_input1" />
+                </Form.Group>
+                <Form.Group className="my-1">
+                  <Form.Label className="custom_label1">Phase type</Form.Label>
+                  <Form.Select className="custom_input1" value={phaseType} onChange={(e) => setPhaseType(e.target.value)}>
+                    <option value="single">Single phase</option>
+                    <option value="three">Three phase</option>
+                  </Form.Select>
+                </Form.Group>
+              </>
             )}
             <Button variant="primary" type="submit" className="w-100 signIn1 mb-2">{isEditMode ? 'Save Changes' : 'Submit'}</Button>
           </Form>

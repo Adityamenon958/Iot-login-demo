@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080', // This should match your Express server port
+        target: 'http://127.0.0.1:8080', // Use 127.0.0.1 to avoid Windows localhost IPv6 port conflicts
         changeOrigin: true,
         secure: false,
       },

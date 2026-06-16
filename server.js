@@ -39,6 +39,25 @@ const CompanyDashboardAccess = require("./backend/models/CompanyDashboardAccess"
 const { calculateAllCraneDistances, getCurrentDateString, validateGPSData, calculateDistance } = require("./backend/utils/locationUtils");
 const ElevatorEvent = require("./backend/models/ElevatorEvent");
 const ElevatorZone = require("./backend/models/ElevatorZone");
+const EnergyMeterLog = require("./backend/models/EnergyMeterLog");
+const EnergyMeterParameterMap = require("./backend/models/EnergyMeterParameterMap");
+const {
+  parseSampleValueString,
+  extractMeterEntries,
+  resolveDeviceForMeter,
+  getParameterMap,
+  buildReadings,
+  isMeterOnline,
+  formatRelativeTime,
+  ensureDefaultParameterMap,
+  pickChartMetric,
+  pickDisplayReading,
+} = require("./backend/utils/energyMeterUtils");
+const {
+  buildEnergyMeterPayload,
+  getProfileConfig,
+  VALID_INTERVALS_SECONDS,
+} = require("./backend/utils/energyMeterSim");
 
 function getEffectiveSubscriptionStatus(user) {
   return BYPASS_SUBSCRIPTION_CHECK ? 'active' : (user.subscriptionStatus || 'inactive');
@@ -180,7 +199,31 @@ function buildElevatorPayload(device) {
   return payload;
 }
 
-// ✅ Simulator tick - crane → /api/crane/log, elevator → /api/elevators/log (floor cycles 0..24)
+function getSimulatorIntervalMs(device) {
+  if ((device.deviceType || 'crane') === 'energyMeter') {
+    return (device.intervalSeconds || 60) * 1000;
+  }
+  return device.frequencyMinutes * 60 * 1000;
+}
+
+async function postEnergyMeterSimPayload(device) {
+  const { payload, energyKwh } = buildEnergyMeterPayload(device, { advanceReading: true });
+  const response = await fetch(`http://127.0.0.1:${PORT}/api/energy-meter/log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (response.ok) {
+    await SimulatorDevice.updateOne({ deviceId: device.deviceId }, { energyBaseReading: energyKwh });
+    console.log(`[sim] ✅ Energy meter ${device.deviceId}: posted ${JSON.stringify(payload)}`);
+    return { success: true, payload, energyKwh };
+  }
+  console.error(`[sim] ❌ Energy meter ${device.deviceId} post failed: ${response.status}`, data.message || data);
+  return { success: false, payload, error: data.message || 'Post failed' };
+}
+
+// ✅ Simulator tick - crane → /api/crane/log, elevator → /api/elevators/log, energyMeter → /api/energy-meter/log
 async function simulatorTick(deviceId) {
   try {
     const device = await SimulatorDevice.findOne({ deviceId }).lean();
@@ -191,6 +234,11 @@ async function simulatorTick(deviceId) {
     }
 
     const deviceType = device.deviceType || 'crane';
+
+    if (deviceType === 'energyMeter') {
+      await postEnergyMeterSimPayload(device);
+      return;
+    }
 
     if (deviceType === 'elevator') {
       const payload = [buildElevatorPayload(device)];
@@ -239,14 +287,17 @@ async function startSimulator(deviceId) {
     throw new Error(`Device ${deviceId} is already running`);
   }
   
-  const frequencyMs = device.frequencyMinutes * 60 * 1000;
+  const frequencyMs = getSimulatorIntervalMs(device);
   const timer = setInterval(() => simulatorTick(deviceId), frequencyMs);
   simulatorTimers.set(deviceId, timer);
   
   // ✅ Update database to mark device as running
   await SimulatorDevice.updateOne({ deviceId }, { isRunning: true });
   
-  console.log(`[sim] 🚀 Started simulator for ${deviceId} (${device.frequencyMinutes}m interval)`);
+  const intervalLabel = device.deviceType === 'energyMeter'
+    ? `${device.intervalSeconds || 60}s`
+    : `${device.frequencyMinutes}m`;
+  console.log(`[sim] 🚀 Started simulator for ${deviceId} (${intervalLabel} interval)`);
 }
 
 // ✅ Stop simulator for a device
@@ -271,10 +322,13 @@ async function restartRunningSimulators() {
     
     for (const device of runningDevices) {
       try {
-        const frequencyMs = device.frequencyMinutes * 60 * 1000;
+        const frequencyMs = getSimulatorIntervalMs(device);
         const timer = setInterval(() => simulatorTick(device.deviceId), frequencyMs);
         simulatorTimers.set(device.deviceId, timer);
-        console.log(`[sim] ✅ Auto-restarted simulator for ${device.deviceId} (${device.frequencyMinutes}m interval)`);
+        const intervalLabel = device.deviceType === 'energyMeter'
+          ? `${device.intervalSeconds || 60}s`
+          : `${device.frequencyMinutes}m`;
+        console.log(`[sim] ✅ Auto-restarted simulator for ${device.deviceId} (${intervalLabel} interval)`);
       } catch (err) {
         console.error(`[sim] ❌ Failed to auto-restart ${device.deviceId}:`, err.message);
         // Mark as stopped in database if restart fails
@@ -1048,7 +1102,8 @@ app.get('/api/devices/count/by-company', async (req, res) => {
 // ✅ Device Routes
 app.post('/api/devices', async (req, res) => {
   try {
-    const { companyName, uid, deviceId, deviceType, elevatorZoneId } = req.body;
+    const { companyName, uid, deviceId, deviceType, elevatorZoneId,
+      siteName, plantName, machineName, location, phaseType } = req.body;
 
     if (!companyName || !uid || !deviceId || !deviceType) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -1072,6 +1127,11 @@ app.post('/api/devices', async (req, res) => {
       deviceId,
       deviceType,
       ...(zoneIdToSet ? { elevatorZoneId: zoneIdToSet } : {}),
+      ...(siteName !== undefined ? { siteName } : {}),
+      ...(plantName !== undefined ? { plantName } : {}),
+      ...(machineName !== undefined ? { machineName } : {}),
+      ...(location !== undefined ? { location } : {}),
+      ...(phaseType !== undefined ? { phaseType } : {}),
     });
 
     await newDevice.save();
@@ -1110,12 +1170,18 @@ app.put('/api/devices/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const { companyName, deviceId, deviceType, elevatorZoneId } = req.body || {};
+    const { companyName, deviceId, deviceType, elevatorZoneId,
+      siteName, plantName, machineName, location, phaseType } = req.body || {};
     const update = {};
     // superadmin can change companyName
     if (companyName !== undefined && actorRole === 'superadmin') update.companyName = companyName;
     if (deviceId !== undefined) update.deviceId = deviceId;
     if (deviceType !== undefined) update.deviceType = deviceType;
+    if (siteName !== undefined) update.siteName = siteName;
+    if (plantName !== undefined) update.plantName = plantName;
+    if (machineName !== undefined) update.machineName = machineName;
+    if (location !== undefined) update.location = location;
+    if (phaseType !== undefined) update.phaseType = phaseType;
 
     const nextCompany =
       companyName !== undefined && actorRole === 'superadmin'
@@ -5138,9 +5204,14 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
       
-      const { deviceType, craneCompany, elevatorCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
-      const effectiveType = (deviceType === 'elevator') ? 'elevator' : 'crane';
-      const companyName = effectiveType === 'elevator' ? (elevatorCompany || craneCompany) : craneCompany;
+      const { deviceType, craneCompany, elevatorCompany, energyCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter,
+        machineProfile, siteName, plantName, machineName, intervalSeconds, energyBaseReading } = req.body;
+      const effectiveType = deviceType === 'elevator' ? 'elevator' : deviceType === 'energyMeter' ? 'energyMeter' : 'crane';
+      const companyName = effectiveType === 'elevator'
+        ? (elevatorCompany || craneCompany)
+        : effectiveType === 'energyMeter'
+          ? (energyCompany || craneCompany)
+          : craneCompany;
       
       if (!companyName || !DeviceID || !state) {
         return res.status(400).json({ error: 'Missing required fields (company, DeviceID, state)' });
@@ -5151,7 +5222,7 @@ if (ENABLE_SIMULATOR) {
       
       const validFrequencies = [1, 2, 5, 10, 15, 30];
       const frequencyNum = parseInt(frequencyMinutes, 10);
-      if (!validFrequencies.includes(frequencyNum)) {
+      if (effectiveType !== 'energyMeter' && !validFrequencies.includes(frequencyNum)) {
         return res.status(400).json({ error: 'Invalid frequency. Must be 1, 2, 5, 10, 15, or 30 minutes' });
       }
       
@@ -5176,6 +5247,47 @@ if (ENABLE_SIMULATOR) {
         });
         await device.save();
         console.log(`[sim] ✅ Added elevator simulator: ${DeviceID} (${state}) at ${location}`);
+        return res.json({ success: true, device: device.toObject() });
+      }
+
+      if (effectiveType === 'energyMeter') {
+        const profileKey = machineProfile || 'warehouse';
+        if (!['warehouse', 'cnc', 'compressor', 'conveyor'].includes(profileKey)) {
+          return res.status(400).json({ error: 'Invalid machine profile' });
+        }
+        const registeredDevice = await Device.findOne({ deviceId: DeviceID, deviceType: 'energyMeter' });
+        if (!registeredDevice) {
+          return res.status(400).json({
+            error: `Device "${DeviceID}" is not registered. Add it first in Manage Devices with deviceType "energyMeter".`,
+          });
+        }
+        const intervalNum = parseInt(intervalSeconds, 10) || 60;
+        if (!VALID_INTERVALS_SECONDS.includes(intervalNum)) {
+          return res.status(400).json({ error: 'Invalid interval. Must be 30, 60, 120, 180, or 300 seconds' });
+        }
+        const profileCfg = getProfileConfig(profileKey);
+        const device = new SimulatorDevice({
+          deviceId: DeviceID,
+          name: companyName.trim(),
+          latitude: 0,
+          longitude: 0,
+          deviceType: 'energyMeter',
+          location: location ? String(location).trim() : '',
+          state,
+          frequencyMinutes: 1,
+          padTimestamp: false,
+          jitter: jitter === true,
+          profile: 'A',
+          isRunning: false,
+          machineProfile: profileKey,
+          siteName: siteName ? String(siteName).trim() : profileCfg.siteName,
+          plantName: plantName ? String(plantName).trim() : profileCfg.plantName,
+          machineName: machineName ? String(machineName).trim() : profileCfg.machineName,
+          energyBaseReading: energyBaseReading != null ? Number(energyBaseReading) : profileCfg.baseEnergyKwh,
+          intervalSeconds: intervalNum,
+        });
+        await device.save();
+        console.log(`[sim] ✅ Added energy meter simulator: ${DeviceID} (${profileKey})`);
         return res.json({ success: true, device: device.toObject() });
       }
       
@@ -5259,7 +5371,8 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
       
-      const { craneCompany, elevatorCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter } = req.body;
+      const { craneCompany, elevatorCompany, energyCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter,
+        machineProfile, siteName, plantName, machineName, intervalSeconds, energyBaseReading } = req.body;
       if (!DeviceID) {
         return res.status(400).json({ error: 'DeviceID is required' });
       }
@@ -5269,16 +5382,30 @@ if (ENABLE_SIMULATOR) {
         return res.status(404).json({ error: 'Device not found' });
       }
       
-      const effectiveType = (device.deviceType === 'elevator') ? 'elevator' : 'crane';
-      const companyName = elevatorCompany !== undefined ? elevatorCompany : craneCompany;
+      const effectiveType = device.deviceType || 'crane';
+      const companyName = energyCompany !== undefined ? energyCompany : elevatorCompany !== undefined ? elevatorCompany : craneCompany;
       if (companyName !== undefined) device.name = companyName;
       if (state && ['working', 'idle', 'maintenance'].includes(state)) device.state = state;
-      if (frequencyMinutes !== undefined) {
+      if (frequencyMinutes !== undefined && effectiveType !== 'energyMeter') {
         const freq = parseInt(frequencyMinutes, 10);
         if ([1, 2, 5, 10, 15, 30].includes(freq)) device.frequencyMinutes = freq;
       }
       if (effectiveType === 'elevator') {
         if (location !== undefined) device.location = String(location).trim();
+      } else if (effectiveType === 'energyMeter') {
+        if (machineProfile && ['warehouse', 'cnc', 'compressor', 'conveyor'].includes(machineProfile)) {
+          device.machineProfile = machineProfile;
+        }
+        if (siteName !== undefined) device.siteName = String(siteName).trim();
+        if (plantName !== undefined) device.plantName = String(plantName).trim();
+        if (machineName !== undefined) device.machineName = String(machineName).trim();
+        if (location !== undefined) device.location = String(location).trim();
+        if (intervalSeconds !== undefined) {
+          const sec = parseInt(intervalSeconds, 10);
+          if (VALID_INTERVALS_SECONDS.includes(sec)) device.intervalSeconds = sec;
+        }
+        if (energyBaseReading !== undefined) device.energyBaseReading = Number(energyBaseReading);
+        if (jitter !== undefined) device.jitter = jitter === true;
       } else {
         if (latitude !== undefined) device.latitude = parseFloat(latitude);
         if (longitude !== undefined) device.longitude = parseFloat(longitude);
@@ -5323,6 +5450,12 @@ if (ENABLE_SIMULATOR) {
         overrideReg65: device.overrideReg65 ?? null,
         overrideReg66: device.overrideReg66 ?? null,
         overrideErrorCode: device.overrideErrorCode ?? null,
+        machineProfile: device.machineProfile || 'warehouse',
+        siteName: device.siteName || '',
+        plantName: device.plantName || '',
+        machineName: device.machineName || '',
+        energyBaseReading: device.energyBaseReading ?? null,
+        intervalSeconds: device.intervalSeconds || 60,
         isRunning: simulatorTimers.has(device.deviceId)
       }));
       
@@ -5369,6 +5502,77 @@ if (ENABLE_SIMULATOR) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // ✅ POST: Preview energy meter payload (no send)
+  app.post('/api/sim/preview-payload', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const { DeviceID, deviceType, state, machineProfile, jitter, energyBaseReading, deviceId } = req.body;
+      let device;
+
+      if (DeviceID) {
+        device = await SimulatorDevice.findOne({ deviceId: DeviceID }).lean();
+        if (!device) return res.status(404).json({ error: 'Device not found' });
+        if (state) device.state = state;
+        if (machineProfile) device.machineProfile = machineProfile;
+        if (jitter !== undefined) device.jitter = jitter === true;
+        if (energyBaseReading != null) device.energyBaseReading = Number(energyBaseReading);
+      } else {
+        const profileCfg = getProfileConfig(machineProfile || 'warehouse');
+        device = {
+          deviceId: deviceId || DeviceID || 'Energy Meter_1',
+          state: state || 'working',
+          machineProfile: machineProfile || 'warehouse',
+          jitter: jitter === true,
+          energyBaseReading: energyBaseReading != null ? Number(energyBaseReading) : profileCfg.baseEnergyKwh,
+        };
+      }
+
+      const { payload, readings, rawValues, dateStr } = buildEnergyMeterPayload(device, { advanceReading: false });
+      res.json({ payload, readings, rawValues, dateStr });
+    } catch (err) {
+      console.error('[sim] ❌ Preview payload error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Manual send one energy meter payload
+  app.post('/api/sim/send', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const { DeviceID } = req.body;
+      if (!DeviceID) {
+        return res.status(400).json({ error: 'DeviceID is required' });
+      }
+
+      const device = await SimulatorDevice.findOne({ deviceId: DeviceID }).lean();
+      if (!device) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+      if ((device.deviceType || 'crane') !== 'energyMeter') {
+        return res.status(400).json({ error: 'Manual send is only supported for energy meter simulators' });
+      }
+
+      const result = await postEnergyMeterSimPayload(device);
+      if (!result.success) {
+        return res.status(result.error?.includes('not registered') ? 404 : 502).json({
+          error: result.error || 'Failed to post to /api/energy-meter/log',
+        });
+      }
+      res.json({ success: true, message: `Payload sent for ${DeviceID}`, payload: result.payload });
+    } catch (err) {
+      console.error('[sim] ❌ Manual send error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
   
   // ✅ DELETE: Remove simulated device
   app.delete('/api/sim/remove/:deviceId', authenticateToken, async (req, res) => {
@@ -5397,6 +5601,300 @@ if (ENABLE_SIMULATOR) {
     }
   });
 }
+
+// ✅ Energy Meter — ingestion + read APIs
+async function getAllowedEnergyMeters(req) {
+  const { role, companyName } = req.user;
+  const filter = { deviceType: 'energyMeter' };
+  if (role !== 'superadmin') {
+    filter.companyName = companyName;
+  }
+  return Device.find(filter).lean();
+}
+
+async function buildEnergyLogDoc(rawPayload, meterId, value, receivedAt) {
+  const parsed = typeof value === 'string' ? parseSampleValueString(value) : { parseStatus: 'partial', D: null, rawValues: null, timestamp: null };
+  const device = await resolveDeviceForMeter(meterId);
+  const parameters = await getParameterMap(meterId);
+  const timestamp = parsed.timestamp || receivedAt;
+  const dateISO = timestamp;
+  const readings = parsed.rawValues ? buildReadings(parsed.rawValues, parameters) : {};
+
+  let parseStatus = parsed.parseStatus || 'partial';
+  if (!meterId || meterId === 'unknown') {
+    parseStatus = 'raw_only';
+  }
+
+  return {
+    meterId: meterId || 'unknown',
+    uid: device?.uid || null,
+    companyName: device?.companyName || null,
+    siteName: device?.siteName || '',
+    plantName: device?.plantName || '',
+    machineName: device?.machineName || '',
+    location: device?.location || '',
+    phaseType: device?.phaseType || 'single',
+    D: parsed.D || null,
+    timestamp,
+    dateISO,
+    rawValues: parsed.rawValues || undefined,
+    readings,
+    rawPayload,
+    parseStatus,
+    receivedAt,
+  };
+}
+
+app.post('/api/energy-meter/log', async (req, res) => {
+  try {
+    if (req.body === undefined || req.body === null) {
+      return res.status(400).json({ message: 'Empty payload' });
+    }
+
+    await ensureDefaultParameterMap();
+
+    const receivedAt = new Date();
+    const rawPayload = req.body;
+    const entries = extractMeterEntries(rawPayload);
+    const docsToSave = [];
+
+    if (!entries.length) {
+      return res.status(400).json({
+        message: 'Unrecognized payload format. Expected { "MeterId": "date,[values]" }',
+      });
+    }
+
+    for (const { meterId, value } of entries) {
+      const registered = await resolveDeviceForMeter(meterId);
+      if (!registered) {
+        return res.status(404).json({
+          message: `Energy meter "${meterId}" is not registered. Add it in Manage Devices with deviceType "energyMeter".`,
+        });
+      }
+      docsToSave.push(await buildEnergyLogDoc(rawPayload, meterId, value, receivedAt));
+    }
+
+    const saved = await EnergyMeterLog.insertMany(docsToSave, { ordered: false });
+    const first = saved[0];
+
+    res.status(201).json({
+      message: 'Energy meter data saved',
+      count: saved.length,
+      meterId: first?.meterId,
+      parseStatus: first?.parseStatus,
+      timestamp: first?.timestamp,
+    });
+  } catch (err) {
+    console.error('Energy meter save error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getAllowedEnergyMeters(req);
+    const meterIds = meters.map((m) => m.deviceId);
+    const companyNames = [...new Set(meters.map((m) => m.companyName).filter(Boolean))];
+
+    let fleetLastComm = null;
+    if (meterIds.length) {
+      const latestFleet = await EnergyMeterLog.findOne({
+        meterId: { $in: meterIds },
+      }).sort({ timestamp: -1 }).lean();
+      fleetLastComm = latestFleet?.timestamp || null;
+    }
+
+    const meterCards = await Promise.all(
+      meters.map(async (device) => {
+        const latest = await EnergyMeterLog.findOne({ meterId: device.deviceId })
+          .sort({ timestamp: -1 })
+          .lean();
+        const previous = latest
+          ? await EnergyMeterLog.findOne({
+              meterId: device.deviceId,
+              timestamp: { $lt: latest.timestamp },
+            }).sort({ timestamp: -1 }).lean()
+          : null;
+
+        const online = isMeterOnline(latest?.timestamp);
+        const displayReading = pickDisplayReading(latest?.readings);
+
+        let sparkline = [];
+        if (device.deviceId) {
+          const recent = await EnergyMeterLog.find({ meterId: device.deviceId })
+            .sort({ timestamp: -1 })
+            .limit(12)
+            .lean();
+          sparkline = recent.reverse().map((row) => pickChartMetric(row));
+        }
+
+        let trendDelta = null;
+        if (latest && previous) {
+          trendDelta = Math.round((pickChartMetric(latest) - pickChartMetric(previous)) * 100) / 100;
+        }
+
+        return {
+          meterId: device.deviceId,
+          uid: device.uid,
+          siteName: device.siteName || '',
+          plantName: device.plantName || '',
+          machineName: device.machineName || '',
+          location: device.location || '',
+          phaseType: device.phaseType || 'single',
+          online,
+          lastTimestamp: latest?.timestamp || null,
+          lastCommunication: formatRelativeTime(latest?.timestamp),
+          latestReading: displayReading
+            ? {
+                key: displayReading.key,
+                value: displayReading.value,
+                label: displayReading.label,
+                unit: displayReading.unit,
+              }
+            : null,
+          sparkline,
+          trendDelta,
+        };
+      })
+    );
+
+    const onlineCount = meterCards.filter((m) => m.online).length;
+    const totalMeters = meters.length;
+
+    res.json({
+      kpis: {
+        totalMeters,
+        onlineMeters: onlineCount,
+        offlineMeters: totalMeters - onlineCount,
+        lastCommunicationAt: fleetLastComm,
+        lastCommunicationStatus: formatRelativeTime(fleetLastComm),
+      },
+      meters: meterCards,
+      chartSeries: await buildFleetChartSeries(meterIds),
+    });
+  } catch (err) {
+    console.error('Energy overview error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+async function buildFleetChartSeries(meterIds) {
+  if (!meterIds.length) return [];
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const logs = await EnergyMeterLog.find({
+    meterId: { $in: meterIds },
+    timestamp: { $gte: since },
+  })
+    .sort({ timestamp: 1 })
+    .lean();
+
+  const byMeter = {};
+  logs.forEach((log) => {
+    if (!byMeter[log.meterId]) byMeter[log.meterId] = [];
+    byMeter[log.meterId].push({
+      timestamp: log.timestamp,
+      value: pickChartMetric(log),
+    });
+  });
+
+  return Object.entries(byMeter).map(([meterId, points]) => ({ meterId, points }));
+}
+
+app.get('/api/energy-meter/latest', authenticateToken, async (req, res) => {
+  try {
+    const { meterId } = req.query;
+    if (!meterId) return res.status(400).json({ message: 'meterId is required' });
+
+    const meters = await getAllowedEnergyMeters(req);
+    const allowed = meters.find((m) => m.deviceId === meterId);
+    if (!allowed) return res.status(403).json({ message: 'Access denied' });
+
+    const latest = await EnergyMeterLog.findOne({ meterId }).sort({ timestamp: -1 }).lean();
+    if (!latest) return res.status(404).json({ message: 'No data found' });
+
+    const parameters = await getParameterMap(meterId);
+
+    res.json({
+      ...latest,
+      device: allowed,
+      online: isMeterOnline(latest.timestamp),
+      parameters,
+    });
+  } catch (err) {
+    console.error('Energy latest error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/logs', authenticateToken, async (req, res) => {
+  try {
+    const { meterId, from, to, limit = '50', page = '1' } = req.query;
+    if (!meterId) return res.status(400).json({ message: 'meterId is required' });
+
+    const meters = await getAllowedEnergyMeters(req);
+    const allowed = meters.find((m) => m.deviceId === meterId);
+    if (!allowed) return res.status(403).json({ message: 'Access denied' });
+
+    const filter = { meterId };
+    if (from || to) {
+      filter.timestamp = {};
+      if (from) filter.timestamp.$gte = new Date(from);
+      if (to) filter.timestamp.$lte = new Date(to);
+    }
+
+    const lim = Math.min(parseInt(limit, 10) || 50, 200);
+    const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * lim;
+
+    const [logs, total] = await Promise.all([
+      EnergyMeterLog.find(filter).sort({ timestamp: -1 }).skip(skip).limit(lim).lean(),
+      EnergyMeterLog.countDocuments(filter),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page: parseInt(page, 10) || 1,
+      limit: lim,
+    });
+  } catch (err) {
+    console.error('Energy logs error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/parameter-map', authenticateToken, async (req, res) => {
+  try {
+    const { meterId } = req.query;
+    const parameters = await getParameterMap(meterId || null);
+    res.json({ meterId: meterId || null, parameters });
+  } catch (err) {
+    console.error('Energy parameter-map error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.put('/api/energy-meter/parameter-map', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Superadmin only' });
+    }
+
+    const { meterId = null, parameters = [] } = req.body;
+    const scope = meterId ? 'device' : 'default';
+
+    const updated = await EnergyMeterParameterMap.findOneAndUpdate(
+      { scope, meterId: meterId || null },
+      { scope, meterId: meterId || null, parameters },
+      { upsert: true, new: true }
+    );
+
+    res.json({ message: 'Parameter map updated', map: updated });
+  } catch (err) {
+    console.error('Energy parameter-map update error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 // ✅ Level Sensor
 // ✅ POST: Store sensor data from TRB245

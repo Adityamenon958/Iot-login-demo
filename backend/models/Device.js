@@ -24,6 +24,13 @@ const deviceSchema = new mongoose.Schema({
     ref: 'ElevatorZone',
     default: null,
   },
+
+  // ✅ Optional: energy meter context (deviceType === "energyMeter")
+  siteName: { type: String, default: '' },
+  plantName: { type: String, default: '' },
+  machineName: { type: String, default: '' },
+  location: { type: String, default: '' },
+  phaseType: { type: String, enum: ['single', 'three'], default: 'single' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Device', deviceSchema);

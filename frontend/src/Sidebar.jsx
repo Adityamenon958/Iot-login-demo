@@ -10,6 +10,7 @@ import { PlusSquare } from 'lucide-react';
 import { MdOutlineSubscriptions } from "react-icons/md";
 import { Truck } from 'lucide-react';
 import { PiElevatorDuotone } from "react-icons/pi";
+import { Zap } from 'lucide-react';
 import Dlogo from './assets/GSN Solutions 1.png';
 
 import axios from 'axios';
@@ -63,6 +64,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           axios.get('/api/check-dashboard-access/dashboard', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/craneOverview', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/elevatorOverview', { withCredentials: true }),
+          axios.get('/api/check-dashboard-access/energyOverview', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/reports', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/addUsers', { withCredentials: true }),
           axios.get('/api/check-dashboard-access/addDevices', { withCredentials: true }),
@@ -75,11 +77,12 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           dashboard: accessChecks[1].data.hasAccess,
           craneOverview: accessChecks[2].data.hasAccess,
           elevatorOverview: accessChecks[3].data.hasAccess,
-          reports: accessChecks[4].data.hasAccess,
-          addUsers: accessChecks[5].data.hasAccess,
-          addDevices: accessChecks[6].data.hasAccess,
-          subscription: accessChecks[7].data.hasAccess,
-          settings: accessChecks[8].data.hasAccess
+          energyOverview: accessChecks[4].data.hasAccess,
+          reports: accessChecks[5].data.hasAccess,
+          addUsers: accessChecks[6].data.hasAccess,
+          addDevices: accessChecks[7].data.hasAccess,
+          subscription: accessChecks[8].data.hasAccess,
+          settings: accessChecks[9].data.hasAccess
         };
 
         setCompanyAccess(access);
@@ -92,6 +95,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           dashboard: true,
           craneOverview: false,
           elevatorOverview: false,
+          energyOverview: false,
           craneDashboard: false,
           reports: true,
           addUsers: true,
@@ -196,6 +200,14 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     <PiElevatorDuotone size={30} className={`${styles.navText} me-2`} />
     Elevator Overview
 </Button>
+          )}
+
+          {/* ✅ Energy Overview */}
+          {(role === 'superadmin' || companyAccess.energyOverview) && (
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/energy-overview' ? styles.active : ''}`} onClick={() => navigate('/dashboard/energy-overview')}>
+            <Zap size={22} className={`${styles.navText} me-2`} />
+            Energy Overview
+          </Button>
           )}
 
           {/* ✅ Reports - Check access for non-superadmin */}

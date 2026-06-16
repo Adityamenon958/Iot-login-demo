@@ -1,0 +1,84 @@
+.card {
+  border: none;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  height: 100%;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.online {
+  border-left: 4px solid #198754;
+}
+
+.offline {
+  border-left: 4px solid #adb5bd;
+  opacity: 0.92;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.meterName {
+  font-weight: 700;
+  margin: 0;
+  color: #1a1a2e;
+}
+
+.meta {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-bottom: 0.75rem;
+}
+
+.breadcrumb {
+  margin-top: 0.15rem;
+}
+
+.readingRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.readingValue {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sparkline {
+  flex-shrink: 0;
+}
+
+.noData {
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detailBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+}

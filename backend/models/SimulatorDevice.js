@@ -27,10 +27,10 @@ const simulatorDeviceSchema = new mongoose.Schema({
     max: 180,
     default: 0
   },
-  // ✅ 'crane' | 'elevator' - existing docs without this field are treated as crane
+  // ✅ 'crane' | 'elevator' | 'energyMeter'
   deviceType: {
     type: String,
-    enum: ['crane', 'elevator'],
+    enum: ['crane', 'elevator', 'energyMeter'],
     default: 'crane'
   },
   // ✅ Elevator only: display location string (e.g. "Building A Lobby")
@@ -77,7 +77,23 @@ const simulatorDeviceSchema = new mongoose.Schema({
   // ✅ Elevator only: live override for demo – if set, next tick uses these instead of computed
   overrideReg65: { type: Number, default: null },
   overrideReg66: { type: Number, default: null },
-  overrideErrorCode: { type: String, trim: true, default: null }
+  overrideErrorCode: { type: String, trim: true, default: null },
+
+  // ✅ Energy meter only
+  machineProfile: {
+    type: String,
+    enum: ['warehouse', 'cnc', 'compressor', 'conveyor'],
+    default: 'warehouse',
+  },
+  siteName: { type: String, trim: true, default: '' },
+  plantName: { type: String, trim: true, default: '' },
+  machineName: { type: String, trim: true, default: '' },
+  energyBaseReading: { type: Number, default: null },
+  intervalSeconds: {
+    type: Number,
+    enum: [30, 60, 120, 180, 300],
+    default: 60,
+  },
 }, {
   timestamps: true // Adds createdAt and updatedAt automatically
 });

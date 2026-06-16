@@ -26,6 +26,8 @@ import {
   Building2,
   ArrowUpDown,
   Sliders,
+  Zap,
+  Send,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -50,6 +52,50 @@ const defaultElevatorForm = {
   frequencyMinutes: 1,
 };
 
+const ENERGY_PROFILES = {
+  warehouse: {
+    label: 'Warehouse',
+    siteName: 'Demo Warehouse',
+    plantName: 'Storage Facility',
+    machineName: 'Warehouse Line',
+    baseEnergyKwh: 6200,
+  },
+  cnc: {
+    label: 'CNC Machine',
+    siteName: 'Manufacturing Plant',
+    plantName: 'Production Hall',
+    machineName: 'CNC Machine',
+    baseEnergyKwh: 7100,
+  },
+  compressor: {
+    label: 'Compressor',
+    siteName: 'Utility Bay',
+    plantName: 'Compressor Room',
+    machineName: 'Air Compressor',
+    baseEnergyKwh: 8400,
+  },
+  conveyor: {
+    label: 'Conveyor',
+    siteName: 'Assembly Plant',
+    plantName: 'Packaging Unit',
+    machineName: 'Conveyor Belt',
+    baseEnergyKwh: 5800,
+  },
+};
+
+const defaultEnergyForm = {
+  energyCompany: 'Gsn Soln',
+  DeviceID: '',
+  machineProfile: 'warehouse',
+  siteName: ENERGY_PROFILES.warehouse.siteName,
+  plantName: ENERGY_PROFILES.warehouse.plantName,
+  machineName: ENERGY_PROFILES.warehouse.machineName,
+  state: 'working',
+  intervalSeconds: 60,
+  jitter: true,
+  energyBaseReading: ENERGY_PROFILES.warehouse.baseEnergyKwh,
+};
+
 export default function Simulator() {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +104,7 @@ export default function Simulator() {
 
   const [showAddCraneModal, setShowAddCraneModal] = useState(false);
   const [showAddElevatorModal, setShowAddElevatorModal] = useState(false);
+  const [showAddEnergyModal, setShowAddEnergyModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -73,7 +120,11 @@ export default function Simulator() {
 
   const [craneFormData, setCraneFormData] = useState(defaultCraneForm);
   const [elevatorFormData, setElevatorFormData] = useState(defaultElevatorForm);
+  const [energyFormData, setEnergyFormData] = useState(defaultEnergyForm);
   const [editFormData, setEditFormData] = useState({ ...defaultCraneForm });
+  const [previewPayload, setPreviewPayload] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [sendingDevice, setSendingDevice] = useState('');
 
   const [addingDevice, setAddingDevice] = useState(false);
   const [startingDevice, setStartingDevice] = useState('');
@@ -82,6 +133,7 @@ export default function Simulator() {
 
   const craneDevices = useMemo(() => devices.filter((d) => (d.deviceType || 'crane') === 'crane'), [devices]);
   const elevatorDevices = useMemo(() => devices.filter((d) => d.deviceType === 'elevator'), [devices]);
+  const energyDevices = useMemo(() => devices.filter((d) => d.deviceType === 'energyMeter'), [devices]);
 
   useEffect(() => {
     fetchDevices();
@@ -109,6 +161,51 @@ export default function Simulator() {
     const { name, value, type, checked } = e.target;
     setElevatorFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
+
+  const handleEnergyInput = (e) => {
+    const { name, value, type, checked } = e.target;
+    if (name === 'machineProfile') {
+      const profile = ENERGY_PROFILES[value] || ENERGY_PROFILES.warehouse;
+      setEnergyFormData((prev) => ({
+        ...prev,
+        machineProfile: value,
+        siteName: profile.siteName,
+        plantName: profile.plantName,
+        machineName: profile.machineName,
+        energyBaseReading: profile.baseEnergyKwh,
+      }));
+      return;
+    }
+    setEnergyFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const fetchPayloadPreview = async (source) => {
+    try {
+      setPreviewLoading(true);
+      const res = await axios.post('/api/sim/preview-payload', source, { withCredentials: true });
+      setPreviewPayload(res.data);
+    } catch (err) {
+      console.error('Preview failed:', err);
+      setPreviewPayload(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showAddEnergyModal) return undefined;
+    const timer = setTimeout(() => {
+      fetchPayloadPreview({
+        deviceType: 'energyMeter',
+        deviceId: energyFormData.DeviceID || 'Energy Meter_1',
+        state: energyFormData.state,
+        machineProfile: energyFormData.machineProfile,
+        jitter: energyFormData.jitter,
+        energyBaseReading: energyFormData.energyBaseReading,
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [showAddEnergyModal, energyFormData]);
   const handleEditInput = (e) => {
     const { name, value, type, checked } = e.target;
     setEditFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
@@ -158,6 +255,53 @@ export default function Simulator() {
     }
   };
 
+  const handleAddEnergy = async () => {
+    try {
+      setAddingDevice(true);
+      setError('');
+      const payload = {
+        deviceType: 'energyMeter',
+        energyCompany: energyFormData.energyCompany,
+        DeviceID: energyFormData.DeviceID,
+        machineProfile: energyFormData.machineProfile,
+        siteName: energyFormData.siteName,
+        plantName: energyFormData.plantName,
+        machineName: energyFormData.machineName,
+        state: energyFormData.state,
+        intervalSeconds: Number(energyFormData.intervalSeconds),
+        jitter: energyFormData.jitter,
+        energyBaseReading: Number(energyFormData.energyBaseReading),
+      };
+      const response = await axios.post('/api/sim/add', payload, { withCredentials: true });
+      if (response.data.success) {
+        setSuccess(`Energy meter ${energyFormData.DeviceID} added successfully!`);
+        setShowAddEnergyModal(false);
+        setEnergyFormData(defaultEnergyForm);
+        setPreviewPayload(null);
+        fetchDevices();
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to add energy meter');
+    } finally {
+      setAddingDevice(false);
+    }
+  };
+
+  const handleManualSend = async (deviceId) => {
+    try {
+      setSendingDevice(deviceId);
+      setError('');
+      const res = await axios.post('/api/sim/send', { DeviceID: deviceId }, { withCredentials: true });
+      setSuccess(res.data.message || `Sent payload for ${deviceId}`);
+      await fetchPayloadPreview({ DeviceID: deviceId });
+      fetchDevices();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Manual send failed');
+    } finally {
+      setSendingDevice('');
+    }
+  };
+
   const handleStartDevice = async (deviceId) => {
     try {
       setStartingDevice(deviceId);
@@ -189,7 +333,22 @@ export default function Simulator() {
   const handleEditDevice = (device) => {
     setEditingDevice(device);
     const isElevator = device.deviceType === 'elevator';
-    if (isElevator) {
+    const isEnergy = device.deviceType === 'energyMeter';
+    if (isEnergy) {
+      setEditFormData({
+        energyCompany: device.craneCompany || device.name,
+        DeviceID: device.DeviceID,
+        machineProfile: device.machineProfile || 'warehouse',
+        siteName: device.siteName || '',
+        plantName: device.plantName || '',
+        machineName: device.machineName || '',
+        state: device.state,
+        intervalSeconds: device.intervalSeconds || 60,
+        jitter: device.jitter,
+        energyBaseReading: device.energyBaseReading ?? '',
+      });
+      fetchPayloadPreview({ DeviceID: device.DeviceID });
+    } else if (isElevator) {
       setEditFormData({
         elevatorCompany: device.craneCompany || device.name,
         DeviceID: device.DeviceID,
@@ -219,9 +378,22 @@ export default function Simulator() {
       setUpdatingDevice(editingDevice.DeviceID);
       setError('');
       const isElevator = editingDevice.deviceType === 'elevator';
+      const isEnergy = editingDevice.deviceType === 'energyMeter';
       const payload = {
         DeviceID: editingDevice.DeviceID,
-        ...(isElevator
+        ...(isEnergy
+          ? {
+              energyCompany: editFormData.energyCompany,
+              machineProfile: editFormData.machineProfile,
+              siteName: editFormData.siteName,
+              plantName: editFormData.plantName,
+              machineName: editFormData.machineName,
+              state: editFormData.state,
+              intervalSeconds: Number(editFormData.intervalSeconds),
+              jitter: editFormData.jitter,
+              energyBaseReading: editFormData.energyBaseReading === '' ? undefined : Number(editFormData.energyBaseReading),
+            }
+          : isElevator
           ? {
               elevatorCompany: editFormData.elevatorCompany,
               location: editFormData.location,
@@ -363,6 +535,68 @@ export default function Simulator() {
     return <Badge bg={v[state] || 'secondary'}>{state}</Badge>;
   };
 
+  const EnergyActionButtons = ({ device }) => (
+    <div className="d-flex flex-wrap gap-1 align-items-center">
+      <Button
+        size="sm"
+        variant="outline-secondary"
+        onClick={() => fetchPayloadPreview({ DeviceID: device.DeviceID })}
+        title="Refresh payload preview"
+      >
+        Preview
+      </Button>
+      <Button
+        size="sm"
+        variant="outline-info"
+        onClick={() => handleManualSend(device.DeviceID)}
+        disabled={sendingDevice === device.DeviceID}
+        title="Send one payload now"
+      >
+        {sendingDevice === device.DeviceID ? <Spinner animation="border" size="sm" /> : <Send size={16} />}
+      </Button>
+      {device.isRunning ? (
+        <Button size="sm" variant="warning" onClick={() => handleStopDevice(device.DeviceID)} disabled={stoppingDevice === device.DeviceID}>
+          {stoppingDevice === device.DeviceID ? <Spinner animation="border" size="sm" /> : <Square size={16} />}
+        </Button>
+      ) : (
+        <Button size="sm" variant="success" onClick={() => handleStartDevice(device.DeviceID)} disabled={startingDevice === device.DeviceID} title="Stopped = offline meter">
+          {startingDevice === device.DeviceID ? <Spinner animation="border" size="sm" /> : <Play size={16} />}
+        </Button>
+      )}
+      <Button size="sm" variant="outline-primary" onClick={() => handleEditDevice(device)}><Edit3 size={16} /></Button>
+      <Button size="sm" variant="outline-danger" onClick={() => handleRemoveDevice(device.DeviceID)}><Trash2 size={16} /></Button>
+    </div>
+  );
+
+  const PayloadPreviewBox = ({ payload }) => (
+    <div className="mt-2">
+      <small className="text-muted d-block mb-1">Live payload preview (as sent to POST /api/energy-meter/log)</small>
+      {previewLoading ? (
+        <div className="text-center py-2"><Spinner animation="border" size="sm" /></div>
+      ) : payload?.payload ? (
+        <>
+          {payload.readings && (
+            <div className="small mb-2 p-2 bg-light rounded border">
+              <strong>Decoded readings:</strong>{' '}
+              {payload.readings.voltage != null && `${payload.readings.voltage} V`}
+              {payload.readings.current != null && ` · ${payload.readings.current} A`}
+              {payload.readings.activePower != null && ` · ${payload.readings.activePower} kW`}
+              {payload.readings.energy != null && ` · ${payload.readings.energy} kWh`}
+            </div>
+          )}
+          <pre
+            className="bg-dark text-success p-2 rounded small mb-0"
+            style={{ maxHeight: 140, overflow: 'auto', fontSize: '0.75rem' }}
+          >
+            {JSON.stringify(payload.payload, null, 2)}
+          </pre>
+        </>
+      ) : (
+        <p className="text-muted small mb-0">No preview available</p>
+      )}
+    </div>
+  );
+
   const ActionButtons = ({ device }) => (
     <div className="d-flex gap-1">
       {device.isRunning ? (
@@ -422,17 +656,21 @@ export default function Simulator() {
             Data Simulator
           </h2>
           <p className="text-muted">
-            Generate simulated crane or elevator data for testing. Two sections: Cranes and Elevators.
+            Generate simulated crane, elevator, or energy meter data for testing.
           </p>
         </Col>
-        <Col xs="auto">
-          <Button variant="outline-primary" className="me-2" onClick={() => setShowAddCraneModal(true)}>
+        <Col xs="auto" className="d-flex flex-wrap gap-2">
+          <Button variant="outline-primary" onClick={() => setShowAddCraneModal(true)}>
             <Plus size={18} className="me-1" />
             Add Crane
           </Button>
           <Button variant="primary" onClick={() => setShowAddElevatorModal(true)}>
             <Plus size={18} className="me-1" />
             Add Elevator
+          </Button>
+          <Button variant="success" onClick={() => setShowAddEnergyModal(true)}>
+            <Zap size={18} className="me-1" />
+            Add Energy Meter
           </Button>
         </Col>
       </Row>
@@ -543,6 +781,69 @@ export default function Simulator() {
               </tbody>
             </Table>
           )}
+        </Card.Body>
+      </Card>
+
+      {/* ---------- Section 3: Energy Meter Simulator ---------- */}
+      <Card className="mb-4">
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <h5 className="mb-0 d-flex align-items-center">
+            <Zap size={20} className="me-2" />
+            Energy Meter Simulator
+          </h5>
+          <Button variant="outline-secondary" size="sm" onClick={fetchDevices}>
+            <RefreshCw size={16} className="me-1" />
+            Refresh
+          </Button>
+        </Card.Header>
+        <Card.Body>
+          <p className="text-muted small">
+            Posts to <code>/api/energy-meter/log</code> in the exact webhook format. The meter must be registered in <strong>Manage Devices</strong> before data is accepted. Stop transmission to simulate an offline meter.
+          </p>
+          {energyDevices.length === 0 ? (
+            <p className="text-muted mb-0">No energy meter simulators. Click &quot;Add Energy Meter&quot; to add one.</p>
+          ) : (
+            <Table responsive striped hover size="sm">
+              <thead>
+                <tr>
+                  <th>Device ID</th>
+                  <th>Company</th>
+                  <th>Profile</th>
+                  <th>Site / Machine</th>
+                  <th>State</th>
+                  <th>Interval</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {energyDevices.map((device) => (
+                  <tr key={device.DeviceID}>
+                    <td><strong>{device.DeviceID}</strong></td>
+                    <td>{device.craneCompany}</td>
+                    <td><Badge bg="info">{ENERGY_PROFILES[device.machineProfile]?.label || device.machineProfile}</Badge></td>
+                    <td>
+                      <small>
+                        {device.siteName || '–'}
+                        {device.machineName ? ` / ${device.machineName}` : ''}
+                      </small>
+                    </td>
+                    <td>{getStateBadge(device.state)}</td>
+                    <td><Clock size={14} className="me-1" />{device.intervalSeconds || 60}s</td>
+                    <td>
+                      {device.isRunning ? (
+                        <Badge bg="success">Transmitting</Badge>
+                      ) : (
+                        <Badge bg="secondary">Offline (stopped)</Badge>
+                      )}
+                    </td>
+                    <td><EnergyActionButtons device={device} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+          {energyDevices.length > 0 && <PayloadPreviewBox payload={previewPayload} />}
         </Card.Body>
       </Card>
 
@@ -687,13 +988,192 @@ export default function Simulator() {
         </Modal.Footer>
       </Modal>
 
-      {/* ---------- Edit Modal (crane or elevator) ---------- */}
-      <Modal show={showEditModal} onHide={() => { setShowEditModal(false); setEditingDevice(null); }} size="lg">
+      {/* ---------- Add Energy Meter Modal ---------- */}
+      <Modal show={showAddEnergyModal} onHide={() => { setShowAddEnergyModal(false); setPreviewPayload(null); }} size="lg">
+        <Modal.Header closeButton><Modal.Title>Add Simulated Energy Meter</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small">
+            Register the meter in <strong>Manage Devices</strong> first (deviceType: <code>energyMeter</code>), then add the simulator with the same Device ID. Stopping transmission simulates an offline meter.
+          </p>
+          <Form>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Company Name *</Form.Label>
+                  <Form.Control name="energyCompany" value={energyFormData.energyCompany} onChange={handleEnergyInput} />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Device ID *</Form.Label>
+                  <Form.Control name="DeviceID" value={energyFormData.DeviceID} onChange={handleEnergyInput} placeholder="Energy Meter_1" required />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Machine profile *</Form.Label>
+                  <Form.Select name="machineProfile" value={energyFormData.machineProfile} onChange={handleEnergyInput}>
+                    {Object.entries(ENERGY_PROFILES).map(([key, p]) => (
+                      <option key={key} value={key}>{p.label}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Update interval *</Form.Label>
+                  <Form.Select name="intervalSeconds" value={energyFormData.intervalSeconds} onChange={handleEnergyInput}>
+                    {[30, 60, 120, 180, 300].map((n) => (
+                      <option key={n} value={n}>{n} seconds</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Site</Form.Label>
+                  <Form.Control name="siteName" value={energyFormData.siteName} onChange={handleEnergyInput} />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Plant</Form.Label>
+                  <Form.Control name="plantName" value={energyFormData.plantName} onChange={handleEnergyInput} />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Machine</Form.Label>
+                  <Form.Control name="machineName" value={energyFormData.machineName} onChange={handleEnergyInput} />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>State</Form.Label>
+                  <Form.Select name="state" value={energyFormData.state} onChange={handleEnergyInput}>
+                    <option value="working">Working</option>
+                    <option value="idle">Idle</option>
+                    <option value="maintenance">Maintenance</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Base energy (kWh)</Form.Label>
+                  <Form.Control type="number" name="energyBaseReading" value={energyFormData.energyBaseReading} onChange={handleEnergyInput} step="0.1" />
+                  <Form.Text className="text-muted">Starting cumulative energy counter for demo data</Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Label className="d-block">Options</Form.Label>
+                <Form.Check type="checkbox" name="jitter" checked={energyFormData.jitter} onChange={handleEnergyInput} label="Value jitter" />
+              </Col>
+            </Row>
+            <PayloadPreviewBox payload={previewPayload} />
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => { setShowAddEnergyModal(false); setPreviewPayload(null); }}>Cancel</Button>
+          <Button variant="primary" onClick={handleAddEnergy} disabled={addingDevice || !energyFormData.DeviceID}>
+            {addingDevice ? <><Spinner animation="border" size="sm" className="me-2" />Adding...</> : 'Add Energy Meter'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ---------- Edit Modal (crane, elevator, or energy meter) ---------- */}
+      <Modal show={showEditModal} onHide={() => { setShowEditModal(false); setEditingDevice(null); setPreviewPayload(null); }} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Edit: {editingDevice?.DeviceID}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {editingDevice?.deviceType === 'elevator' ? (
+          {editingDevice?.deviceType === 'energyMeter' ? (
+            <Form>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Company</Form.Label>
+                    <Form.Control name="energyCompany" value={editFormData.energyCompany} onChange={handleEditInput} />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Device ID</Form.Label>
+                    <Form.Control name="DeviceID" value={editFormData.DeviceID} disabled className="bg-light" />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Machine profile</Form.Label>
+                    <Form.Select name="machineProfile" value={editFormData.machineProfile} onChange={handleEditInput}>
+                      {Object.entries(ENERGY_PROFILES).map(([key, p]) => (
+                        <option key={key} value={key}>{p.label}</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Interval (seconds)</Form.Label>
+                    <Form.Select name="intervalSeconds" value={editFormData.intervalSeconds} onChange={handleEditInput}>
+                      {[30, 60, 120, 180, 300].map((n) => (
+                        <option key={n} value={n}>{n}s</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Site</Form.Label>
+                    <Form.Control name="siteName" value={editFormData.siteName} onChange={handleEditInput} />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Plant</Form.Label>
+                    <Form.Control name="plantName" value={editFormData.plantName} onChange={handleEditInput} />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Machine</Form.Label>
+                    <Form.Control name="machineName" value={editFormData.machineName} onChange={handleEditInput} />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>State</Form.Label>
+                    <Form.Select name="state" value={editFormData.state} onChange={handleEditInput}>
+                      <option value="working">Working</option>
+                      <option value="idle">Idle</option>
+                      <option value="maintenance">Maintenance</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Base energy (kWh)</Form.Label>
+                    <Form.Control type="number" name="energyBaseReading" value={editFormData.energyBaseReading} onChange={handleEditInput} step="0.1" />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Check type="checkbox" name="jitter" checked={editFormData.jitter} onChange={handleEditInput} label="Value jitter" className="mt-4" />
+                </Col>
+              </Row>
+              <PayloadPreviewBox payload={previewPayload} />
+            </Form>
+          ) : editingDevice?.deviceType === 'elevator' ? (
             <Form>
               <Row>
                 <Col md={6}>
@@ -905,19 +1385,26 @@ export default function Simulator() {
         </Card.Header>
         <Card.Body>
           <Row>
-            <Col md={6}>
+            <Col md={4}>
               <h6>Device allow-list</h6>
               <p className="text-muted small mb-0">
-                To see simulated cranes in the crane dashboard, add the DeviceID to the <strong>Device</strong> collection (companyName, deviceId, deviceType: &quot;crane&quot;). Same for elevators: add deviceId with deviceType: &quot;elevator&quot; so they appear on the Elevator page.
+                Cranes and elevators: add DeviceID in <strong>Manage Devices</strong>. Energy meters: register in Manage Devices first (<code>energyMeter</code>), then add the simulator with the same Device ID.
               </p>
             </Col>
-            <Col md={6}>
-              <h6>Simulator</h6>
+            <Col md={4}>
+              <h6>Simulator endpoints</h6>
               <ul className="text-muted small mb-0">
                 <li>Enabled when <code>ENABLE_SIMULATOR=true</code></li>
-                <li>Crane: posts to /api/crane/log at configured frequency</li>
-                <li>Elevator: posts to /api/elevators/log; floor cycles 0→24 each tick; state is manual only</li>
+                <li>Crane → <code>/api/crane/log</code></li>
+                <li>Elevator → <code>/api/elevators/log</code></li>
+                <li>Energy meter → <code>/api/energy-meter/log</code></li>
               </ul>
+            </Col>
+            <Col md={4}>
+              <h6>Energy meter offline demo</h6>
+              <p className="text-muted small mb-0">
+                Click <strong>Stop</strong> on a meter to stop transmission — it will show as offline on Energy Overview (no data within 5 minutes). Use <strong>Send</strong> for a one-shot manual post.
+              </p>
             </Col>
           </Row>
         </Card.Body>
