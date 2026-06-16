@@ -131,7 +131,7 @@ export default function EnergyOverview() {
             </div>
 
             <EnergyKpiCards kpis={overview?.kpis} />
-            <EnergyFleetChart chartSeries={overview?.chartSeries || []} />
+            <EnergyFleetChart />
 
             <h6 className={styles.sectionTitle}>Energy Meters</h6>
             <Row className="g-3">
@@ -197,7 +197,7 @@ export default function EnergyOverview() {
 
                 {isMobile ? (
                   <>
-                    <EnergyDetailChart logs={detailLogs} parameters={parameters} />
+                    <EnergyDetailChart meterId={selectedMeterId} />
                     <div className="mb-3">
                       <EnergyRawPayloadPanel
                         rawPayload={rawPayload}
@@ -209,7 +209,7 @@ export default function EnergyOverview() {
                 ) : (
                   <Row className="g-3 mb-3">
                     <Col lg={8}>
-                      <EnergyDetailChart logs={detailLogs} parameters={parameters} />
+                      <EnergyDetailChart meterId={selectedMeterId} />
                     </Col>
                     <Col lg={4}>
                       <EnergyRawPayloadPanel

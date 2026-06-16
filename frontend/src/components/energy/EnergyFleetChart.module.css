@@ -20,6 +20,12 @@
   color: #1a1a2e;
 }
 
+.chartSubtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
 .rangePills {
   display: flex;
   gap: 0.35rem;

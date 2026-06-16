@@ -3,6 +3,18 @@ const EnergyMeterParameterMap = require('../models/EnergyMeterParameterMap');
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
+const CHART_RANGE_MS = {
+  '15m': 15 * 60 * 1000,
+  '1h': 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+};
+
+function parseChartRange(rangeKey) {
+  const key = Object.prototype.hasOwnProperty.call(CHART_RANGE_MS, rangeKey) ? rangeKey : '24h';
+  return { key, ms: CHART_RANGE_MS[key] };
+}
+
 const DEFAULT_PARAMETERS = [
   { index: 0, key: 'voltage', label: 'Voltage', unit: 'V', scale: 0.1 },
   { index: 1, key: 'current', label: 'Current', unit: 'A', scale: 0.01 },
@@ -209,6 +221,8 @@ function pickDisplayReading(readings) {
 
 module.exports = {
   ONLINE_WINDOW_MS,
+  CHART_RANGE_MS,
+  parseChartRange,
   DEFAULT_PARAMETERS,
   parseDeviceDateString,
   parseSampleValueString,

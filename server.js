@@ -52,6 +52,7 @@ const {
   ensureDefaultParameterMap,
   pickChartMetric,
   pickDisplayReading,
+  parseChartRange,
 } = require("./backend/utils/energyMeterUtils");
 const {
   buildEnergyMeterPayload,
@@ -5770,7 +5771,6 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
         lastCommunicationStatus: formatRelativeTime(fleetLastComm),
       },
       meters: meterCards,
-      chartSeries: await buildFleetChartSeries(meterIds),
     });
   } catch (err) {
     console.error('Energy overview error:', err);
@@ -5778,19 +5778,38 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
   }
 });
 
-async function buildFleetChartSeries(meterIds) {
-  if (!meterIds.length) return [];
+async function buildFleetChartSeries(meterIds, rangeKey = '24h') {
+  const { key, ms } = parseChartRange(rangeKey);
+  const requestedUntil = new Date();
+  const requestedSince = new Date(requestedUntil.getTime() - ms);
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const empty = {
+    range: key,
+    requestedSince,
+    requestedUntil,
+    dataStart: null,
+    dataEnd: null,
+    chartSeries: [],
+  };
+
+  if (!meterIds.length) return empty;
+
   const logs = await EnergyMeterLog.find({
     meterId: { $in: meterIds },
-    timestamp: { $gte: since },
+    timestamp: { $gte: requestedSince },
   })
     .sort({ timestamp: 1 })
     .lean();
 
   const byMeter = {};
+  let dataStart = null;
+  let dataEnd = null;
+
   logs.forEach((log) => {
+    const ts = log.timestamp;
+    if (!dataStart || new Date(ts) < new Date(dataStart)) dataStart = ts;
+    if (!dataEnd || new Date(ts) > new Date(dataEnd)) dataEnd = ts;
+
     if (!byMeter[log.meterId]) byMeter[log.meterId] = [];
     byMeter[log.meterId].push({
       timestamp: log.timestamp,
@@ -5798,8 +5817,97 @@ async function buildFleetChartSeries(meterIds) {
     });
   });
 
-  return Object.entries(byMeter).map(([meterId, points]) => ({ meterId, points }));
+  return {
+    range: key,
+    requestedSince,
+    requestedUntil,
+    dataStart,
+    dataEnd,
+    chartSeries: Object.entries(byMeter).map(([meterId, points]) => ({ meterId, points })),
+  };
 }
+
+app.get('/api/energy-meter/fleet-chart', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getAllowedEnergyMeters(req);
+    const meterIds = meters.map((m) => m.deviceId);
+    const rangeKey = req.query.range || '24h';
+    const chart = await buildFleetChartSeries(meterIds, rangeKey);
+    res.json(chart);
+  } catch (err) {
+    console.error('Energy fleet chart error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+async function buildMeterChartData(meterId, rangeKey = '24h') {
+  const { key, ms } = parseChartRange(rangeKey);
+  const requestedUntil = new Date();
+  const requestedSince = new Date(requestedUntil.getTime() - ms);
+  const parameters = await getParameterMap(meterId);
+
+  const empty = {
+    range: key,
+    requestedSince,
+    requestedUntil,
+    dataStart: null,
+    dataEnd: null,
+    parameters,
+    points: [],
+  };
+
+  const logs = await EnergyMeterLog.find({
+    meterId,
+    timestamp: { $gte: requestedSince },
+  })
+    .sort({ timestamp: 1 })
+    .lean();
+
+  if (!logs.length) return empty;
+
+  let dataStart = null;
+  let dataEnd = null;
+
+  const points = logs.map((log) => {
+    const ts = log.timestamp;
+    if (!dataStart || new Date(ts) < new Date(dataStart)) dataStart = ts;
+    if (!dataEnd || new Date(ts) > new Date(dataEnd)) dataEnd = ts;
+
+    const readings =
+      log.readings && Object.keys(log.readings).length
+        ? log.readings
+        : buildReadings(log.rawValues, parameters);
+
+    return { timestamp: ts, readings };
+  });
+
+  return {
+    range: key,
+    requestedSince,
+    requestedUntil,
+    dataStart,
+    dataEnd,
+    parameters,
+    points,
+  };
+}
+
+app.get('/api/energy-meter/meter-chart', authenticateToken, async (req, res) => {
+  try {
+    const { meterId, range } = req.query;
+    if (!meterId) return res.status(400).json({ message: 'meterId is required' });
+
+    const meters = await getAllowedEnergyMeters(req);
+    const allowed = meters.find((m) => m.deviceId === meterId);
+    if (!allowed) return res.status(403).json({ message: 'Access denied' });
+
+    const chart = await buildMeterChartData(meterId, range || '24h');
+    res.json(chart);
+  } catch (err) {
+    console.error('Energy meter chart error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 app.get('/api/energy-meter/latest', authenticateToken, async (req, res) => {
   try {
