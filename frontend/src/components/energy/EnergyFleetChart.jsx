@@ -144,16 +144,16 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
           ) : chartData.length === 0 ? (
             <div className={styles.empty}>No chart data for this range yet.</div>
           ) : (
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={235}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 10 }}
                   minTickGap={range === '7d' ? 48 : range === '24h' ? 32 : 16}
                   interval="preserveStartEnd"
                 />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip
                   labelFormatter={(_, payload) => {
                     const ts = payload?.[0]?.payload?.timestamp;

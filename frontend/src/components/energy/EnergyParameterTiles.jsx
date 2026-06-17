@@ -26,7 +26,7 @@ export default function EnergyParameterTiles({ readings = {}, parameters = [] })
   }
 
   return (
-    <Row className="g-3 mb-4">
+    <Row className="g-2 mb-2">
       {entries.map(({ key, label, unit, value }) => (
         <Col key={key} xs={6} md={4} lg={3}>
           <div className={styles.tile}>

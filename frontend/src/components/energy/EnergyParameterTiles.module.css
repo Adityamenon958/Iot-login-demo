@@ -1,7 +1,7 @@
 .tile {
   background: #fff;
-  border-radius: 1rem;
-  padding: 1rem;
+  border-radius: 0.875rem;
+  padding: 0.75rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
   border: 1px solid #f0f0f0;
   height: 100%;
@@ -16,13 +16,13 @@
 }
 
 .tileValue {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: #1a1a2e;
 }
 
 .unit {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: #6c757d;
 }

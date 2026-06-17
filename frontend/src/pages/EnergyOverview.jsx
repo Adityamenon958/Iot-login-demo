@@ -168,10 +168,10 @@ export default function EnergyOverview() {
           >
             <div className={styles.pageHeader}>
               <div>
-                <h4 className={styles.pageTitle}>
-                  <Zap size={22} className="me-2" />
+                <h5 className={styles.pageTitle}>
+                  <Zap size={18} className="me-2" />
                   Energy Overview
-                </h4>
+                </h5>
                 <p className={styles.pageSubtitle}>
                   Fleet monitoring for all registered energy meters
                 </p>
@@ -193,7 +193,7 @@ export default function EnergyOverview() {
                 )}
                 <Badge bg="success" className={styles.liveBadge}>LIVE</Badge>
                 {lastUpdated && (
-                  <small className="text-muted">
+                  <small className={`text-muted ${styles.lastRefreshed}`}>
                     Last refreshed: {lastUpdated.toLocaleTimeString()}
                   </small>
                 )}
@@ -204,7 +204,7 @@ export default function EnergyOverview() {
             <EnergyFleetChart refreshKey={dataRefreshKey} />
 
             <h6 className={styles.sectionTitle}>Energy Meters</h6>
-            <Row className="g-3">
+            <Row className="g-2">
               {(overview?.meters || []).length === 0 ? (
                 <Col xs={12}>
                   <div className={styles.emptyState}>
@@ -220,7 +220,7 @@ export default function EnergyOverview() {
                 </Col>
               ) : (
                 overview.meters.map((meter) => (
-                  <Col key={meter.meterId} xs={12} md={6} lg={4}>
+                  <Col key={meter.meterId} xs={12} md={6} lg={3} xl={3}>
                     <EnergyMeterCard meter={meter} onSelect={handleSelectMeter} />
                   </Col>
                 ))
@@ -237,7 +237,7 @@ export default function EnergyOverview() {
               className={styles.backBtn}
               onClick={handleBackToFleet}
             >
-              <ArrowLeft size={18} className="me-1" />
+              <ArrowLeft size={16} className="me-1" />
               Back to Fleet Overview
             </Button>
 
@@ -275,7 +275,7 @@ export default function EnergyOverview() {
                 {isMobile ? (
                   <>
                     <EnergyDetailChart meterId={selectedMeterId} refreshKey={dataRefreshKey} />
-                    <div className="mb-3">
+                    <div className="mb-2">
                       <EnergyRawPayloadPanel
                         rawPayload={rawPayload}
                         parseStatus={parseStatus}
@@ -284,7 +284,7 @@ export default function EnergyOverview() {
                     </div>
                   </>
                 ) : (
-                  <Row className="g-3 mb-3">
+                  <Row className="g-2 mb-2">
                     <Col lg={8}>
                       <EnergyDetailChart meterId={selectedMeterId} refreshKey={dataRefreshKey} />
                     </Col>

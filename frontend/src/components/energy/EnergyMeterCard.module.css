@@ -1,10 +1,14 @@
 .card {
   border: none;
-  border-radius: 1.25rem;
+  border-radius: 1rem;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: transform 0.22s ease, box-shadow 0.22s ease;
   height: 100%;
+}
+
+.card :global(.card-body) {
+  padding: 0.75rem;
 }
 
 .card:hover {
@@ -36,9 +40,9 @@
 }
 
 .meta {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   color: #6c757d;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .breadcrumb {
@@ -49,15 +53,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0;
   border-top: 1px solid #f0f0f0;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .readingValue {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
 }
 
 .sparkline {
@@ -80,5 +84,5 @@
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }

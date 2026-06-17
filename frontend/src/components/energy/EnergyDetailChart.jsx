@@ -154,12 +154,12 @@ export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
           ) : chartData.length === 0 ? (
             <div className={styles.empty}>No historical data for this range.</div>
           ) : (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={230}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 10 }}
                   minTickGap={range === '7d' ? 48 : range === '24h' ? 32 : 16}
                   interval="preserveStartEnd"
                 />

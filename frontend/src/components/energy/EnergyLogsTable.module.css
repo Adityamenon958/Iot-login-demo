@@ -1,17 +1,27 @@
 .tableCard {
   border: none;
-  border-radius: 1.25rem;
+  border-radius: 1rem;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.tableCard :global(.card-body) {
+  padding: 0.75rem 1rem;
 }
 
 .title {
   font-weight: 700;
-  margin-bottom: 1rem;
+  margin-bottom: 0.625rem;
 }
 
 .table {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   margin-bottom: 0;
+}
+
+.table :global(th),
+.table :global(td) {
+  padding: 0.3rem 0.5rem;
+  vertical-align: middle;
 }
 
 .code {

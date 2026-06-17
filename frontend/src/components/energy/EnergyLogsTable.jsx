@@ -21,7 +21,7 @@ export default function EnergyLogsTable({ logs = [], selectedLogId, onSelectLog 
             <tbody>
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center text-muted py-4">
+                  <td colSpan={5} className="text-center text-muted py-3">
                     No logs yet
                   </td>
                 </tr>

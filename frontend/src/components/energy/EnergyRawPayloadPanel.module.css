@@ -1,8 +1,8 @@
 .panel {
   border: none;
-  border-radius: 1.25rem;
+  border-radius: 1rem;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  padding: 1rem;
+  padding: 0.75rem;
   height: 100%;
 }
 
@@ -31,7 +31,7 @@
   border-radius: 0.75rem;
   padding: 0.75rem;
   font-size: 0.75rem;
-  max-height: 280px;
+  max-height: 240px;
   overflow: auto;
   margin: 0;
   white-space: pre-wrap;

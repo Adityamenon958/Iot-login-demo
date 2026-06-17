@@ -14,12 +14,12 @@ export default function EnergyKpiCards({ kpis }) {
   if (!kpis) return null;
 
   return (
-    <Row className="g-3 mb-4">
+    <Row className="g-2 mb-2">
       {KPI_CONFIG.map(({ key, label, icon: Icon, variant, isText }) => (
         <Col key={key} xs={6} lg={3}>
           <div className={`${styles.kpiCard} ${styles[variant]}`}>
             <div className={styles.kpiIcon}>
-              <Icon size={20} />
+              <Icon size={18} />
             </div>
             <div className={styles.kpiLabel}>{label}</div>
             <div className={styles.kpiValue}>
