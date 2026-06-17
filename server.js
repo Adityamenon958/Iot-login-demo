@@ -53,6 +53,16 @@ const {
   pickChartMetric,
   pickDisplayReading,
   parseChartRange,
+  assertValidDataSource,
+  mergeMongoFilters,
+  getCompanyEnergyViewMode,
+  getSimulatorMeterIdsForCompany,
+  buildLogVisibilityQuery,
+  buildMeterVisibilityFilter,
+  buildLogFilterForCompany,
+  buildLogFilterForMeters,
+  viewModeToShowSimulator,
+  showSimulatorToViewMode,
 } = require("./backend/utils/energyMeterUtils");
 const {
   buildEnergyMeterPayload,
@@ -209,19 +219,15 @@ function getSimulatorIntervalMs(device) {
 
 async function postEnergyMeterSimPayload(device) {
   const { payload, energyKwh } = buildEnergyMeterPayload(device, { advanceReading: true });
-  const response = await fetch(`http://127.0.0.1:${PORT}/api/energy-meter/log`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (response.ok) {
+  try {
+    await ingestEnergyMeterPayload(payload, 'simulator');
     await SimulatorDevice.updateOne({ deviceId: device.deviceId }, { energyBaseReading: energyKwh });
     console.log(`[sim] ✅ Energy meter ${device.deviceId}: posted ${JSON.stringify(payload)}`);
     return { success: true, payload, energyKwh };
+  } catch (err) {
+    console.error(`[sim] ❌ Energy meter ${device.deviceId} post failed:`, err.message);
+    return { success: false, payload, error: err.message || 'Post failed' };
   }
-  console.error(`[sim] ❌ Energy meter ${device.deviceId} post failed: ${response.status}`, data.message || data);
-  return { success: false, payload, error: data.message || 'Post failed' };
 }
 
 // ✅ Simulator tick - crane → /api/crane/log, elevator → /api/elevators/log, energyMeter → /api/energy-meter/log
@@ -1110,6 +1116,18 @@ app.post('/api/devices', async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
+    if (String(deviceType).toLowerCase() === 'energymeter') {
+      const simConflict = await SimulatorDevice.findOne({
+        deviceId,
+        deviceType: 'energyMeter',
+      }).lean();
+      if (simConflict) {
+        return res.status(409).json({
+          message: `Device ID "${deviceId}" is already used by the energy meter simulator. Register the real meter with a different deviceId to avoid mixing demo and live data.`,
+        });
+      }
+    }
+
     let zoneIdToSet = null;
     if (elevatorZoneId) {
       if (String(deviceType).toLowerCase() !== 'elevator') {
@@ -1190,6 +1208,19 @@ app.put('/api/devices/:id', authenticateToken, async (req, res) => {
         : targetDevice.companyName;
     const effectiveType =
       deviceType !== undefined ? deviceType : targetDevice.deviceType;
+
+    const nextDeviceId = deviceId !== undefined ? deviceId : targetDevice.deviceId;
+    if (String(effectiveType).toLowerCase() === 'energymeter') {
+      const simConflict = await SimulatorDevice.findOne({
+        deviceId: nextDeviceId,
+        deviceType: 'energyMeter',
+      }).lean();
+      if (simConflict) {
+        return res.status(409).json({
+          message: `Device ID "${nextDeviceId}" is already used by the energy meter simulator. Register the real meter with a different deviceId to avoid mixing demo and live data.`,
+        });
+      }
+    }
 
     if (elevatorZoneId !== undefined) {
       if (elevatorZoneId === null || elevatorZoneId === '') {
@@ -5613,7 +5644,48 @@ async function getAllowedEnergyMeters(req) {
   return Device.find(filter).lean();
 }
 
-async function buildEnergyLogDoc(rawPayload, meterId, value, receivedAt) {
+async function getVisibleEnergyMeters(req) {
+  const { role, companyName } = req.user;
+
+  if (role !== 'superadmin') {
+    const viewMode = await getCompanyEnergyViewMode(companyName);
+    const simIds = await getSimulatorMeterIdsForCompany(companyName);
+    const visibility = buildMeterVisibilityFilter(viewMode, simIds);
+    return Device.find({
+      deviceType: 'energyMeter',
+      companyName,
+      ...visibility,
+    }).lean();
+  }
+
+  const allMeters = await Device.find({ deviceType: 'energyMeter' }).lean();
+  const companies = [...new Set(allMeters.map((m) => m.companyName).filter(Boolean))];
+  const visible = [];
+
+  for (const cn of companies) {
+    const viewMode = await getCompanyEnergyViewMode(cn);
+    const simIds = await getSimulatorMeterIdsForCompany(cn);
+    const visibility = buildMeterVisibilityFilter(viewMode, simIds);
+    const companyMeters = allMeters.filter((m) => m.companyName === cn);
+
+    if (!Object.keys(visibility).length) {
+      visible.push(...companyMeters);
+      continue;
+    }
+
+    if (visibility.deviceId?.$nin) {
+      visible.push(...companyMeters.filter((m) => !visibility.deviceId.$nin.includes(m.deviceId)));
+    } else if (visibility.deviceId?.$in) {
+      visible.push(...companyMeters.filter((m) => visibility.deviceId.$in.includes(m.deviceId)));
+    }
+  }
+
+  return visible;
+}
+
+async function buildEnergyLogDoc(rawPayload, meterId, value, receivedAt, dataSource) {
+  assertValidDataSource(dataSource);
+
   const parsed = typeof value === 'string' ? parseSampleValueString(value) : { parseStatus: 'partial', D: null, rawValues: null, timestamp: null };
   const device = await resolveDeviceForMeter(meterId);
   const parameters = await getParameterMap(meterId);
@@ -5635,6 +5707,7 @@ async function buildEnergyLogDoc(rawPayload, meterId, value, receivedAt) {
     machineName: device?.machineName || '',
     location: device?.location || '',
     phaseType: device?.phaseType || 'single',
+    dataSource,
     D: parsed.D || null,
     timestamp,
     dateISO,
@@ -5646,36 +5719,41 @@ async function buildEnergyLogDoc(rawPayload, meterId, value, receivedAt) {
   };
 }
 
+async function ingestEnergyMeterPayload(rawPayload, dataSource) {
+  assertValidDataSource(dataSource);
+
+  await ensureDefaultParameterMap();
+
+  const receivedAt = new Date();
+  const entries = extractMeterEntries(rawPayload);
+
+  if (!entries.length) {
+    const err = new Error('Unrecognized payload format. Expected { "MeterId": "date,[values]" }');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const docsToSave = [];
+  for (const { meterId, value } of entries) {
+    const registered = await resolveDeviceForMeter(meterId);
+    if (!registered) {
+      const err = new Error(`Energy meter "${meterId}" is not registered. Add it in Manage Devices with deviceType "energyMeter".`);
+      err.statusCode = 404;
+      throw err;
+    }
+    docsToSave.push(await buildEnergyLogDoc(rawPayload, meterId, value, receivedAt, dataSource));
+  }
+
+  return EnergyMeterLog.insertMany(docsToSave, { ordered: false });
+}
+
 app.post('/api/energy-meter/log', async (req, res) => {
   try {
     if (req.body === undefined || req.body === null) {
       return res.status(400).json({ message: 'Empty payload' });
     }
 
-    await ensureDefaultParameterMap();
-
-    const receivedAt = new Date();
-    const rawPayload = req.body;
-    const entries = extractMeterEntries(rawPayload);
-    const docsToSave = [];
-
-    if (!entries.length) {
-      return res.status(400).json({
-        message: 'Unrecognized payload format. Expected { "MeterId": "date,[values]" }',
-      });
-    }
-
-    for (const { meterId, value } of entries) {
-      const registered = await resolveDeviceForMeter(meterId);
-      if (!registered) {
-        return res.status(404).json({
-          message: `Energy meter "${meterId}" is not registered. Add it in Manage Devices with deviceType "energyMeter".`,
-        });
-      }
-      docsToSave.push(await buildEnergyLogDoc(rawPayload, meterId, value, receivedAt));
-    }
-
-    const saved = await EnergyMeterLog.insertMany(docsToSave, { ordered: false });
+    const saved = await ingestEnergyMeterPayload(req.body, 'device');
     const first = saved[0];
 
     res.status(201).json({
@@ -5686,35 +5764,121 @@ app.post('/api/energy-meter/log', async (req, res) => {
       timestamp: first?.timestamp,
     });
   } catch (err) {
+    if (err.statusCode === 400) return res.status(400).json({ message: err.message });
+    if (err.statusCode === 404) return res.status(404).json({ message: err.message });
     console.error('Energy meter save error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/view-settings', authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    const targetCompany = role === 'superadmin' ? (req.query.companyName || companyName) : companyName;
+    if (!targetCompany) {
+      return res.status(400).json({ message: 'companyName is required' });
+    }
+
+    const viewMode = await getCompanyEnergyViewMode(targetCompany);
+    const simulatorMeterIds = await getSimulatorMeterIdsForCompany(targetCompany);
+
+    res.json({
+      viewMode,
+      showSimulatorData: viewModeToShowSimulator(viewMode),
+      simulatorMeterCount: simulatorMeterIds.length,
+      companyName: targetCompany,
+      canEdit: role === 'admin' || role === 'superadmin',
+    });
+  } catch (err) {
+    console.error('Energy view-settings GET error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.put('/api/energy-meter/view-settings', authenticateToken, async (req, res) => {
+  try {
+    const { role, companyName } = req.user;
+    if (role !== 'superadmin' && role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    }
+
+    const targetCompany = role === 'superadmin' ? (req.body.companyName || companyName) : companyName;
+    if (!targetCompany) {
+      return res.status(400).json({ message: 'companyName is required' });
+    }
+
+    const { showSimulatorData, viewMode: rawViewMode } = req.body;
+    let viewMode = rawViewMode;
+    if (showSimulatorData !== undefined) {
+      viewMode = showSimulatorToViewMode(showSimulatorData === true);
+    }
+    if (!['all', 'real_only', 'simulator_only'].includes(viewMode)) {
+      return res.status(400).json({ message: 'Invalid viewMode' });
+    }
+
+    const access = await CompanyDashboardAccess.findOneAndUpdate(
+      { companyName: targetCompany },
+      {
+        $set: {
+          'energySettings.viewMode': viewMode,
+          lastUpdated: new Date(),
+          updatedBy: req.user.email || role,
+        },
+        $setOnInsert: {
+          companyName: targetCompany,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    const simulatorMeterIds = await getSimulatorMeterIdsForCompany(targetCompany);
+
+    res.json({
+      viewMode: access.energySettings?.viewMode || viewMode,
+      showSimulatorData: viewModeToShowSimulator(access.energySettings?.viewMode || viewMode),
+      simulatorMeterCount: simulatorMeterIds.length,
+      companyName: targetCompany,
+    });
+  } catch (err) {
+    console.error('Energy view-settings PUT error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
 app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
   try {
-    const meters = await getAllowedEnergyMeters(req);
+    const meters = await getVisibleEnergyMeters(req);
     const meterIds = meters.map((m) => m.deviceId);
-    const companyNames = [...new Set(meters.map((m) => m.companyName).filter(Boolean))];
 
     let fleetLastComm = null;
     if (meterIds.length) {
-      const latestFleet = await EnergyMeterLog.findOne({
+      const fleetLogFilter = await buildLogFilterForMeters(meters, {
         meterId: { $in: meterIds },
-      }).sort({ timestamp: -1 }).lean();
+      });
+      const latestFleet = await EnergyMeterLog.findOne(fleetLogFilter)
+        .sort({ timestamp: -1 })
+        .lean();
       fleetLastComm = latestFleet?.timestamp || null;
     }
 
     const meterCards = await Promise.all(
       meters.map(async (device) => {
-        const latest = await EnergyMeterLog.findOne({ meterId: device.deviceId })
+        const logFilter = await buildLogFilterForCompany(device.companyName, {
+          meterId: device.deviceId,
+        });
+
+        const latest = await EnergyMeterLog.findOne(logFilter)
           .sort({ timestamp: -1 })
           .lean();
         const previous = latest
-          ? await EnergyMeterLog.findOne({
-              meterId: device.deviceId,
-              timestamp: { $lt: latest.timestamp },
-            }).sort({ timestamp: -1 }).lean()
+          ? await EnergyMeterLog.findOne(
+              await buildLogFilterForCompany(device.companyName, {
+                meterId: device.deviceId,
+                timestamp: { $lt: latest.timestamp },
+              })
+            )
+              .sort({ timestamp: -1 })
+              .lean()
           : null;
 
         const online = isMeterOnline(latest?.timestamp);
@@ -5722,7 +5886,7 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
 
         let sparkline = [];
         if (device.deviceId) {
-          const recent = await EnergyMeterLog.find({ meterId: device.deviceId })
+          const recent = await EnergyMeterLog.find(logFilter)
             .sort({ timestamp: -1 })
             .limit(12)
             .lean();
@@ -5778,7 +5942,8 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
   }
 });
 
-async function buildFleetChartSeries(meterIds, rangeKey = '24h') {
+async function buildFleetChartSeries(meters, rangeKey = '24h') {
+  const meterIds = meters.map((m) => m.deviceId);
   const { key, ms } = parseChartRange(rangeKey);
   const requestedUntil = new Date();
   const requestedSince = new Date(requestedUntil.getTime() - ms);
@@ -5794,10 +5959,12 @@ async function buildFleetChartSeries(meterIds, rangeKey = '24h') {
 
   if (!meterIds.length) return empty;
 
-  const logs = await EnergyMeterLog.find({
+  const logFilter = await buildLogFilterForMeters(meters, {
     meterId: { $in: meterIds },
     timestamp: { $gte: requestedSince },
-  })
+  });
+
+  const logs = await EnergyMeterLog.find(logFilter)
     .sort({ timestamp: 1 })
     .lean();
 
@@ -5829,10 +5996,9 @@ async function buildFleetChartSeries(meterIds, rangeKey = '24h') {
 
 app.get('/api/energy-meter/fleet-chart', authenticateToken, async (req, res) => {
   try {
-    const meters = await getAllowedEnergyMeters(req);
-    const meterIds = meters.map((m) => m.deviceId);
+    const meters = await getVisibleEnergyMeters(req);
     const rangeKey = req.query.range || '24h';
-    const chart = await buildFleetChartSeries(meterIds, rangeKey);
+    const chart = await buildFleetChartSeries(meters, rangeKey);
     res.json(chart);
   } catch (err) {
     console.error('Energy fleet chart error:', err);
@@ -5840,7 +6006,8 @@ app.get('/api/energy-meter/fleet-chart', authenticateToken, async (req, res) => 
   }
 });
 
-async function buildMeterChartData(meterId, rangeKey = '24h') {
+async function buildMeterChartData(device, rangeKey = '24h') {
+  const meterId = device.deviceId;
   const { key, ms } = parseChartRange(rangeKey);
   const requestedUntil = new Date();
   const requestedSince = new Date(requestedUntil.getTime() - ms);
@@ -5856,10 +6023,12 @@ async function buildMeterChartData(meterId, rangeKey = '24h') {
     points: [],
   };
 
-  const logs = await EnergyMeterLog.find({
+  const logFilter = await buildLogFilterForCompany(device.companyName, {
     meterId,
     timestamp: { $gte: requestedSince },
-  })
+  });
+
+  const logs = await EnergyMeterLog.find(logFilter)
     .sort({ timestamp: 1 })
     .lean();
 
@@ -5897,11 +6066,11 @@ app.get('/api/energy-meter/meter-chart', authenticateToken, async (req, res) => 
     const { meterId, range } = req.query;
     if (!meterId) return res.status(400).json({ message: 'meterId is required' });
 
-    const meters = await getAllowedEnergyMeters(req);
+    const meters = await getVisibleEnergyMeters(req);
     const allowed = meters.find((m) => m.deviceId === meterId);
     if (!allowed) return res.status(403).json({ message: 'Access denied' });
 
-    const chart = await buildMeterChartData(meterId, range || '24h');
+    const chart = await buildMeterChartData(allowed, range || '24h');
     res.json(chart);
   } catch (err) {
     console.error('Energy meter chart error:', err);
@@ -5914,11 +6083,12 @@ app.get('/api/energy-meter/latest', authenticateToken, async (req, res) => {
     const { meterId } = req.query;
     if (!meterId) return res.status(400).json({ message: 'meterId is required' });
 
-    const meters = await getAllowedEnergyMeters(req);
+    const meters = await getVisibleEnergyMeters(req);
     const allowed = meters.find((m) => m.deviceId === meterId);
     if (!allowed) return res.status(403).json({ message: 'Access denied' });
 
-    const latest = await EnergyMeterLog.findOne({ meterId }).sort({ timestamp: -1 }).lean();
+    const logFilter = await buildLogFilterForCompany(allowed.companyName, { meterId });
+    const latest = await EnergyMeterLog.findOne(logFilter).sort({ timestamp: -1 }).lean();
     if (!latest) return res.status(404).json({ message: 'No data found' });
 
     const parameters = await getParameterMap(meterId);
@@ -5940,16 +6110,18 @@ app.get('/api/energy-meter/logs', authenticateToken, async (req, res) => {
     const { meterId, from, to, limit = '50', page = '1' } = req.query;
     if (!meterId) return res.status(400).json({ message: 'meterId is required' });
 
-    const meters = await getAllowedEnergyMeters(req);
+    const meters = await getVisibleEnergyMeters(req);
     const allowed = meters.find((m) => m.deviceId === meterId);
     if (!allowed) return res.status(403).json({ message: 'Access denied' });
 
-    const filter = { meterId };
+    const baseFilter = { meterId };
     if (from || to) {
-      filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to) filter.timestamp.$lte = new Date(to);
+      baseFilter.timestamp = {};
+      if (from) baseFilter.timestamp.$gte = new Date(from);
+      if (to) baseFilter.timestamp.$lte = new Date(to);
     }
+
+    const filter = await buildLogFilterForCompany(allowed.companyName, baseFilter);
 
     const lim = Math.min(parseInt(limit, 10) || 50, 200);
     const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * lim;

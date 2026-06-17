@@ -19,6 +19,13 @@ const companyDashboardAccessSchema = new mongoose.Schema({
     subscription: { type: Boolean, default: true },
     settings: { type: Boolean, default: true }
   },
+  energySettings: {
+    viewMode: {
+      type: String,
+      enum: ['all', 'real_only', 'simulator_only'],
+      default: 'all',
+    },
+  },
   lastUpdated: { 
     type: Date, 
     default: Date.now 

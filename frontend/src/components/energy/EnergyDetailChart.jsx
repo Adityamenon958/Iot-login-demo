@@ -67,7 +67,7 @@ function buildSubtitle(chartMeta) {
   return null;
 }
 
-export default function EnergyDetailChart({ meterId }) {
+export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
   const [range, setRange] = useState('24h');
   const [chartMeta, setChartMeta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +93,7 @@ export default function EnergyDetailChart({ meterId }) {
     fetchChart(true);
     const interval = setInterval(() => fetchChart(false), 30000);
     return () => clearInterval(interval);
-  }, [fetchChart]);
+  }, [fetchChart, refreshKey]);
 
   const parameters = chartMeta?.parameters || [];
   const points = chartMeta?.points || [];

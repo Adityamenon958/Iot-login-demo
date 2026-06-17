@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Col, Row, Badge, Button, Spinner } from 'react-bootstrap';
+import { Col, Row, Badge, Button, Spinner, Form } from 'react-bootstrap';
 import { ArrowLeft, Zap } from 'lucide-react';
 import axios from 'axios';
 import styles from './EnergyOverview.module.css';
@@ -30,6 +30,14 @@ export default function EnergyOverview() {
   const [detailLogs, setDetailLogs] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [viewSettings, setViewSettings] = useState({
+    showSimulatorData: true,
+    canEdit: false,
+    simulatorMeterCount: 0,
+  });
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const isMobile = useIsMobile();
 
   const fetchOverview = useCallback(async () => {
@@ -37,7 +45,54 @@ export default function EnergyOverview() {
     return res.data;
   }, []);
 
-  const { data: overview, lastUpdated, isInitialized } = useBackgroundRefresh(fetchOverview, 30000);
+  const { data: overview, lastUpdated, isInitialized, manualRefresh } = useBackgroundRefresh(
+    fetchOverview,
+    30000
+  );
+
+  const loadViewSettings = useCallback(async () => {
+    try {
+      setSettingsLoading(true);
+      const res = await axios.get('/api/energy-meter/view-settings', { withCredentials: true });
+      setViewSettings({
+        showSimulatorData: res.data.showSimulatorData !== false,
+        canEdit: res.data.canEdit === true,
+        simulatorMeterCount: res.data.simulatorMeterCount || 0,
+      });
+    } catch (err) {
+      console.error('Failed to load view settings:', err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadViewSettings();
+  }, [loadViewSettings]);
+
+  const handleSimulatorToggle = async (e) => {
+    const showSimulatorData = e.target.checked;
+    if (!viewSettings.canEdit) return;
+
+    try {
+      setSavingSettings(true);
+      await axios.put(
+        '/api/energy-meter/view-settings',
+        { showSimulatorData },
+        { withCredentials: true }
+      );
+      setViewSettings((prev) => ({ ...prev, showSimulatorData }));
+      setDataRefreshKey((k) => k + 1);
+      await manualRefresh();
+      if (viewMode === 'detail' && selectedMeterId) {
+        await fetchDetail(selectedMeterId);
+      }
+    } catch (err) {
+      console.error('Failed to update view settings:', err);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const fetchDetail = useCallback(async (meterId) => {
     if (!meterId) return;
@@ -91,8 +146,9 @@ export default function EnergyOverview() {
   const parameters = detailLatest?.parameters || [];
   const rawPayload = selectedLog?.rawPayload ?? detailLatest?.rawPayload;
   const parseStatus = selectedLog?.parseStatus ?? detailLatest?.parseStatus;
+  const simDataHidden = !viewSettings.showSimulatorData;
 
-  if (!isInitialized) {
+  if (!isInitialized || settingsLoading) {
     return (
       <Col xs={12} md={9} lg={10} xl={10} className={mainStyles.main}>
         <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '50vh' }}>
@@ -121,6 +177,20 @@ export default function EnergyOverview() {
                 </p>
               </div>
               <div className={styles.headerMeta}>
+                {viewSettings.canEdit && (
+                  <Form.Check
+                    type="switch"
+                    id="show-simulator-data"
+                    className={styles.simToggle}
+                    label="Show simulator data"
+                    checked={viewSettings.showSimulatorData}
+                    disabled={savingSettings}
+                    onChange={handleSimulatorToggle}
+                  />
+                )}
+                {simDataHidden && (
+                  <Badge bg="secondary" className={styles.hiddenBadge}>Demo data hidden</Badge>
+                )}
                 <Badge bg="success" className={styles.liveBadge}>LIVE</Badge>
                 {lastUpdated && (
                   <small className="text-muted">
@@ -131,14 +201,21 @@ export default function EnergyOverview() {
             </div>
 
             <EnergyKpiCards kpis={overview?.kpis} />
-            <EnergyFleetChart />
+            <EnergyFleetChart refreshKey={dataRefreshKey} />
 
             <h6 className={styles.sectionTitle}>Energy Meters</h6>
             <Row className="g-3">
               {(overview?.meters || []).length === 0 ? (
                 <Col xs={12}>
                   <div className={styles.emptyState}>
-                    No energy meters registered. Add devices with type <code>energyMeter</code> or run the seed script.
+                    {simDataHidden
+                      ? 'No live meter data. Simulator data is hidden.'
+                      : (
+                        <>
+                          No energy meters registered. Add devices with type{' '}
+                          <code>energyMeter</code> or run the seed script.
+                        </>
+                      )}
                   </div>
                 </Col>
               ) : (
@@ -197,7 +274,7 @@ export default function EnergyOverview() {
 
                 {isMobile ? (
                   <>
-                    <EnergyDetailChart meterId={selectedMeterId} />
+                    <EnergyDetailChart meterId={selectedMeterId} refreshKey={dataRefreshKey} />
                     <div className="mb-3">
                       <EnergyRawPayloadPanel
                         rawPayload={rawPayload}
@@ -209,7 +286,7 @@ export default function EnergyOverview() {
                 ) : (
                   <Row className="g-3 mb-3">
                     <Col lg={8}>
-                      <EnergyDetailChart meterId={selectedMeterId} />
+                      <EnergyDetailChart meterId={selectedMeterId} refreshKey={dataRefreshKey} />
                     </Col>
                     <Col lg={4}>
                       <EnergyRawPayloadPanel

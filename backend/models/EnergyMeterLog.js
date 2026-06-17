@@ -12,6 +12,12 @@ const energyMeterLogSchema = new mongoose.Schema(
     location: { type: String, default: '' },
     phaseType: { type: String, default: 'single' },
 
+    dataSource: {
+      type: String,
+      enum: ['simulator', 'device'],
+      required: true,
+    },
+
     D: String,
     timestamp: { type: Date, index: true },
     dateISO: { type: Date, index: true },
@@ -37,8 +43,18 @@ const energyMeterLogSchema = new mongoose.Schema(
   }
 );
 
+energyMeterLogSchema.pre('validate', function enforceDataSource(next) {
+  if (this.isNew && !this.dataSource) {
+    return next(new Error('dataSource is required for new EnergyMeterLog records'));
+  }
+  next();
+});
+
 energyMeterLogSchema.index({ companyName: 1, timestamp: -1 });
 energyMeterLogSchema.index({ meterId: 1, timestamp: -1 });
 energyMeterLogSchema.index({ uid: 1, timestamp: -1 });
+energyMeterLogSchema.index({ meterId: 1, dataSource: 1, timestamp: -1 });
+energyMeterLogSchema.index({ companyName: 1, dataSource: 1, timestamp: -1 });
+energyMeterLogSchema.index({ dataSource: 1, timestamp: -1 });
 
 module.exports = mongoose.model('EnergyMeterLog', energyMeterLogSchema);

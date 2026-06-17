@@ -1,7 +1,12 @@
 const Device = require('../models/Device');
 const EnergyMeterParameterMap = require('../models/EnergyMeterParameterMap');
+const CompanyDashboardAccess = require('../models/CompanyDashboardAccess');
+const SimulatorDevice = require('../models/SimulatorDevice');
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+const ENERGY_VIEW_MODES = ['all', 'real_only', 'simulator_only'];
+const ENERGY_DATA_SOURCES = ['simulator', 'device'];
 
 const CHART_RANGE_MS = {
   '15m': 15 * 60 * 1000,
@@ -219,9 +224,127 @@ function pickDisplayReading(readings) {
   return key ? { key, value, label: meta?.label || key, unit: meta?.unit || '' } : null;
 }
 
+function assertValidDataSource(dataSource) {
+  if (!dataSource || !ENERGY_DATA_SOURCES.includes(dataSource)) {
+    throw new Error(`dataSource must be one of: ${ENERGY_DATA_SOURCES.join(', ')}`);
+  }
+}
+
+function mergeMongoFilters(base = {}, extra = {}) {
+  const hasBase = base && Object.keys(base).length > 0;
+  const hasExtra = extra && Object.keys(extra).length > 0;
+  if (!hasBase) return { ...extra };
+  if (!hasExtra) return { ...base };
+  return { $and: [base, extra] };
+}
+
+async function getCompanyEnergyViewMode(companyName) {
+  if (!companyName) return 'all';
+  const access = await CompanyDashboardAccess.findOne({ companyName }).lean();
+  const mode = access?.energySettings?.viewMode;
+  return ENERGY_VIEW_MODES.includes(mode) ? mode : 'all';
+}
+
+async function getSimulatorMeterIdsForCompany(companyName) {
+  const sims = await SimulatorDevice.find({ deviceType: 'energyMeter' }).select('deviceId').lean();
+  const simIds = sims.map((s) => s.deviceId).filter(Boolean);
+  if (!simIds.length) return [];
+
+  const deviceFilter = { deviceType: 'energyMeter', deviceId: { $in: simIds } };
+  if (companyName) deviceFilter.companyName = companyName;
+
+  const devices = await Device.find(deviceFilter).select('deviceId').lean();
+  return devices.map((d) => d.deviceId);
+}
+
+function buildLogVisibilityQuery(viewMode, simulatorMeterIds = []) {
+  if (!viewMode || viewMode === 'all') return {};
+
+  const ids = simulatorMeterIds || [];
+
+  if (viewMode === 'real_only') {
+    return {
+      $or: [
+        { dataSource: 'device' },
+        { dataSource: { $exists: false }, meterId: { $nin: ids } },
+      ],
+    };
+  }
+
+  if (viewMode === 'simulator_only') {
+    return {
+      $or: [
+        { dataSource: 'simulator' },
+        { dataSource: { $exists: false }, meterId: { $in: ids } },
+      ],
+    };
+  }
+
+  return {};
+}
+
+function buildMeterVisibilityFilter(viewMode, simulatorMeterIds = []) {
+  if (!viewMode || viewMode === 'all') return {};
+
+  const ids = simulatorMeterIds || [];
+
+  if (viewMode === 'real_only') {
+    return ids.length ? { deviceId: { $nin: ids } } : {};
+  }
+
+  if (viewMode === 'simulator_only') {
+    return ids.length ? { deviceId: { $in: ids } } : { deviceId: { $in: [] } };
+  }
+
+  return {};
+}
+
+async function buildLogFilterForCompany(companyName, baseFilter = {}) {
+  const viewMode = await getCompanyEnergyViewMode(companyName);
+  const simIds = await getSimulatorMeterIdsForCompany(companyName);
+  return mergeMongoFilters(baseFilter, buildLogVisibilityQuery(viewMode, simIds));
+}
+
+async function buildLogFilterForMeters(meters, baseFilter = {}) {
+  if (!meters?.length) {
+    return mergeMongoFilters(baseFilter, { _id: { $exists: false } });
+  }
+
+  const byCompany = {};
+  meters.forEach((m) => {
+    const cn = m.companyName || '';
+    if (!byCompany[cn]) byCompany[cn] = [];
+    byCompany[cn].push(m.deviceId);
+  });
+
+  const orClauses = [];
+  for (const [companyName, meterIds] of Object.entries(byCompany)) {
+    const viewMode = await getCompanyEnergyViewMode(companyName);
+    const simIds = await getSimulatorMeterIdsForCompany(companyName);
+    const visibility = buildLogVisibilityQuery(viewMode, simIds);
+    orClauses.push(mergeMongoFilters({ meterId: { $in: meterIds } }, visibility));
+  }
+
+  if (orClauses.length === 1) {
+    return mergeMongoFilters(baseFilter, orClauses[0]);
+  }
+
+  return mergeMongoFilters(baseFilter, { $or: orClauses });
+}
+
+function viewModeToShowSimulator(viewMode) {
+  return viewMode !== 'real_only';
+}
+
+function showSimulatorToViewMode(showSimulatorData) {
+  return showSimulatorData ? 'all' : 'real_only';
+}
+
 module.exports = {
   ONLINE_WINDOW_MS,
   CHART_RANGE_MS,
+  ENERGY_VIEW_MODES,
+  ENERGY_DATA_SOURCES,
   parseChartRange,
   DEFAULT_PARAMETERS,
   parseDeviceDateString,
@@ -235,4 +358,14 @@ module.exports = {
   ensureDefaultParameterMap,
   pickChartMetric,
   pickDisplayReading,
+  assertValidDataSource,
+  mergeMongoFilters,
+  getCompanyEnergyViewMode,
+  getSimulatorMeterIdsForCompany,
+  buildLogVisibilityQuery,
+  buildMeterVisibilityFilter,
+  buildLogFilterForCompany,
+  buildLogFilterForMeters,
+  viewModeToShowSimulator,
+  showSimulatorToViewMode,
 };
