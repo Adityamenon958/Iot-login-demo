@@ -30,6 +30,7 @@ import {
   Send,
 } from 'lucide-react';
 import axios from 'axios';
+import styles from './Simulator.module.css';
 
 // ✅ Default form values
 const defaultCraneForm = {
@@ -649,29 +650,43 @@ export default function Simulator() {
 
   return (
     <Container fluid className="mt-4">
-      <Row className="mb-4">
+      <Row className="mb-4 align-items-center">
         <Col>
-          <h2 className="d-flex align-items-center">
+          <h2 className="d-flex align-items-center mb-1">
             <Activity className="me-2" size={28} />
             Data Simulator
           </h2>
-          <p className="text-muted">
+          <p className="text-muted mb-0">
             Generate simulated crane, elevator, or energy meter data for testing.
           </p>
         </Col>
-        <Col xs="auto" className="d-flex flex-wrap gap-2">
-          <Button variant="outline-primary" onClick={() => setShowAddCraneModal(true)}>
-            <Plus size={18} className="me-1" />
-            Add Crane
-          </Button>
-          <Button variant="primary" onClick={() => setShowAddElevatorModal(true)}>
-            <Plus size={18} className="me-1" />
-            Add Elevator
-          </Button>
-          <Button variant="success" onClick={() => setShowAddEnergyModal(true)}>
-            <Zap size={18} className="me-1" />
-            Add Energy Meter
-          </Button>
+        <Col xs="auto">
+          <div className={styles.headerActions}>
+            <Button
+              variant="outline-primary"
+              className={styles.headerActionBtn}
+              onClick={() => setShowAddCraneModal(true)}
+            >
+              <Plus size={18} className="me-1" />
+              Add Crane
+            </Button>
+            <Button
+              variant="primary"
+              className={styles.headerActionBtn}
+              onClick={() => setShowAddElevatorModal(true)}
+            >
+              <Plus size={18} className="me-1" />
+              Add Elevator
+            </Button>
+            <Button
+              variant="success"
+              className={styles.headerActionBtn}
+              onClick={() => setShowAddEnergyModal(true)}
+            >
+              <Zap size={18} className="me-1" />
+              Add Energy Meter
+            </Button>
+          </div>
         </Col>
       </Row>
 
