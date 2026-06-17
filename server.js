@@ -52,6 +52,7 @@ const {
   ensureDefaultParameterMap,
   pickChartMetric,
   pickDisplayReading,
+  pickActivePowerKw,
   parseChartRange,
   assertValidDataSource,
   mergeMongoFilters,
@@ -5848,18 +5849,6 @@ app.put('/api/energy-meter/view-settings', authenticateToken, async (req, res) =
 app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
   try {
     const meters = await getVisibleEnergyMeters(req);
-    const meterIds = meters.map((m) => m.deviceId);
-
-    let fleetLastComm = null;
-    if (meterIds.length) {
-      const fleetLogFilter = await buildLogFilterForMeters(meters, {
-        meterId: { $in: meterIds },
-      });
-      const latestFleet = await EnergyMeterLog.findOne(fleetLogFilter)
-        .sort({ timestamp: -1 })
-        .lean();
-      fleetLastComm = latestFleet?.timestamp || null;
-    }
 
     const meterCards = await Promise.all(
       meters.map(async (device) => {
@@ -5883,6 +5872,7 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
 
         const online = isMeterOnline(latest?.timestamp);
         const displayReading = pickDisplayReading(latest?.readings);
+        const currentPowerKw = pickActivePowerKw(latest?.readings);
 
         let sparkline = [];
         if (device.deviceId) {
@@ -5917,6 +5907,7 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
                 unit: displayReading.unit,
               }
             : null,
+          currentPowerKw,
           sparkline,
           trendDelta,
         };
@@ -5925,14 +5916,21 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
 
     const onlineCount = meterCards.filter((m) => m.online).length;
     const totalMeters = meters.length;
+    const powerValues = meterCards
+      .filter((m) => m.online === true)
+      .map((m) => m.currentPowerKw)
+      .filter((v) => v != null);
+    const currentPowerConsumption = powerValues.length > 0
+      ? powerValues.reduce((a, b) => a + b, 0)
+      : null;
 
     res.json({
       kpis: {
         totalMeters,
         onlineMeters: onlineCount,
         offlineMeters: totalMeters - onlineCount,
-        lastCommunicationAt: fleetLastComm,
-        lastCommunicationStatus: formatRelativeTime(fleetLastComm),
+        currentPowerConsumption,
+        currentPowerUnit: 'kW',
       },
       meters: meterCards,
     });

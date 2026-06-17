@@ -36,7 +36,7 @@ export default function EnergyMeterCard({ meter, onSelect }) {
     machineName,
     online,
     lastCommunication,
-    latestReading,
+    currentPowerKw,
     sparkline,
   } = meter;
 
@@ -65,11 +65,9 @@ export default function EnergyMeterCard({ meter, onSelect }) {
 
         <div className={styles.readingRow}>
           <div>
-            <small className="text-muted">Latest reading</small>
+            <small className="text-muted">Current Power</small>
             <div className={styles.readingValue}>
-              {latestReading
-                ? `${latestReading.label || latestReading.key}: ${latestReading.value}${latestReading.unit ? ` ${latestReading.unit}` : ''}`
-                : '—'}
+              {currentPowerKw != null ? `${currentPowerKw} kW` : '—'}
             </div>
           </div>
           <MiniSparkline data={sparkline} />

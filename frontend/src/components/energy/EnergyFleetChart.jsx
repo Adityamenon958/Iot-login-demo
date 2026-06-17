@@ -167,8 +167,9 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
                     type="monotone"
                     dataKey={id}
                     stroke={COLORS[i % COLORS.length]}
-                    dot={false}
+                    dot={{ r: 2 }}
                     strokeWidth={2}
+                    connectNulls
                     name={id}
                   />
                 ))}

@@ -224,6 +224,12 @@ function pickDisplayReading(readings) {
   return key ? { key, value, label: meta?.label || key, unit: meta?.unit || '' } : null;
 }
 
+function pickActivePowerKw(readings) {
+  if (readings?.activePower == null) return null;
+  const n = Number(readings.activePower);
+  return Number.isFinite(n) ? n : null;
+}
+
 function assertValidDataSource(dataSource) {
   if (!dataSource || !ENERGY_DATA_SOURCES.includes(dataSource)) {
     throw new Error(`dataSource must be one of: ${ENERGY_DATA_SOURCES.join(', ')}`);
@@ -358,6 +364,7 @@ module.exports = {
   ensureDefaultParameterMap,
   pickChartMetric,
   pickDisplayReading,
+  pickActivePowerKw,
   assertValidDataSource,
   mergeMongoFilters,
   getCompanyEnergyViewMode,

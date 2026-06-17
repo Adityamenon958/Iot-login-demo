@@ -1,13 +1,13 @@
 import React from 'react';
 import { Row, Col, Badge } from 'react-bootstrap';
-import { Activity, Wifi, WifiOff, Clock } from 'lucide-react';
+import { Activity, Wifi, WifiOff, Zap } from 'lucide-react';
 import styles from './EnergyKpiCards.module.css';
 
 const KPI_CONFIG = [
   { key: 'totalMeters', label: 'Total Meters', icon: Activity, variant: 'primary' },
   { key: 'onlineMeters', label: 'Online Meters', icon: Wifi, variant: 'success' },
   { key: 'offlineMeters', label: 'Offline Meters', icon: WifiOff, variant: 'warning' },
-  { key: 'lastCommunicationStatus', label: 'Last Communication', icon: Clock, variant: 'info', isText: true },
+  { key: 'currentPowerConsumption', label: 'Current Power', icon: Zap, variant: 'power', isText: true },
 ];
 
 export default function EnergyKpiCards({ kpis }) {
@@ -24,7 +24,15 @@ export default function EnergyKpiCards({ kpis }) {
             <div className={styles.kpiLabel}>{label}</div>
             <div className={styles.kpiValue}>
               {isText ? (
-                <span className={styles.kpiText}>{kpis[key] || 'No data yet'}</span>
+                <span className={styles.kpiText}>
+                  {key === 'currentPowerConsumption'
+                    ? (
+                      kpis.currentPowerConsumption != null
+                        ? `${Number(kpis.currentPowerConsumption).toFixed(1)} ${kpis.currentPowerUnit || 'kW'}`
+                        : 'No data yet'
+                    )
+                    : (kpis[key] || 'No data yet')}
+                </span>
               ) : (
                 kpis[key] ?? 0
               )}
