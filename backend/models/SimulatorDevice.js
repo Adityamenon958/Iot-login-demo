@@ -94,6 +94,40 @@ const simulatorDeviceSchema = new mongoose.Schema({
     enum: [30, 60, 120, 180, 300],
     default: 60,
   },
+  // Room-aware industrial simulator
+  energySimMode: {
+    type: String,
+    enum: ['room', 'single'],
+    default: 'single',
+  },
+  roomType: {
+    type: String,
+    enum: ['office', 'warehouse', 'manufacturing', 'retail'],
+    default: 'office',
+  },
+  scheduleTimezone: { type: String, default: 'Asia/Kolkata' },
+  appliances: [{
+    type: { type: String, required: true },
+    count: { type: Number, min: 1, default: 1 },
+    ratedKwOverride: { type: Number, default: null },
+    stateDistribution: {
+      running: { type: Number, default: 80 },
+      idle: { type: Number, default: 15 },
+      stopped: { type: Number, default: 5 },
+      maintenance: { type: Number, default: 0 },
+    },
+  }],
+  singleApplianceType: { type: String, default: 'ac_split' },
+  singleApplianceRatedKwOverride: { type: Number, default: null },
+  singleStateDistribution: {
+    running: { type: Number, default: 80 },
+    idle: { type: Number, default: 15 },
+    stopped: { type: Number, default: 5 },
+    maintenance: { type: Number, default: 0 },
+  },
+  occupancyPercent: { type: Number, min: 0, max: 100, default: 100 },
+  minVoltage: { type: Number, default: 220 },
+  maxVoltage: { type: Number, default: 240 },
 }, {
   timestamps: true // Adds createdAt and updatedAt automatically
 });

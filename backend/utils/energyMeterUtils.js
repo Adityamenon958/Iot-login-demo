@@ -25,7 +25,20 @@ const DEFAULT_PARAMETERS = [
   { index: 1, key: 'current', label: 'Current', unit: 'A', scale: 0.01 },
   { index: 2, key: 'activePower', label: 'Active Power', unit: 'kW', scale: 0.01 },
   { index: 3, key: 'energy', label: 'Energy', unit: 'kWh', scale: 0.1 },
+  { index: 4, key: 'powerFactor', label: 'Power Factor', unit: '', scale: 0.01 },
+  { index: 5, key: 'frequency', label: 'Frequency', unit: 'Hz', scale: 0.01 },
 ];
+
+function mergeParameterMaps(existingParams = [], defaults = DEFAULT_PARAMETERS) {
+  const byIndex = new Map();
+  (existingParams || []).forEach((p) => {
+    if (p != null && Number.isFinite(p.index)) byIndex.set(p.index, { ...p });
+  });
+  defaults.forEach((p) => {
+    if (!byIndex.has(p.index)) byIndex.set(p.index, { ...p });
+  });
+  return [...byIndex.values()].sort((a, b) => a.index - b.index);
+}
 
 function parseDeviceDateString(d) {
   if (typeof d !== 'string' || !d.includes('/')) return null;
@@ -188,8 +201,12 @@ async function ensureDefaultParameterMap() {
   }
 
   const isLegacy = (existing.parameters || []).some((p) => String(p.key || '').startsWith('channel_'));
-  if (isLegacy) {
-    existing.parameters = DEFAULT_PARAMETERS;
+  const merged = mergeParameterMaps(existing.parameters, DEFAULT_PARAMETERS);
+  const needsSave = isLegacy
+    || merged.length !== (existing.parameters || []).length
+    || merged.some((p, i) => existing.parameters[i]?.key !== p.key);
+  if (needsSave) {
+    existing.parameters = merged;
     await existing.save();
   }
   return existing;
@@ -353,6 +370,7 @@ module.exports = {
   ENERGY_DATA_SOURCES,
   parseChartRange,
   DEFAULT_PARAMETERS,
+  mergeParameterMaps,
   parseDeviceDateString,
   parseSampleValueString,
   extractMeterEntries,

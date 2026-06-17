@@ -1,57 +1,12 @@
 const { DEFAULT_PARAMETERS } = require('./energyMeterUtils');
-
-/**
- * Single-phase demo profiles — realistic load shapes per machine type.
- * Register mapping (index → parameter) lives in DEFAULT_PARAMETERS and can be changed later.
- */
-const ENERGY_MACHINE_PROFILES = {
-  warehouse: {
-    label: 'Warehouse',
-    siteName: 'Demo Warehouse',
-    plantName: 'Storage Facility',
-    machineName: 'Warehouse Line',
-    baseEnergyKwh: 6200,
-    voltageRange: [228, 232],
-    powerKwRange: [1.8, 3.4],
-    energyDriftKwh: 0.06,
-    pattern: 'flat',
-  },
-  cnc: {
-    label: 'CNC Machine',
-    siteName: 'Manufacturing Plant',
-    plantName: 'Production Hall',
-    machineName: 'CNC Machine',
-    baseEnergyKwh: 7100,
-    voltageRange: [226, 234],
-    powerKwRange: [4.5, 11.5],
-    energyDriftKwh: 0.15,
-    pattern: 'spike',
-  },
-  compressor: {
-    label: 'Compressor',
-    siteName: 'Utility Bay',
-    plantName: 'Compressor Room',
-    machineName: 'Air Compressor',
-    baseEnergyKwh: 8400,
-    voltageRange: [224, 233],
-    powerKwRange: [2.8, 8.2],
-    energyDriftKwh: 0.1,
-    pattern: 'cyclic',
-  },
-  conveyor: {
-    label: 'Conveyor',
-    siteName: 'Assembly Plant',
-    plantName: 'Packaging Unit',
-    machineName: 'Conveyor Belt',
-    baseEnergyKwh: 5800,
-    voltageRange: [229, 231],
-    powerKwRange: [1.1, 2.3],
-    energyDriftKwh: 0.04,
-    pattern: 'steady',
-  },
-};
+const { computeSimulatedLoad, MACHINE_PROFILE_TO_APPLIANCE } = require('./energyApplianceCatalog');
 
 const VALID_INTERVALS_SECONDS = [30, 60, 120, 180, 300];
+
+const MIN_PF = 0.7;
+const GRID_FREQ_NOMINAL = 50.0;
+const GRID_FREQ_MIN = 49.8;
+const GRID_FREQ_MAX = 50.2;
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -59,10 +14,6 @@ function pad(n) {
 
 function formatEnergyMeterDate(d = new Date()) {
   return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-}
-
-function getProfileConfig(profileName) {
-  return ENERGY_MACHINE_PROFILES[profileName] || ENERGY_MACHINE_PROFILES.warehouse;
 }
 
 function randBetween(min, max) {
@@ -74,67 +25,92 @@ function round(value, decimals = 2) {
   return Math.round(value * f) / f;
 }
 
-function stateLoadFactor(state) {
-  if (state === 'maintenance') return 0.05;
-  if (state === 'idle') return 0.25;
-  return 1;
-}
-
-function patternPowerMultiplier(pattern, profile) {
-  const base = randBetween(profile.powerKwRange[0], profile.powerKwRange[1]);
-  if (pattern === 'spike') {
-    return Math.random() > 0.65 ? base * randBetween(1.4, 1.9) : base * randBetween(0.5, 0.85);
-  }
-  if (pattern === 'cyclic') {
-    const phase = Date.now() % 90000;
-    const wave = Math.sin((phase / 90000) * Math.PI * 2);
-    return base * (0.55 + (wave + 1) * 0.35);
-  }
-  if (pattern === 'steady') {
-    return base * randBetween(0.92, 1.08);
-  }
-  return base * randBetween(0.9, 1.1);
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function toRaw(value, scale) {
   return Math.round(Number(value) / scale);
 }
 
+function normalizeSimDevice(device) {
+  const d = { ...device };
+  if (!d.energySimMode) {
+    d.energySimMode = 'single';
+    if (!d.singleApplianceType && d.machineProfile) {
+      d.singleApplianceType = MACHINE_PROFILE_TO_APPLIANCE[d.machineProfile] || 'ac_split';
+    }
+  }
+  if (d.minVoltage == null) d.minVoltage = 220;
+  if (d.maxVoltage == null) d.maxVoltage = 240;
+  if (d.occupancyPercent == null) d.occupancyPercent = 100;
+  if (!d.roomType) d.roomType = 'office';
+  return d;
+}
+
+function generateGridFrequency(jitter) {
+  const slow = Math.sin((Date.now() % 300000) / 300000 * Math.PI * 2) * 0.05;
+  let hz = GRID_FREQ_NOMINAL + slow + (jitter ? randBetween(-0.12, 0.12) : 0);
+  return round(clamp(hz, GRID_FREQ_MIN, GRID_FREQ_MAX), 2);
+}
+
+function generateVoltage(simDevice, totalKw, jitter) {
+  const minV = Number(simDevice.minVoltage) || 220;
+  const maxV = Number(simDevice.maxVoltage) || 240;
+  let voltage = 230 + (jitter ? randBetween(-1.5, 1.5) : 0);
+  if (totalKw > 5) {
+    const sag = Math.min(0.02, (totalKw - 5) * 0.002);
+    voltage *= 1 - sag;
+  }
+  return round(clamp(voltage, minV, maxV), 1);
+}
+
 /**
- * Generate realistic single-phase electrical readings (demo values).
+ * Industrial physics engine — 6-parameter readings.
  */
-function generateElectricalReadings(device, profile, options = {}) {
-  const { advanceEnergy = true } = options;
-  const loadFactor = stateLoadFactor(device.state || 'working');
+function generateElectricalReadings(simDevice, options = {}) {
+  const { advanceEnergy = true, now = new Date() } = options;
+  const device = normalizeSimDevice(simDevice);
   const jitter = device.jitter !== false;
+  const intervalSec = Number(device.intervalSeconds) || 60;
 
-  let energyKwh = device.energyBaseReading != null
-    ? Number(device.energyBaseReading)
-    : profile.baseEnergyKwh;
+  const load = computeSimulatedLoad(device, now);
+  const activePowerKw = load.totalKw;
+  const powerFactor = load.powerFactor;
 
-  if (advanceEnergy) {
-    const drift = profile.energyDriftKwh * loadFactor;
-    energyKwh = round(energyKwh + drift + (jitter ? randBetween(-0.02, 0.04) : 0), 2);
+  let energyKwh = device.energyBaseReading != null ? Number(device.energyBaseReading) : 0;
+  if (advanceEnergy && activePowerKw > 0) {
+    energyKwh = round(energyKwh + activePowerKw * (intervalSec / 3600), 2);
   }
 
-  let voltage = randBetween(profile.voltageRange[0], profile.voltageRange[1]);
-  if (jitter) voltage += randBetween(-1.2, 1.2);
-  voltage = round(Math.max(210, Math.min(245, voltage)), 1);
+  const voltage = generateVoltage(device, activePowerKw, jitter);
+  const frequency = generateGridFrequency(jitter);
+  const pfSafe = Math.max(powerFactor, MIN_PF);
 
-  let activePowerKw = patternPowerMultiplier(profile.pattern, profile) * loadFactor;
-  if (jitter) activePowerKw += randBetween(-0.15, 0.15);
-  activePowerKw = round(Math.max(0.05, activePowerKw), 2);
-
-  // I ≈ P / V (single-phase, kW → W)
-  let current = (activePowerKw * 1000) / voltage;
-  if (jitter) current += randBetween(-0.4, 0.4);
-  current = round(Math.max(0.1, current), 2);
+  let current = activePowerKw > 0
+    ? (activePowerKw * 1000) / (voltage * pfSafe)
+    : 0;
+  if (jitter && current > 0) current += randBetween(-0.3, 0.3);
+  current = round(Math.max(0, current), 2);
 
   return {
-    voltage,
-    current,
-    activePower: activePowerKw,
-    energy: energyKwh,
+    readings: {
+      voltage,
+      current,
+      activePower: round(activePowerKw, 2),
+      energy: energyKwh,
+      powerFactor,
+      frequency,
+    },
+    breakdown: {
+      totalKw: activePowerKw,
+      powerFactor,
+      frequency,
+      items: load.items,
+      scheduleFactor: load.scheduleFactor,
+      occupancyFactor: load.occupancyFactor,
+    },
+    energyKwh,
   };
 }
 
@@ -147,20 +123,18 @@ function readingsToRawValues(readings, parameters = DEFAULT_PARAMETERS) {
 }
 
 /**
- * Build webhook payload exactly as a physical energy meter sends:
- * { "Energy Meter_1": "DD/MM/YYYY HH:mm:ss,[n1,n2,n3,n4]" }
- * Raw array order follows DEFAULT_PARAMETERS (voltage, current, activePower, energy).
+ * Build webhook payload:
+ * { "Energy Meter_1": "DD/MM/YYYY HH:mm:ss,[V,A,kW,kWh,PF,Hz]" }
  */
 function buildEnergyMeterPayload(device, options = {}) {
-  const { advanceReading = true } = options;
-  const profile = getProfileConfig(device.machineProfile || 'warehouse');
-
-  const readings = generateElectricalReadings(device, profile, {
+  const { advanceReading = true, now = new Date() } = options;
+  const { readings, breakdown, energyKwh } = generateElectricalReadings(device, {
     advanceEnergy: advanceReading,
+    now,
   });
 
   const rawValues = readingsToRawValues(readings);
-  const dateStr = formatEnergyMeterDate();
+  const dateStr = formatEnergyMeterDate(now);
   const meterKey = device.deviceId;
 
   return {
@@ -169,9 +143,9 @@ function buildEnergyMeterPayload(device, options = {}) {
     },
     readings,
     rawValues,
-    energyKwh: readings.energy,
+    energyKwh,
+    breakdown,
     dateStr,
-    profile,
   };
 }
 
@@ -184,14 +158,18 @@ function buildUidFromCompany(companyName, deviceId) {
   return `${prefix}-${deviceId}`;
 }
 
+/** @deprecated use energyApplianceCatalog */
+function getProfileConfig(profileName) {
+  return { baseEnergyKwh: 0, pattern: 'flat', powerKwRange: [1, 3], voltageRange: [228, 232], energyDriftKwh: 0.06 };
+}
+
 module.exports = {
-  ENERGY_MACHINE_PROFILES,
   VALID_INTERVALS_SECONDS,
-  DEFAULT_PARAMETERS,
   formatEnergyMeterDate,
   getProfileConfig,
   generateElectricalReadings,
   readingsToRawValues,
   buildEnergyMeterPayload,
   buildUidFromCompany,
+  normalizeSimDevice,
 };

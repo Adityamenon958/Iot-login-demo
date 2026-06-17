@@ -67,9 +67,15 @@ const {
 } = require("./backend/utils/energyMeterUtils");
 const {
   buildEnergyMeterPayload,
-  getProfileConfig,
   VALID_INTERVALS_SECONDS,
 } = require("./backend/utils/energyMeterSim");
+const {
+  getCatalog,
+  getRoomPresets,
+  buildConfigSummary,
+  validateEnergySimBody,
+  pickEnergySimFields,
+} = require("./backend/utils/energyApplianceCatalog");
 
 function getEffectiveSubscriptionStatus(user) {
   return BYPASS_SUBSCRIPTION_CHECK ? 'active' : (user.subscriptionStatus || 'inactive');
@@ -5237,16 +5243,20 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
       
-      const { deviceType, craneCompany, elevatorCompany, energyCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter,
-        machineProfile, siteName, plantName, machineName, intervalSeconds, energyBaseReading } = req.body;
+      const { deviceType, craneCompany, elevatorCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter,
+        intervalSeconds, energyBaseReading, energySimMode, roomType, appliances, singleApplianceType,
+        singleApplianceRatedKwOverride, singleStateDistribution, occupancyPercent, minVoltage, maxVoltage,
+        scheduleTimezone } = req.body;
       const effectiveType = deviceType === 'elevator' ? 'elevator' : deviceType === 'energyMeter' ? 'energyMeter' : 'crane';
       const companyName = effectiveType === 'elevator'
         ? (elevatorCompany || craneCompany)
-        : effectiveType === 'energyMeter'
-          ? (energyCompany || craneCompany)
-          : craneCompany;
+        : craneCompany;
       
-      if (!companyName || !DeviceID || !state) {
+      if (effectiveType === 'energyMeter') {
+        if (!DeviceID || !state) {
+          return res.status(400).json({ error: 'Missing required fields (DeviceID, state)' });
+        }
+      } else if (!companyName || !DeviceID || !state) {
         return res.status(400).json({ error: 'Missing required fields (company, DeviceID, state)' });
       }
       if (!['working', 'idle', 'maintenance'].includes(state)) {
@@ -5284,43 +5294,56 @@ if (ENABLE_SIMULATOR) {
       }
 
       if (effectiveType === 'energyMeter') {
-        const profileKey = machineProfile || 'warehouse';
-        if (!['warehouse', 'cnc', 'compressor', 'conveyor'].includes(profileKey)) {
-          return res.status(400).json({ error: 'Invalid machine profile' });
-        }
         const registeredDevice = await Device.findOne({ deviceId: DeviceID, deviceType: 'energyMeter' });
         if (!registeredDevice) {
           return res.status(400).json({
             error: `Device "${DeviceID}" is not registered. Add it first in Manage Devices with deviceType "energyMeter".`,
           });
         }
+        const simErrors = validateEnergySimBody(req.body);
+        if (simErrors.length) {
+          return res.status(400).json({ error: simErrors.join('; ') });
+        }
         const intervalNum = parseInt(intervalSeconds, 10) || 60;
         if (!VALID_INTERVALS_SECONDS.includes(intervalNum)) {
           return res.status(400).json({ error: 'Invalid interval. Must be 30, 60, 120, 180, or 300 seconds' });
         }
-        const profileCfg = getProfileConfig(profileKey);
+        const mode = energySimMode || 'single';
+        const simFields = pickEnergySimFields(req.body);
         const device = new SimulatorDevice({
           deviceId: DeviceID,
-          name: companyName.trim(),
+          name: registeredDevice.companyName || 'simulator',
           latitude: 0,
           longitude: 0,
           deviceType: 'energyMeter',
-          location: location ? String(location).trim() : '',
+          location: '',
           state,
           frequencyMinutes: 1,
           padTimestamp: false,
           jitter: jitter === true,
           profile: 'A',
           isRunning: false,
-          machineProfile: profileKey,
-          siteName: siteName ? String(siteName).trim() : profileCfg.siteName,
-          plantName: plantName ? String(plantName).trim() : profileCfg.plantName,
-          machineName: machineName ? String(machineName).trim() : profileCfg.machineName,
-          energyBaseReading: energyBaseReading != null ? Number(energyBaseReading) : profileCfg.baseEnergyKwh,
+          machineProfile: 'warehouse',
+          siteName: '',
+          plantName: '',
+          machineName: '',
+          energyBaseReading: energyBaseReading != null ? Number(energyBaseReading) : 0,
           intervalSeconds: intervalNum,
+          energySimMode: mode,
+          roomType: roomType || 'office',
+          scheduleTimezone: scheduleTimezone || 'Asia/Kolkata',
+          appliances: mode === 'room'
+            ? (simFields.appliances || getRoomPresets(roomType || 'office'))
+            : [],
+          singleApplianceType: singleApplianceType || 'ac_split',
+          singleApplianceRatedKwOverride: simFields.singleApplianceRatedKwOverride ?? null,
+          singleStateDistribution: simFields.singleStateDistribution,
+          occupancyPercent: occupancyPercent != null ? Number(occupancyPercent) : 100,
+          minVoltage: minVoltage != null ? Number(minVoltage) : 220,
+          maxVoltage: maxVoltage != null ? Number(maxVoltage) : 240,
         });
         await device.save();
-        console.log(`[sim] ✅ Added energy meter simulator: ${DeviceID} (${profileKey})`);
+        console.log(`[sim] ✅ Added energy meter simulator: ${DeviceID} (${device.energySimMode})`);
         return res.json({ success: true, device: device.toObject() });
       }
       
@@ -5404,8 +5427,10 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
       
-      const { craneCompany, elevatorCompany, energyCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter,
-        machineProfile, siteName, plantName, machineName, intervalSeconds, energyBaseReading } = req.body;
+      const { craneCompany, elevatorCompany, DeviceID, latitude, longitude, location, state, frequencyMinutes, padTimestamp, profile, jitter,
+        intervalSeconds, energyBaseReading, energySimMode, roomType, appliances, singleApplianceType,
+        singleApplianceRatedKwOverride, singleStateDistribution, occupancyPercent, minVoltage, maxVoltage,
+        scheduleTimezone } = req.body;
       if (!DeviceID) {
         return res.status(400).json({ error: 'DeviceID is required' });
       }
@@ -5416,8 +5441,8 @@ if (ENABLE_SIMULATOR) {
       }
       
       const effectiveType = device.deviceType || 'crane';
-      const companyName = energyCompany !== undefined ? energyCompany : elevatorCompany !== undefined ? elevatorCompany : craneCompany;
-      if (companyName !== undefined) device.name = companyName;
+      const companyName = elevatorCompany !== undefined ? elevatorCompany : craneCompany;
+      if (companyName !== undefined && effectiveType !== 'energyMeter') device.name = companyName;
       if (state && ['working', 'idle', 'maintenance'].includes(state)) device.state = state;
       if (frequencyMinutes !== undefined && effectiveType !== 'energyMeter') {
         const freq = parseInt(frequencyMinutes, 10);
@@ -5426,19 +5451,19 @@ if (ENABLE_SIMULATOR) {
       if (effectiveType === 'elevator') {
         if (location !== undefined) device.location = String(location).trim();
       } else if (effectiveType === 'energyMeter') {
-        if (machineProfile && ['warehouse', 'cnc', 'compressor', 'conveyor'].includes(machineProfile)) {
-          device.machineProfile = machineProfile;
+        const simErrors = validateEnergySimBody(req.body, { isUpdate: true });
+        if (simErrors.length) {
+          return res.status(400).json({ error: simErrors.join('; ') });
         }
-        if (siteName !== undefined) device.siteName = String(siteName).trim();
-        if (plantName !== undefined) device.plantName = String(plantName).trim();
-        if (machineName !== undefined) device.machineName = String(machineName).trim();
-        if (location !== undefined) device.location = String(location).trim();
+        const simFields = pickEnergySimFields(req.body);
+        Object.assign(device, simFields);
         if (intervalSeconds !== undefined) {
           const sec = parseInt(intervalSeconds, 10);
           if (VALID_INTERVALS_SECONDS.includes(sec)) device.intervalSeconds = sec;
         }
         if (energyBaseReading !== undefined) device.energyBaseReading = Number(energyBaseReading);
         if (jitter !== undefined) device.jitter = jitter === true;
+        if (state && ['working', 'idle', 'maintenance'].includes(state)) device.state = state;
       } else {
         if (latitude !== undefined) device.latitude = parseFloat(latitude);
         if (longitude !== undefined) device.longitude = parseFloat(longitude);
@@ -5489,6 +5514,12 @@ if (ENABLE_SIMULATOR) {
         machineName: device.machineName || '',
         energyBaseReading: device.energyBaseReading ?? null,
         intervalSeconds: device.intervalSeconds || 60,
+        energySimMode: device.energySimMode || 'single',
+        roomType: device.roomType || 'office',
+        appliances: device.appliances || [],
+        singleApplianceType: device.singleApplianceType || 'ac_split',
+        occupancyPercent: device.occupancyPercent ?? 100,
+        configSummary: device.deviceType === 'energyMeter' ? buildConfigSummary(device) : undefined,
         isRunning: simulatorTimers.has(device.deviceId)
       }));
       
@@ -5536,6 +5567,20 @@ if (ENABLE_SIMULATOR) {
     }
   });
 
+  // ✅ GET: Energy simulator catalog (appliances, room presets)
+  app.get('/api/sim/energy-catalog', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      res.json(getCatalog());
+    } catch (err) {
+      console.error('[sim] ❌ Energy catalog error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ✅ POST: Preview energy meter payload (no send)
   app.post('/api/sim/preview-payload', authenticateToken, async (req, res) => {
     try {
@@ -5544,29 +5589,36 @@ if (ENABLE_SIMULATOR) {
         return res.status(403).json({ error: 'Access denied. Superadmin only.' });
       }
 
-      const { DeviceID, deviceType, state, machineProfile, jitter, energyBaseReading, deviceId } = req.body;
+      const { DeviceID, deviceId, state, jitter, energyBaseReading, intervalSeconds } = req.body;
       let device;
 
       if (DeviceID) {
         device = await SimulatorDevice.findOne({ deviceId: DeviceID }).lean();
         if (!device) return res.status(404).json({ error: 'Device not found' });
+        Object.assign(device, pickEnergySimFields(req.body));
         if (state) device.state = state;
-        if (machineProfile) device.machineProfile = machineProfile;
         if (jitter !== undefined) device.jitter = jitter === true;
         if (energyBaseReading != null) device.energyBaseReading = Number(energyBaseReading);
+        if (intervalSeconds != null) device.intervalSeconds = parseInt(intervalSeconds, 10) || device.intervalSeconds;
       } else {
-        const profileCfg = getProfileConfig(machineProfile || 'warehouse');
         device = {
           deviceId: deviceId || DeviceID || 'Energy Meter_1',
           state: state || 'working',
-          machineProfile: machineProfile || 'warehouse',
           jitter: jitter === true,
-          energyBaseReading: energyBaseReading != null ? Number(energyBaseReading) : profileCfg.baseEnergyKwh,
+          energyBaseReading: energyBaseReading != null ? Number(energyBaseReading) : 0,
+          intervalSeconds: intervalSeconds != null ? parseInt(intervalSeconds, 10) : 60,
+          energySimMode: 'single',
+          roomType: 'office',
+          singleApplianceType: 'ac_split',
+          occupancyPercent: 100,
+          minVoltage: 220,
+          maxVoltage: 240,
+          ...pickEnergySimFields(req.body),
         };
       }
 
-      const { payload, readings, rawValues, dateStr } = buildEnergyMeterPayload(device, { advanceReading: false });
-      res.json({ payload, readings, rawValues, dateStr });
+      const { payload, readings, rawValues, dateStr, breakdown } = buildEnergyMeterPayload(device, { advanceReading: false });
+      res.json({ payload, readings, rawValues, dateStr, breakdown });
     } catch (err) {
       console.error('[sim] ❌ Preview payload error:', err);
       res.status(500).json({ error: 'Internal server error' });
