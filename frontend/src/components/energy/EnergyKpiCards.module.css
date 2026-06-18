@@ -5,7 +5,22 @@
   padding: 0.625rem 0.75rem;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   min-height: 80px;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.kpiHelp {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  color: #adb5bd;
+  cursor: help;
+  line-height: 0;
+  transition: color 0.15s ease;
+}
+
+.kpiHelp:hover {
+  color: #6c757d;
 }
 
 .kpiIcon {
@@ -45,3 +60,16 @@
 .warning .kpiValue { color: #fd7e14; }
 .info .kpiValue { color: #0dcaf0; }
 .power .kpiValue { color: #fd7e14; }
+.energy .kpiValue { color: #198754; }
+.pf .kpiValue { color: #1a1a2e; }
+.voltage .kpiValue { color: #0d6efd; }
+.frequency .kpiValue { color: #6f42c1; }
+
+.pfBadge {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.2em 0.45em;
+}

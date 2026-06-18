@@ -2,6 +2,7 @@ const Device = require('../models/Device');
 const EnergyMeterParameterMap = require('../models/EnergyMeterParameterMap');
 const CompanyDashboardAccess = require('../models/CompanyDashboardAccess');
 const SimulatorDevice = require('../models/SimulatorDevice');
+const EnergyMeterLog = require('../models/EnergyMeterLog');
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
@@ -247,6 +248,102 @@ function pickActivePowerKw(readings) {
   return Number.isFinite(n) ? n : null;
 }
 
+function pickReadingValue(readings, key) {
+  if (readings?.[key] == null) return null;
+  const n = Number(readings[key]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function roundToDecimals(value, decimals) {
+  const f = 10 ** decimals;
+  return Math.round(Number(value) * f) / f;
+}
+
+function averageFinite(values, decimals) {
+  const nums = values.filter((v) => v != null && Number.isFinite(v));
+  if (!nums.length) return null;
+  const mean = nums.reduce((sum, v) => sum + v, 0) / nums.length;
+  return roundToDecimals(mean, decimals);
+}
+
+/** Fleet averages from per-meter latest readings (no extra DB queries). */
+function computeFleetReadingAverages(meterCards = []) {
+  const powerFactors = [];
+  const voltages = [];
+  const frequencies = [];
+
+  meterCards.forEach((card) => {
+    if (card.latestPowerFactor != null) powerFactors.push(card.latestPowerFactor);
+    if (card.latestVoltage != null) voltages.push(card.latestVoltage);
+    if (card.latestFrequency != null) frequencies.push(card.latestFrequency);
+  });
+
+  return {
+    averagePowerFactor: averageFinite(powerFactors, 2),
+    averageVoltage: averageFinite(voltages, 1),
+    averageVoltageUnit: 'V',
+    averageFrequency: averageFinite(frequencies, 2),
+    averageFrequencyUnit: 'Hz',
+  };
+}
+
+function roundEnergyKwh(value) {
+  return Math.round(Number(value) * 100) / 100;
+}
+
+/**
+ * Per-meter today's consumption from cumulative readings.energy deltas (IST day window).
+ * @returns {{ fleetTotal: number|null, byMeter: Record<string, number> }}
+ */
+async function computeTodayEnergyConsumptionByMeter(meters, todayStart) {
+  const byMeter = {};
+  if (!meters?.length || !todayStart) {
+    return { fleetTotal: null, byMeter };
+  }
+
+  const logFilter = await buildLogFilterForMeters(meters, {
+    timestamp: { $gte: todayStart },
+    'readings.energy': { $exists: true, $ne: null },
+  });
+
+  const rows = await EnergyMeterLog.aggregate([
+    { $match: logFilter },
+    { $sort: { meterId: 1, timestamp: 1 } },
+    {
+      $group: {
+        _id: '$meterId',
+        firstEnergy: { $first: '$readings.energy' },
+        lastEnergy: { $last: '$readings.energy' },
+        countToday: { $sum: 1 },
+      },
+    },
+  ]);
+
+  if (!rows.length) {
+    return { fleetTotal: null, byMeter };
+  }
+
+  let fleetSum = 0;
+  rows.forEach((row) => {
+    let consumption = 0;
+    if (row.countToday >= 2) {
+      const first = Number(row.firstEnergy);
+      const last = Number(row.lastEnergy);
+      if (Number.isFinite(first) && Number.isFinite(last)) {
+        consumption = Math.max(0, last - first);
+      }
+    }
+    consumption = roundEnergyKwh(consumption);
+    byMeter[row._id] = consumption;
+    fleetSum += consumption;
+  });
+
+  return {
+    fleetTotal: roundEnergyKwh(fleetSum),
+    byMeter,
+  };
+}
+
 function assertValidDataSource(dataSource) {
   if (!dataSource || !ENERGY_DATA_SOURCES.includes(dataSource)) {
     throw new Error(`dataSource must be one of: ${ENERGY_DATA_SOURCES.join(', ')}`);
@@ -383,6 +480,11 @@ module.exports = {
   pickChartMetric,
   pickDisplayReading,
   pickActivePowerKw,
+  pickReadingValue,
+  computeFleetReadingAverages,
+  roundToDecimals,
+  roundEnergyKwh,
+  computeTodayEnergyConsumptionByMeter,
   assertValidDataSource,
   mergeMongoFilters,
   getCompanyEnergyViewMode,

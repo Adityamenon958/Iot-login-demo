@@ -59,6 +59,34 @@
   font-size: 0.8125rem;
 }
 
+.fleetSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: #6c757d;
+}
+
+.fleetSummary strong {
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.summarySep {
+  color: #ced4da;
+  user-select: none;
+}
+
+.summaryOnline {
+  color: #198754;
+}
+
+.summaryOffline {
+  color: #fd7e14;
+}
+
 .headerMeta {
   display: flex;
   flex-direction: column;

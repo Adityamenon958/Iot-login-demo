@@ -64,6 +64,9 @@ const {
   buildLogFilterForMeters,
   viewModeToShowSimulator,
   showSimulatorToViewMode,
+  computeTodayEnergyConsumptionByMeter,
+  pickReadingValue,
+  computeFleetReadingAverages,
 } = require("./backend/utils/energyMeterUtils");
 const {
   buildEnergyMeterPayload,
@@ -511,6 +514,11 @@ function istStartUtcFromYMD(y, m, d) {
 function istEndUtcFromYMD(y, m, d) {
   // 23:59:59 IST for that date, expressed in UTC
   return new Date(Date.UTC(y, m, d, 18, 29, 59));
+}
+
+function getTodayStartIstUtc(now = new Date()) {
+  const { year, month, day } = getISTDateComponentsFromUtcDate(now);
+  return istStartUtcFromYMD(year, month, day);
 }
 
 // ✅ UPDATED: Timestamp is now a Date object, no parsing needed
@@ -6042,8 +6050,10 @@ app.put('/api/energy-meter/view-settings', authenticateToken, async (req, res) =
 app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
   try {
     const meters = await getVisibleEnergyMeters(req);
+    const todayStart = getTodayStartIstUtc();
 
-    const meterCards = await Promise.all(
+    const [meterCards, todayEnergy] = await Promise.all([
+      Promise.all(
       meters.map(async (device) => {
         const logFilter = await buildLogFilterForCompany(device.companyName, {
           meterId: device.deviceId,
@@ -6066,6 +6076,9 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
         const online = isMeterOnline(latest?.timestamp);
         const displayReading = pickDisplayReading(latest?.readings);
         const currentPowerKw = pickActivePowerKw(latest?.readings);
+        const latestPowerFactor = pickReadingValue(latest?.readings, 'powerFactor');
+        const latestVoltage = pickReadingValue(latest?.readings, 'voltage');
+        const latestFrequency = pickReadingValue(latest?.readings, 'frequency');
 
         let sparkline = [];
         if (device.deviceId) {
@@ -6101,21 +6114,35 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
               }
             : null,
           currentPowerKw,
+          latestPowerFactor,
+          latestVoltage,
+          latestFrequency,
           sparkline,
           trendDelta,
         };
       })
-    );
+      ),
+      computeTodayEnergyConsumptionByMeter(meters, todayStart),
+    ]);
 
-    const onlineCount = meterCards.filter((m) => m.online).length;
+    const meterCardsWithToday = meterCards.map((card) => ({
+      ...card,
+      todayConsumptionKwh: Object.prototype.hasOwnProperty.call(todayEnergy.byMeter, card.meterId)
+        ? todayEnergy.byMeter[card.meterId]
+        : null,
+    }));
+
+    const onlineCount = meterCardsWithToday.filter((m) => m.online).length;
     const totalMeters = meters.length;
-    const powerValues = meterCards
+    const powerValues = meterCardsWithToday
       .filter((m) => m.online === true)
       .map((m) => m.currentPowerKw)
       .filter((v) => v != null);
     const currentPowerConsumption = powerValues.length > 0
       ? powerValues.reduce((a, b) => a + b, 0)
       : null;
+
+    const readingAverages = computeFleetReadingAverages(meterCardsWithToday);
 
     res.json({
       kpis: {
@@ -6124,8 +6151,11 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
         offlineMeters: totalMeters - onlineCount,
         currentPowerConsumption,
         currentPowerUnit: 'kW',
+        todayEnergyConsumption: todayEnergy.fleetTotal,
+        todayEnergyUnit: 'kWh',
+        ...readingAverages,
       },
-      meters: meterCards,
+      meters: meterCardsWithToday,
     });
   } catch (err) {
     console.error('Energy overview error:', err);

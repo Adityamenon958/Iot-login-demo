@@ -175,6 +175,28 @@ export default function EnergyOverview() {
                 <p className={styles.pageSubtitle}>
                   Fleet monitoring for all registered energy meters
                 </p>
+                {overview?.kpis && (
+                  <div className={styles.fleetSummary}>
+                    <span>
+                      Total Meters:{' '}
+                      <strong>{overview.kpis.totalMeters ?? 0}</strong>
+                    </span>
+                    <span className={styles.summarySep} aria-hidden="true">·</span>
+                    <span>
+                      Online:{' '}
+                      <strong className={styles.summaryOnline}>
+                        {overview.kpis.onlineMeters ?? 0}
+                      </strong>
+                    </span>
+                    <span className={styles.summarySep} aria-hidden="true">·</span>
+                    <span>
+                      Offline:{' '}
+                      <strong className={styles.summaryOffline}>
+                        {overview.kpis.offlineMeters ?? 0}
+                      </strong>
+                    </span>
+                  </div>
+                )}
               </div>
               <div className={styles.headerMeta}>
                 {viewSettings.canEdit && (

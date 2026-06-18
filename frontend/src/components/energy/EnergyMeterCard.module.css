@@ -59,6 +59,12 @@
   border-bottom: 1px solid #f0f0f0;
 }
 
+.readingStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .readingValue {
   font-weight: 600;
   font-size: 0.875rem;

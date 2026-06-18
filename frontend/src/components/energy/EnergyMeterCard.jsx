@@ -37,6 +37,7 @@ export default function EnergyMeterCard({ meter, onSelect }) {
     online,
     lastCommunication,
     currentPowerKw,
+    todayConsumptionKwh,
     sparkline,
   } = meter;
 
@@ -64,10 +65,20 @@ export default function EnergyMeterCard({ meter, onSelect }) {
         </div>
 
         <div className={styles.readingRow}>
-          <div>
-            <small className="text-muted">Current Power</small>
-            <div className={styles.readingValue}>
-              {currentPowerKw != null ? `${currentPowerKw} kW` : '—'}
+          <div className={styles.readingStack}>
+            <div>
+              <small className="text-muted">Current Power</small>
+              <div className={styles.readingValue}>
+                {currentPowerKw != null ? `${currentPowerKw} kW` : '—'}
+              </div>
+            </div>
+            <div>
+              <small className="text-muted">Today&apos;s Consumption</small>
+              <div className={styles.readingValue}>
+                {todayConsumptionKwh != null
+                  ? `${Number(todayConsumptionKwh).toFixed(2)} kWh`
+                  : '—'}
+              </div>
             </div>
           </div>
           <MiniSparkline data={sparkline} />
