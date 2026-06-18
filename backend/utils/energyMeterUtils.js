@@ -223,6 +223,44 @@ function pickChartMetric(row) {
   return 0;
 }
 
+function pickSparklinePower(row) {
+  if (row?.readings?.activePower != null) {
+    const n = Number(row.readings.activePower);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (Array.isArray(row?.rawValues) && row.rawValues.length >= 3) {
+    const n = row.rawValues[2] * 0.01;
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function pickSparklineEnergy(row) {
+  if (row?.readings?.energy != null) {
+    const n = Number(row.readings.energy);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (Array.isArray(row?.rawValues) && row.rawValues.length >= 4) {
+    const n = row.rawValues[3] * 0.1;
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function buildSparklineSeries(logs, picker) {
+  return logs.map(picker).filter((v) => v != null && Number.isFinite(v));
+}
+
+/** kWh accumulated within the sparkline window (visible trend, not flat cumulative totals). */
+function buildConsumptionSparkline(logs) {
+  const energies = buildSparklineSeries(logs, pickSparklineEnergy);
+  if (!energies.length) return [];
+  const base = energies[0];
+  const deltas = energies.map((e) => Math.round((e - base) * 1000) / 1000);
+  if (deltas.length === 1) return [0, deltas[0]];
+  return deltas;
+}
+
 function pickDisplayReading(readings) {
   if (!readings || typeof readings !== 'object') return null;
   const prefer = ['activePower', 'energy', 'voltage', 'current'];
@@ -478,6 +516,10 @@ module.exports = {
   formatRelativeTime,
   ensureDefaultParameterMap,
   pickChartMetric,
+  pickSparklinePower,
+  pickSparklineEnergy,
+  buildSparklineSeries,
+  buildConsumptionSparkline,
   pickDisplayReading,
   pickActivePowerKw,
   pickReadingValue,

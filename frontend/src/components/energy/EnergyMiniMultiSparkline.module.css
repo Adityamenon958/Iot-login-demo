@@ -1,0 +1,20 @@
+.wrap {
+  width: 100%;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+}
+
+.noData {
+  font-size: 0.7rem;
+  color: #adb5bd;
+}
+
+.moreLabel {
+  display: block;
+  font-size: 0.65rem;
+  color: #6c757d;
+  margin-top: 0.15rem;
+}

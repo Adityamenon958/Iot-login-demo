@@ -18,8 +18,7 @@ const KPI_CONFIG = [
     variant: 'power',
     unitKey: 'currentPowerUnit',
     decimals: 1,
-    tooltip:
-      'Total instantaneous power (kW) across all online meters right now. Offline meters are not included in this sum.',
+    tooltip: 'Total kW from online meters right now.',
   },
   {
     key: 'todayEnergyConsumption',
@@ -28,8 +27,7 @@ const KPI_CONFIG = [
     variant: 'energy',
     unitKey: 'todayEnergyUnit',
     decimals: 2,
-    tooltip:
-      "Total energy used today (IST) across all visible meters. For each meter, today's consumption is the change in cumulative kWh since midnight—not the sum of raw meter readings.",
+    tooltip: 'Fleet kWh used today (IST midnight to now).',
   },
   {
     key: 'averagePowerFactor',
@@ -38,8 +36,7 @@ const KPI_CONFIG = [
     variant: 'pf',
     decimals: 2,
     showPfBadge: true,
-    tooltip:
-      'Average of the latest power factor readings across visible meters. Higher PF means more efficient use of supplied power.',
+    tooltip: 'Average latest PF across visible meters.',
   },
   {
     key: 'averageVoltage',
@@ -48,8 +45,7 @@ const KPI_CONFIG = [
     variant: 'voltage',
     unitKey: 'averageVoltageUnit',
     decimals: 1,
-    tooltip:
-      'Average of the latest voltage (V) readings across visible meters with valid data.',
+    tooltip: 'Average latest voltage across visible meters.',
   },
   {
     key: 'averageFrequency',
@@ -58,8 +54,7 @@ const KPI_CONFIG = [
     variant: 'frequency',
     unitKey: 'averageFrequencyUnit',
     decimals: 2,
-    tooltip:
-      'Average of the latest grid frequency (Hz) readings across visible meters with valid data.',
+    tooltip: 'Average latest frequency across visible meters.',
   },
 ];
 

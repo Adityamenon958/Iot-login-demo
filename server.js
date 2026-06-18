@@ -51,6 +51,10 @@ const {
   formatRelativeTime,
   ensureDefaultParameterMap,
   pickChartMetric,
+  pickSparklinePower,
+  pickSparklineEnergy,
+  buildSparklineSeries,
+  buildConsumptionSparkline,
   pickDisplayReading,
   pickActivePowerKw,
   parseChartRange,
@@ -68,6 +72,11 @@ const {
   pickReadingValue,
   computeFleetReadingAverages,
 } = require("./backend/utils/energyMeterUtils");
+const {
+  buildElectricalHealthSummary,
+  buildFleetMetricHistory,
+} = require("./backend/utils/electricalHealthService");
+const { ALLOWED_METRIC_KEYS } = require("./backend/utils/electricalHealthMetrics");
 const {
   buildEnergyMeterPayload,
   VALID_INTERVALS_SECONDS,
@@ -6081,12 +6090,17 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
         const latestFrequency = pickReadingValue(latest?.readings, 'frequency');
 
         let sparkline = [];
+        let powerSparkline = [];
+        let energySparkline = [];
         if (device.deviceId) {
           const recent = await EnergyMeterLog.find(logFilter)
             .sort({ timestamp: -1 })
             .limit(12)
             .lean();
-          sparkline = recent.reverse().map((row) => pickChartMetric(row));
+          const ordered = recent.reverse();
+          sparkline = ordered.map((row) => pickChartMetric(row));
+          powerSparkline = buildSparklineSeries(ordered, pickSparklinePower);
+          energySparkline = buildConsumptionSparkline(ordered);
         }
 
         let trendDelta = null;
@@ -6118,6 +6132,8 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
           latestVoltage,
           latestFrequency,
           sparkline,
+          powerSparkline,
+          energySparkline,
           trendDelta,
         };
       })
@@ -6223,6 +6239,43 @@ app.get('/api/energy-meter/fleet-chart', authenticateToken, async (req, res) => 
     res.json(chart);
   } catch (err) {
     console.error('Energy fleet chart error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/electrical-health', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const rangeKey = req.query.range || '1h';
+    const summary = await buildElectricalHealthSummary(meters, rangeKey);
+    res.json(summary);
+  } catch (err) {
+    console.error('Electrical health summary error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/metric-history', authenticateToken, async (req, res) => {
+  try {
+    const { metric, range, meterId } = req.query;
+    if (!metric) return res.status(400).json({ message: 'metric is required' });
+    if (!ALLOWED_METRIC_KEYS.includes(metric)) {
+      return res.status(400).json({ message: 'Invalid metric' });
+    }
+
+    const meters = await getVisibleEnergyMeters(req);
+    let scopedMeters = meters;
+
+    if (meterId) {
+      const allowed = meters.find((m) => m.deviceId === meterId);
+      if (!allowed) return res.status(403).json({ message: 'Access denied' });
+      scopedMeters = [allowed];
+    }
+
+    const history = await buildFleetMetricHistory(scopedMeters, metric, range || '24h');
+    res.json(history);
+  } catch (err) {
+    console.error('Metric history error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });

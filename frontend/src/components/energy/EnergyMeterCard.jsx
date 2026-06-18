@@ -3,27 +3,41 @@ import { Card, Badge, Button } from 'react-bootstrap';
 import { ChevronRight } from 'lucide-react';
 import styles from './EnergyMeterCard.module.css';
 
-function MiniSparkline({ data = [] }) {
+function MiniSparkline({ data = [], color = '#0d6efd' }) {
   if (!data.length) {
-    return <span className={styles.noData}>No recent data</span>;
+    return <span className={styles.noSpark}> </span>;
   }
 
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
   const w = 56;
   const h = 20;
-  const points = data
-    .map((v, i) => {
-      const x = (i / Math.max(data.length - 1, 1)) * w;
-      const y = h - ((v - min) / range) * h;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min;
+
+  let points;
+  if (range === 0) {
+    const midY = h / 2;
+    points = `0,${midY} ${w},${midY}`;
+  } else {
+    points = data
+      .map((v, i) => {
+        const x = (i / Math.max(data.length - 1, 1)) * w;
+        const y = h - ((v - min) / range) * (h - 4) - 2;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }
 
   return (
-    <svg width={w} height={h} className={styles.sparkline}>
-      <polyline fill="none" stroke="#0d6efd" strokeWidth="2" points={points} />
+    <svg width={w} height={h} className={styles.sparkline} aria-hidden="true">
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
     </svg>
   );
 }
@@ -38,7 +52,8 @@ export default function EnergyMeterCard({ meter, onSelect }) {
     lastCommunication,
     currentPowerKw,
     todayConsumptionKwh,
-    sparkline,
+    powerSparkline = [],
+    energySparkline = [],
   } = meter;
 
   return (
@@ -64,15 +79,18 @@ export default function EnergyMeterCard({ meter, onSelect }) {
           )}
         </div>
 
-        <div className={styles.readingRow}>
-          <div className={styles.readingStack}>
-            <div>
+        <div className={styles.readingsBlock}>
+          <div className={styles.metricRow}>
+            <div className={styles.metricText}>
               <small className="text-muted">Current Power</small>
               <div className={styles.readingValue}>
                 {currentPowerKw != null ? `${currentPowerKw} kW` : '—'}
               </div>
             </div>
-            <div>
+            <MiniSparkline data={powerSparkline} color="#0d6efd" />
+          </div>
+          <div className={styles.metricRow}>
+            <div className={styles.metricText}>
               <small className="text-muted">Today&apos;s Consumption</small>
               <div className={styles.readingValue}>
                 {todayConsumptionKwh != null
@@ -80,8 +98,8 @@ export default function EnergyMeterCard({ meter, onSelect }) {
                   : '—'}
               </div>
             </div>
+            <MiniSparkline data={energySparkline} color="#198754" />
           </div>
-          <MiniSparkline data={sparkline} />
         </div>
 
         <div className={styles.footer}>

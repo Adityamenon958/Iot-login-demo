@@ -7,6 +7,7 @@ import mainStyles from './MainContent.module.css';
 import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
 import EnergyKpiCards from '../components/energy/EnergyKpiCards';
 import EnergyFleetChart from '../components/energy/EnergyFleetChart';
+import EnergyElectricalHealth from '../components/energy/EnergyElectricalHealth';
 import EnergyMeterCard from '../components/energy/EnergyMeterCard';
 import EnergyParameterTiles from '../components/energy/EnergyParameterTiles';
 import EnergyDetailChart from '../components/energy/EnergyDetailChart';
@@ -224,6 +225,7 @@ export default function EnergyOverview() {
 
             <EnergyKpiCards kpis={overview?.kpis} />
             <EnergyFleetChart refreshKey={dataRefreshKey} />
+            <EnergyElectricalHealth refreshKey={dataRefreshKey} />
 
             <h6 className={styles.sectionTitle}>Energy Meters</h6>
             <Row className="g-2">
