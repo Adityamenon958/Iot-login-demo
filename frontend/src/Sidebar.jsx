@@ -25,6 +25,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
   const [companyAccess, setCompanyAccess] = useState({});
   const [accessLoading, setAccessLoading] = useState(true);
+  const [simulatorAvailable, setSimulatorAvailable] = useState(false);
 
   // ✅ Securely fetch role & companyName from backend cookies
   useEffect(() => {
@@ -39,6 +40,12 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           await fetchCompanyAccess(res.data.companyName);
         } else {
           setAccessLoading(false);
+          try {
+            const simRes = await axios.get('/api/sim/availability', { withCredentials: true });
+            setSimulatorAvailable(simRes.data.enabled === true);
+          } catch {
+            setSimulatorAvailable(false);
+          }
         }
       } catch (err) {
         console.error("❌ Failed to fetch user info from cookies:", err.message);
@@ -226,8 +233,8 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             </Button>
           )}
 
-          {/* ✅ Simulator - Superadmin only (backend uses ENABLE_SIMULATOR to run timers) */}
-          {role === "superadmin" && (
+          {/* ✅ Simulator — superadmin only, Azure (or ENABLE_SIMULATOR=true locally) */}
+          {role === "superadmin" && simulatorAvailable && (
             <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/simulator' ? styles.active : ''}`} onClick={() => navigate('/dashboard/simulator')}>
               <Activity size={20} className="me-2" />
               Simulator

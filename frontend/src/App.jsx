@@ -20,6 +20,7 @@ import CraneOverview from './pages/CraneOverview';
 import ElevatorOverview from './pages/ElevatorOverview';
 import EnergyOverview from './pages/EnergyOverview';
 import Simulator from './pages/Simulator';
+import SimulatorRouteGuard from './components/SimulatorRouteGuard';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -114,8 +115,12 @@ function App() {
           </RouteGuard>
         } />
         
-        {/* ✅ Simulator Route - Superadmin only (sidebar controls visibility) */}
-        <Route path="simulator" element={<Simulator />} />
+        {/* ✅ Simulator — superadmin + Azure (or ENABLE_SIMULATOR=true locally) */}
+        <Route path="simulator" element={
+          <SimulatorRouteGuard>
+            <Simulator />
+          </SimulatorRouteGuard>
+        } />
       </Route>
     </Routes>
   );

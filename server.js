@@ -108,18 +108,88 @@ function getDeviceAllowlistSet(allowedDevices, query) {
   return allIds;
 }
 
-// ✅ SIMULATOR: Enabled only when ENABLE_SIMULATOR=true (env var)
-const ENABLE_SIMULATOR = process.env.ENABLE_SIMULATOR === 'true';
+const {
+  ENABLE_SIMULATOR,
+  resolveSimulatorEnabled,
+} = require('./backend/utils/simulatorEnv');
 
 // ✅ Log simulator status
+const _simEnv = resolveSimulatorEnabled();
 if (ENABLE_SIMULATOR) {
-  console.log('[sim] 🚀 Simulator enabled (ENABLE_SIMULATOR=true)');
+  console.log(`[sim] 🚀 Simulator enabled (${_simEnv.reason})`);
 } else {
-  console.log('[sim] ⏸️ Simulator disabled (set ENABLE_SIMULATOR=true to enable)');
+  console.log(`[sim] ⏸️ Simulator disabled (${_simEnv.reason})`);
 }
 
 // Simulator state management (timers only - devices stored in database)
 const simulatorTimers = new Map();  // DeviceID -> interval timer
+const simulatorTickStatus = new Map(); // DeviceID -> { lastTickAt, lastStatus, lastError, consecutiveFailures }
+
+const SIM_RETRY_ATTEMPTS = 3;
+const SIM_RETRY_BASE_DELAY_MS = 2000;
+const SIM_WATCHDOG_INTERVAL_MS = 60 * 1000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryAsync(fn, { retries = SIM_RETRY_ATTEMPTS, delayMs = SIM_RETRY_BASE_DELAY_MS, label = 'operation' } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        const wait = delayMs * attempt;
+        console.warn(`[sim] ⚠️ ${label} failed (attempt ${attempt}/${retries}): ${err.message}; retry in ${wait}ms`);
+        await sleep(wait);
+      }
+    }
+  }
+  throw lastErr;
+}
+
+function recordTickSuccess(deviceId) {
+  simulatorTickStatus.set(deviceId, {
+    lastTickAt: new Date(),
+    lastStatus: 'success',
+    lastError: null,
+    consecutiveFailures: 0,
+  });
+}
+
+function recordTickError(deviceId, message) {
+  const prev = simulatorTickStatus.get(deviceId) || { consecutiveFailures: 0 };
+  simulatorTickStatus.set(deviceId, {
+    lastTickAt: new Date(),
+    lastStatus: 'error',
+    lastError: message,
+    consecutiveFailures: (prev.consecutiveFailures || 0) + 1,
+  });
+}
+
+function clearSimulatorTimer(deviceId) {
+  const timer = simulatorTimers.get(deviceId);
+  if (timer) {
+    clearInterval(timer);
+    simulatorTimers.delete(deviceId);
+  }
+}
+
+function attachSimulatorTimer(deviceId, device) {
+  if (simulatorTimers.has(deviceId)) return false;
+  const frequencyMs = getSimulatorIntervalMs(device);
+  const timer = setInterval(() => simulatorTick(deviceId), frequencyMs);
+  simulatorTimers.set(deviceId, timer);
+  return true;
+}
+
+function getSimulatorIntervalLabel(device) {
+  return device.deviceType === 'energyMeter'
+    ? `${device.intervalSeconds || 60}s`
+    : `${device.frequencyMinutes}m`;
+}
 
 // Simulator profiles for state mapping
 const simulatorProfiles = {
@@ -226,13 +296,20 @@ function getSimulatorIntervalMs(device) {
 
 async function postEnergyMeterSimPayload(device) {
   const { payload, energyKwh } = buildEnergyMeterPayload(device, { advanceReading: true });
+  const deviceId = device.deviceId;
+
   try {
-    await ingestEnergyMeterPayload(payload, 'simulator');
-    await SimulatorDevice.updateOne({ deviceId: device.deviceId }, { energyBaseReading: energyKwh });
-    console.log(`[sim] ✅ Energy meter ${device.deviceId}: posted ${JSON.stringify(payload)}`);
+    await retryAsync(async () => {
+      await ingestEnergyMeterPayload(payload, 'simulator');
+      await SimulatorDevice.updateOne({ deviceId }, { energyBaseReading: energyKwh });
+    }, { label: `Energy meter ${deviceId} post` });
+
+    recordTickSuccess(deviceId);
+    console.log(`[sim] ✅ Energy meter ${deviceId}: posted ${JSON.stringify(payload)}`);
     return { success: true, payload, energyKwh };
   } catch (err) {
-    console.error(`[sim] ❌ Energy meter ${device.deviceId} post failed:`, err.message);
+    recordTickError(deviceId, err.message);
+    console.error(`[sim] ❌ Energy meter ${deviceId} post failed after ${SIM_RETRY_ATTEMPTS} attempts:`, err.message);
     return { success: false, payload, error: err.message || 'Post failed' };
   }
 }
@@ -240,10 +317,14 @@ async function postEnergyMeterSimPayload(device) {
 // ✅ Simulator tick - crane → /api/crane/log, elevator → /api/elevators/log, energyMeter → /api/energy-meter/log
 async function simulatorTick(deviceId) {
   try {
-    const device = await SimulatorDevice.findOne({ deviceId }).lean();
+    const device = await retryAsync(
+      () => SimulatorDevice.findOne({ deviceId }).lean(),
+      { label: `Load simulator device ${deviceId}` }
+    );
+
     if (!device) {
-      console.log(`[sim] Device ${deviceId} not found in database, stopping timer`);
-      stopSimulator(deviceId);
+      console.log(`[sim] Device ${deviceId} not found in database, stopping timer (device-not-found)`);
+      await stopSimulator(deviceId, 'device-not-found');
       return;
     }
 
@@ -256,37 +337,46 @@ async function simulatorTick(deviceId) {
 
     if (deviceType === 'elevator') {
       const payload = [buildElevatorPayload(device)];
-      const response = await fetch(`http://localhost:${PORT}/api/elevators/log`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (response.ok) {
-        const nextFloor = ((device.elevatorCurrentFloor != null ? device.elevatorCurrentFloor : 0) + 1) % 25; // 0..24 then 0
-        await SimulatorDevice.updateOne({ deviceId }, { elevatorCurrentFloor: nextFloor });
-        console.log(`[sim] ✅ Elevator ${deviceId}: posted floor ${device.elevatorCurrentFloor} (${device.state}), next ${nextFloor}`);
-      } else {
-        console.error(`[sim] ❌ Elevator ${deviceId} post failed: ${response.status}`);
-      }
+      await retryAsync(async () => {
+        const response = await fetch(`http://localhost:${PORT}/api/elevators/log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          throw new Error(`Elevator post failed: HTTP ${response.status}`);
+        }
+        return response;
+      }, { label: `Elevator ${deviceId} post` });
+
+      const nextFloor = ((device.elevatorCurrentFloor != null ? device.elevatorCurrentFloor : 0) + 1) % 25;
+      await SimulatorDevice.updateOne({ deviceId }, { elevatorCurrentFloor: nextFloor });
+      recordTickSuccess(deviceId);
+      console.log(`[sim] ✅ Elevator ${deviceId}: posted floor ${device.elevatorCurrentFloor} (${device.state}), next ${nextFloor}`);
       return;
     }
 
     // Crane
     const payload = buildSimulatorPayload(device);
-    const response = await fetch(`http://localhost:${PORT}/api/crane/log`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (response.ok) {
-      const lat = (device.latitude != null) ? device.latitude : 0;
-      const lon = (device.longitude != null) ? device.longitude : 0;
-      console.log(`[sim] ✅ Crane ${deviceId}: ${device.state} at [${lat.toFixed(6)}, ${lon.toFixed(6)}]`);
-    } else {
-      console.error(`[sim] ❌ Crane ${deviceId} post failed: ${response.status}`);
-    }
+    await retryAsync(async () => {
+      const response = await fetch(`http://localhost:${PORT}/api/crane/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`Crane post failed: HTTP ${response.status}`);
+      }
+      return response;
+    }, { label: `Crane ${deviceId} post` });
+
+    const lat = (device.latitude != null) ? device.latitude : 0;
+    const lon = (device.longitude != null) ? device.longitude : 0;
+    recordTickSuccess(deviceId);
+    console.log(`[sim] ✅ Crane ${deviceId}: ${device.state} at [${lat.toFixed(6)}, ${lon.toFixed(6)}]`);
   } catch (err) {
-    console.error(`[sim] ❌ Simulator tick error for ${deviceId}:`, err.message);
+    recordTickError(deviceId, err.message);
+    console.error(`[sim] ❌ Simulator tick error for ${deviceId} (timer still running, will retry next interval):`, err.message);
   }
 }
 
@@ -296,36 +386,66 @@ async function startSimulator(deviceId) {
   if (!device) {
     throw new Error(`Device ${deviceId} not found in database`);
   }
-  
+
   if (simulatorTimers.has(deviceId)) {
     throw new Error(`Device ${deviceId} is already running`);
   }
-  
-  const frequencyMs = getSimulatorIntervalMs(device);
-  const timer = setInterval(() => simulatorTick(deviceId), frequencyMs);
-  simulatorTimers.set(deviceId, timer);
-  
-  // ✅ Update database to mark device as running
+
+  attachSimulatorTimer(deviceId, device);
   await SimulatorDevice.updateOne({ deviceId }, { isRunning: true });
-  
-  const intervalLabel = device.deviceType === 'energyMeter'
-    ? `${device.intervalSeconds || 60}s`
-    : `${device.frequencyMinutes}m`;
-  console.log(`[sim] 🚀 Started simulator for ${deviceId} (${intervalLabel} interval)`);
+  startSimulatorWatchdog();
+  console.log(`[sim] 🚀 Started simulator for ${deviceId} (${getSimulatorIntervalLabel(device)} interval)`);
 }
 
-// ✅ Stop simulator for a device
-async function stopSimulator(deviceId) {
-  const timer = simulatorTimers.get(deviceId);
-  if (timer) {
-    clearInterval(timer);
-    simulatorTimers.delete(deviceId);
-    
-    // ✅ Update database to mark device as stopped
-    await SimulatorDevice.updateOne({ deviceId }, { isRunning: false });
-    
-    console.log(`[sim] ⏹️ Stopped simulator for ${deviceId}`);
+// ✅ Re-attach timer without marking device stopped (config update / watchdog)
+async function restartSimulatorTimer(deviceId) {
+  const device = await SimulatorDevice.findOne({ deviceId }).lean();
+  if (!device) {
+    throw new Error(`Device ${deviceId} not found in database`);
   }
+
+  clearSimulatorTimer(deviceId);
+  attachSimulatorTimer(deviceId, device);
+  await SimulatorDevice.updateOne({ deviceId }, { isRunning: true });
+  console.log(`[sim] 🔄 Restarted timer for ${deviceId} (${getSimulatorIntervalLabel(device)} interval)`);
+}
+
+// ✅ Stop simulator for a device (explicit stop / device removed only)
+async function stopSimulator(deviceId, reason = 'manual') {
+  clearSimulatorTimer(deviceId);
+  await SimulatorDevice.updateOne({ deviceId }, { isRunning: false });
+  simulatorTickStatus.delete(deviceId);
+  console.log(`[sim] ⏹️ Stopped simulator for ${deviceId} (reason: ${reason})`);
+}
+
+// ✅ Re-attach timers when DB says running but in-memory timer was lost (Azure idle, crash, etc.)
+async function simulatorWatchdog() {
+  if (!ENABLE_SIMULATOR) return;
+
+  try {
+    const runningDevices = await SimulatorDevice.find({ isRunning: true }).lean();
+    for (const device of runningDevices) {
+      if (simulatorTimers.has(device.deviceId)) continue;
+      try {
+        attachSimulatorTimer(device.deviceId, device);
+        console.log(`[sim] 🔄 Watchdog re-attached timer for ${device.deviceId} (${getSimulatorIntervalLabel(device)} interval)`);
+      } catch (err) {
+        console.error(`[sim] ❌ Watchdog failed for ${device.deviceId}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[sim] ❌ Watchdog error:', err.message);
+  }
+}
+
+let simulatorWatchdogTimer = null;
+
+function startSimulatorWatchdog() {
+  if (simulatorWatchdogTimer || !ENABLE_SIMULATOR) return;
+  simulatorWatchdogTimer = setInterval(() => {
+    simulatorWatchdog().catch((err) => console.error('[sim] ❌ Watchdog interval error:', err.message));
+  }, SIM_WATCHDOG_INTERVAL_MS);
+  console.log(`[sim] 🐕 Simulator watchdog started (every ${SIM_WATCHDOG_INTERVAL_MS / 1000}s)`);
 }
 
 // ✅ Auto-restart running devices on server start
@@ -333,22 +453,20 @@ async function restartRunningSimulators() {
   try {
     const runningDevices = await SimulatorDevice.find({ isRunning: true }).lean();
     console.log(`[sim] 🔄 Found ${runningDevices.length} running devices to restart`);
-    
+
     for (const device of runningDevices) {
       try {
-        const frequencyMs = getSimulatorIntervalMs(device);
-        const timer = setInterval(() => simulatorTick(device.deviceId), frequencyMs);
-        simulatorTimers.set(device.deviceId, timer);
-        const intervalLabel = device.deviceType === 'energyMeter'
-          ? `${device.intervalSeconds || 60}s`
-          : `${device.frequencyMinutes}m`;
-        console.log(`[sim] ✅ Auto-restarted simulator for ${device.deviceId} (${intervalLabel} interval)`);
+        if (attachSimulatorTimer(device.deviceId, device)) {
+          console.log(`[sim] ✅ Auto-restarted simulator for ${device.deviceId} (${getSimulatorIntervalLabel(device)} interval)`);
+        }
       } catch (err) {
         console.error(`[sim] ❌ Failed to auto-restart ${device.deviceId}:`, err.message);
-        // Mark as stopped in database if restart fails
-        await SimulatorDevice.updateOne({ deviceId: device.deviceId }, { isRunning: false });
+        // Keep isRunning true — watchdog will retry
       }
     }
+
+    startSimulatorWatchdog();
+    await simulatorWatchdog();
   } catch (err) {
     console.error('[sim] ❌ Error during auto-restart:', err.message);
   }
@@ -5233,7 +5351,17 @@ app.get("/api/crane/chart", authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ SIMULATOR ENDPOINTS (superadmin only)
+// ✅ Simulator availability (UI + route guard — always registered)
+app.get('/api/sim/availability', authenticateToken, (req, res) => {
+  const { enabled, reason } = resolveSimulatorEnabled();
+  const isSuperadmin = req.user?.role === 'superadmin';
+  res.json({
+    enabled: isSuperadmin ? enabled : false,
+    reason: isSuperadmin ? reason : undefined,
+  });
+});
+
+// ✅ SIMULATOR ENDPOINTS (superadmin only, when enabled)
 if (ENABLE_SIMULATOR) {
   // ✅ POST: Add simulated device (crane or elevator)
   app.post('/api/sim/add', authenticateToken, async (req, res) => {
@@ -5411,7 +5539,7 @@ if (ENABLE_SIMULATOR) {
         return res.status(400).json({ error: 'DeviceID is required' });
       }
       
-      await stopSimulator(DeviceID);
+      await stopSimulator(DeviceID, 'manual');
       res.json({ success: true, message: `Simulator stopped for ${DeviceID}` });
     } catch (err) {
       console.error('[sim] ❌ Stop simulator error:', err);
@@ -5472,11 +5600,16 @@ if (ENABLE_SIMULATOR) {
         if (jitter !== undefined) device.jitter = jitter;
       }
       
+      const wasRunning = simulatorTimers.has(DeviceID) || device.isRunning;
       await device.save();
-      
-      if (simulatorTimers.has(DeviceID)) {
-        await stopSimulator(DeviceID);
-        await startSimulator(DeviceID);
+
+      if (wasRunning) {
+        try {
+          await restartSimulatorTimer(DeviceID);
+        } catch (restartErr) {
+          console.error(`[sim] ❌ Failed to restart timer after update for ${DeviceID}:`, restartErr.message);
+          await SimulatorDevice.updateOne({ deviceId: DeviceID }, { isRunning: true });
+        }
       }
       
       console.log(`[sim] ✅ Updated device ${DeviceID}:`, device.toObject());
@@ -5498,7 +5631,10 @@ if (ENABLE_SIMULATOR) {
       const devices = await SimulatorDevice.find({}).lean();
       
       // ✅ Add isRunning, overrides, and backward-compat fields; deviceType/location for elevator
-      const devicesWithStatus = devices.map(device => ({
+      const devicesWithStatus = devices.map(device => {
+        const tickStatus = simulatorTickStatus.get(device.deviceId);
+        const timerActive = simulatorTimers.has(device.deviceId);
+        return {
         ...device,
         DeviceID: device.deviceId,
         craneCompany: device.name,
@@ -5520,8 +5656,13 @@ if (ENABLE_SIMULATOR) {
         singleApplianceType: device.singleApplianceType || 'ac_split',
         occupancyPercent: device.occupancyPercent ?? 100,
         configSummary: device.deviceType === 'energyMeter' ? buildConfigSummary(device) : undefined,
-        isRunning: simulatorTimers.has(device.deviceId)
-      }));
+        isRunning: device.isRunning === true,
+        timerActive,
+        lastTickAt: tickStatus?.lastTickAt || null,
+        lastTickStatus: tickStatus?.lastStatus || null,
+        lastTickError: tickStatus?.lastError || null,
+      };
+      });
       
       res.json({ devices: devicesWithStatus });
     } catch (err) {
@@ -5670,7 +5811,7 @@ if (ENABLE_SIMULATOR) {
       const { deviceId } = req.params;
       
       // ✅ Stop simulator if running
-      await stopSimulator(deviceId);
+      await stopSimulator(deviceId, 'device-removed');
       
       // ✅ Remove device from database
       const removed = await SimulatorDevice.deleteOne({ deviceId });

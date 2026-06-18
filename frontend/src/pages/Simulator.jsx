@@ -279,6 +279,9 @@ export default function Simulator() {
   };
 
   const handleStopDevice = async (deviceId) => {
+    if (!window.confirm(`Stop simulator for ${deviceId}? It will show as offline on the dashboard until you start it again.`)) {
+      return;
+    }
     try {
       setStoppingDevice(deviceId);
       setError('');
@@ -489,8 +492,33 @@ export default function Simulator() {
     }
   };
 
-  const getStatusBadge = (device) =>
-    device.isRunning ? <Badge bg="success">Running</Badge> : <Badge bg="secondary">Stopped</Badge>;
+  const getStatusBadge = (device) => {
+    if (!device.isRunning) {
+      return <Badge bg="secondary">Stopped</Badge>;
+    }
+    if (device.timerActive === false) {
+      return <Badge bg="warning" text="dark">Recovering…</Badge>;
+    }
+    if (device.lastTickStatus === 'error') {
+      return (
+        <Badge bg="warning" text="dark" title={device.lastTickError || 'Last tick failed — still retrying'}>
+          Running (retrying)
+        </Badge>
+      );
+    }
+    return <Badge bg="success">Running</Badge>;
+  };
+
+  const getEnergyStatusCell = (device) => (
+    <div>
+      {getStatusBadge(device)}
+      {device.isRunning && device.lastTickStatus === 'error' && device.lastTickError && (
+        <div className="text-warning small mt-1" title={device.lastTickError}>
+          Last tick failed — retrying
+        </div>
+      )}
+    </div>
+  );
 
   const getStateBadge = (state) => {
     const v = { working: 'success', idle: 'info', maintenance: 'warning' };
@@ -779,13 +807,7 @@ export default function Simulator() {
                     <td>{device.occupancyPercent ?? 100}%</td>
                     <td><Clock size={14} className="me-1" />{device.intervalSeconds || 60}s</td>
                     <td>{device.energyBaseReading != null ? device.energyBaseReading : '—'}</td>
-                    <td>
-                      {device.isRunning ? (
-                        <Badge bg="success">Transmitting</Badge>
-                      ) : (
-                        <Badge bg="secondary">Offline (stopped)</Badge>
-                      )}
-                    </td>
+                    <td>{getEnergyStatusCell(device)}</td>
                     <td><EnergyActionButtons device={device} /></td>
                   </tr>
                 ))}
@@ -1197,7 +1219,8 @@ export default function Simulator() {
             <Col md={4}>
               <h6>Simulator endpoints</h6>
               <ul className="text-muted small mb-0">
-                <li>Enabled when <code>ENABLE_SIMULATOR=true</code></li>
+                <li>On by default on <strong>Azure App Service</strong> (<code>WEBSITE_SITE_NAME</code>)</li>
+                <li>Off locally unless <code>ENABLE_SIMULATOR=true</code> in <code>.env</code></li>
                 <li>Crane → <code>/api/crane/log</code></li>
                 <li>Elevator → <code>/api/elevators/log</code></li>
                 <li>Energy meter → <code>/api/energy-meter/log</code></li>
