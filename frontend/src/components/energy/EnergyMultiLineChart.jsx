@@ -11,7 +11,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { CHART_COLORS, formatAxisLabel } from './energyChartShared';
+import {
+  CHART_COLORS,
+  formatAxisLabel,
+  buildMultiSeriesChartData,
+} from './energyChartShared';
+import ChartMultiSeriesTooltip from './ChartMultiSeriesTooltip';
 import styles from './EnergyMultiLineChart.module.css';
 
 export default function EnergyMultiLineChart({
@@ -23,33 +28,15 @@ export default function EnergyMultiLineChart({
   referenceLines = [],
   loading = false,
 }) {
-  const visibleSet = visibleMeters || new Set(chartSeries.map((s) => s.meterId));
+  const visibleSet = useMemo(
+    () => visibleMeters || new Set(chartSeries.map((s) => s.meterId)),
+    [visibleMeters, chartSeries]
+  );
 
-  const { chartData, meterIds } = useMemo(() => {
-    const map = new Map();
-    const ids = [];
-
-    chartSeries.forEach((series) => {
-      if (!visibleSet.has(series.meterId)) return;
-      ids.push(series.meterId);
-      (series.points || []).forEach((pt) => {
-        const key = pt.timestamp;
-        if (!map.has(key)) {
-          map.set(key, {
-            timestamp: pt.timestamp,
-            label: formatAxisLabel(pt.timestamp, range),
-          });
-        }
-        map.get(key)[series.meterId] = pt.value;
-      });
-    });
-
-    const data = Array.from(map.values()).sort(
-      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-    );
-
-    return { chartData: data, meterIds: ids };
-  }, [chartSeries, visibleSet, range]);
+  const { chartData, meterIds } = useMemo(
+    () => buildMultiSeriesChartData(chartSeries, visibleSet, range),
+    [chartSeries, visibleSet, range]
+  );
 
   if (loading) {
     return (
@@ -71,11 +58,18 @@ export default function EnergyMultiLineChart({
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+        <XAxis
+          dataKey="bucketTs"
+          tick={{ fontSize: 11 }}
+          tickFormatter={(ts) => formatAxisLabel(new Date(Number(ts)), range)}
+          minTickGap={range === '7d' ? 48 : 24}
+        />
         <YAxis tick={{ fontSize: 11 }} unit={unit ? ` ${unit}` : ''} width={48} />
         <Tooltip
-          formatter={(val) => (val != null ? `${Number(val).toFixed(2)}${unit ? ` ${unit}` : ''}` : '—')}
-          labelStyle={{ fontSize: 12 }}
+          shared
+          content={(props) => (
+            <ChartMultiSeriesTooltip {...props} meterIds={meterIds} unit={unit} />
+          )}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {referenceLines.map((ref) => (
@@ -92,10 +86,13 @@ export default function EnergyMultiLineChart({
             key={meterId}
             type="monotone"
             dataKey={meterId}
+            name={meterId}
             stroke={CHART_COLORS[idx % CHART_COLORS.length]}
             dot={false}
+            activeDot={{ r: 4 }}
             strokeWidth={2}
             connectNulls
+            isAnimationActive={false}
           />
         ))}
       </LineChart>

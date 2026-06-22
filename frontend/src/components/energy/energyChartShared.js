@@ -71,3 +71,46 @@ export function formatRangeValue(latestRange, unit, decimals) {
   }
   return `${Number(latestRange.min).toFixed(decimals)}–${Number(latestRange.max).toFixed(decimals)}${unit ? ` ${unit}` : ''}`;
 }
+
+/** Align per-meter points into time buckets so tooltips show all meters at once. */
+export function getChartBucketMs(rangeKey) {
+  switch (rangeKey) {
+    case '15m':
+      return 30 * 1000;
+    case '1h':
+      return 60 * 1000;
+    case '24h':
+      return 5 * 60 * 1000;
+    case '7d':
+      return 15 * 60 * 1000;
+    default:
+      return 60 * 1000;
+  }
+}
+
+export function buildMultiSeriesChartData(chartSeries, visibleSet, rangeKey) {
+  const bucketMs = getChartBucketMs(rangeKey);
+  const map = new Map();
+  const meterIds = [];
+
+  chartSeries.forEach((series) => {
+    if (!visibleSet.has(series.meterId)) return;
+    if (!meterIds.includes(series.meterId)) meterIds.push(series.meterId);
+
+    (series.points || []).forEach((pt) => {
+      const t = new Date(pt.timestamp).getTime();
+      if (!Number.isFinite(t)) return;
+      const bucket = Math.floor(t / bucketMs) * bucketMs;
+      if (!map.has(bucket)) {
+        map.set(bucket, {
+          bucketTs: bucket,
+          timestamp: new Date(bucket).toISOString(),
+        });
+      }
+      map.get(bucket)[series.meterId] = pt.value;
+    });
+  });
+
+  const chartData = Array.from(map.values()).sort((a, b) => a.bucketTs - b.bucketTs);
+  return { chartData, meterIds };
+}

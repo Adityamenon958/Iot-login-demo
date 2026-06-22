@@ -1,0 +1,19 @@
+.tooltip {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.65rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-size: 0.8rem;
+}
+
+.tooltipLabel {
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 0.35rem;
+}
+
+.tooltipRow {
+  line-height: 1.5;
+  font-weight: 500;
+}

@@ -11,54 +11,15 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import {
+  CHART_COLORS,
+  CHART_RANGES,
+  formatAxisLabel,
+  buildChartSubtitle,
+  buildMultiSeriesChartData,
+} from './energyChartShared';
+import ChartMultiSeriesTooltip from './ChartMultiSeriesTooltip';
 import styles from './EnergyFleetChart.module.css';
-
-const RANGES = [
-  { key: '15m', label: '15m' },
-  { key: '1h', label: '1h' },
-  { key: '24h', label: '24h' },
-  { key: '7d', label: '7d' },
-];
-
-const COLORS = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#dc3545', '#20c997'];
-
-function formatAxisLabel(timestamp, range) {
-  const d = new Date(timestamp);
-  if (range === '15m' || range === '1h') {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  if (range === '24h') {
-    return d.toLocaleString([], {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function formatSubtitleDate(value) {
-  return new Date(value).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function buildSubtitle(chartMeta) {
-  if (!chartMeta) return null;
-  const { dataStart, dataEnd } = chartMeta;
-  if (dataStart && dataEnd) {
-    return `Showing data from ${formatSubtitleDate(dataStart)} to ${formatSubtitleDate(dataEnd)}`;
-  }
-  if (chartMeta.requestedSince && chartMeta.requestedUntil) {
-    return `No data in this range (${formatSubtitleDate(chartMeta.requestedSince)} to ${formatSubtitleDate(chartMeta.requestedUntil)})`;
-  }
-  return null;
-}
 
 export default function EnergyFleetChart({ refreshKey = 0 }) {
   const [range, setRange] = useState('24h');
@@ -89,29 +50,17 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
 
   const chartSeries = chartMeta?.chartSeries || [];
 
-  const chartData = useMemo(() => {
-    const map = new Map();
+  const visibleSet = useMemo(
+    () => new Set(chartSeries.map((s) => s.meterId)),
+    [chartSeries]
+  );
 
-    chartSeries.forEach((series) => {
-      series.points.forEach((pt) => {
-        const key = pt.timestamp;
-        if (!map.has(key)) {
-          map.set(key, {
-            timestamp: pt.timestamp,
-            label: formatAxisLabel(pt.timestamp, range),
-          });
-        }
-        map.get(key)[series.meterId] = pt.value;
-      });
-    });
+  const { chartData, meterIds } = useMemo(
+    () => buildMultiSeriesChartData(chartSeries, visibleSet, range),
+    [chartSeries, visibleSet, range]
+  );
 
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-    );
-  }, [chartSeries, range]);
-
-  const meterIds = chartSeries.map((s) => s.meterId);
-  const subtitle = buildSubtitle(chartMeta);
+  const subtitle = buildChartSubtitle(chartMeta);
 
   return (
     <Card className={styles.chartCard}>
@@ -122,7 +71,7 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
             {subtitle && <p className={styles.chartSubtitle}>{subtitle}</p>}
           </div>
           <div className={styles.rangePills}>
-            {RANGES.map((r) => (
+            {CHART_RANGES.map((r) => (
               <button
                 key={r.key}
                 type="button"
@@ -148,17 +97,23 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                 <XAxis
-                  dataKey="label"
+                  dataKey="bucketTs"
                   tick={{ fontSize: 10 }}
+                  tickFormatter={(ts) => formatAxisLabel(new Date(Number(ts)), range)}
                   minTickGap={range === '7d' ? 48 : range === '24h' ? 32 : 16}
                   interval="preserveStartEnd"
                 />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip
-                  labelFormatter={(_, payload) => {
-                    const ts = payload?.[0]?.payload?.timestamp;
-                    return ts ? formatSubtitleDate(ts) : '';
-                  }}
+                  shared
+                  content={(props) => (
+                    <ChartMultiSeriesTooltip
+                      {...props}
+                      meterIds={meterIds}
+                      unit="kWh"
+                      decimals={2}
+                    />
+                  )}
                 />
                 <Legend />
                 {meterIds.map((id, i) => (
@@ -166,11 +121,13 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
                     key={id}
                     type="monotone"
                     dataKey={id}
-                    stroke={COLORS[i % COLORS.length]}
-                    dot={{ r: 2 }}
+                    name={id}
+                    stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                    dot={false}
+                    activeDot={{ r: 4 }}
                     strokeWidth={2}
                     connectNulls
-                    name={id}
+                    isAnimationActive={false}
                   />
                 ))}
               </LineChart>
