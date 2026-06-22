@@ -11,23 +11,28 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { CHART_RANGES, formatSubtitleDate, buildChartSubtitle } from './energyChartShared';
 import styles from './EnergyDetailChart.module.css';
-
-const RANGES = [
-  { key: '15m', label: '15m' },
-  { key: '1h', label: '1h' },
-  { key: '24h', label: '24h' },
-  { key: '7d', label: '7d' },
-];
 
 const SERIES_COLORS = {
   voltage: '#0d6efd',
   current: '#198754',
   activePower: '#fd7e14',
   energy: '#6f42c1',
+  powerFactor: '#dc3545',
+  frequency: '#20c997',
 };
 
 const ENERGY_AXIS_KEYS = new Set(['energy']);
+
+const VALUE_DECIMALS = {
+  voltage: 1,
+  current: 2,
+  activePower: 2,
+  energy: 2,
+  powerFactor: 2,
+  frequency: 2,
+};
 
 function formatAxisLabel(timestamp, range) {
   const d = new Date(timestamp);
@@ -45,26 +50,35 @@ function formatAxisLabel(timestamp, range) {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function formatSubtitleDate(value) {
-  return new Date(value).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+function DetailChartTooltip({ active, payload, parameters = [] }) {
+  if (!active || !payload?.length) return null;
 
-function buildSubtitle(chartMeta) {
-  if (!chartMeta) return null;
-  const { dataStart, dataEnd } = chartMeta;
-  if (dataStart && dataEnd) {
-    return `Showing data from ${formatSubtitleDate(dataStart)} to ${formatSubtitleDate(dataEnd)}`;
-  }
-  if (chartMeta.requestedSince && chartMeta.requestedUntil) {
-    return `No data in this range (${formatSubtitleDate(chartMeta.requestedSince)} to ${formatSubtitleDate(chartMeta.requestedUntil)})`;
-  }
-  return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+
+  const paramLabel = (key) => parameters.find((p) => p.key === key)?.label || key;
+  const paramUnit = (key) => parameters.find((p) => p.key === key)?.unit || '';
+
+  const items = payload.filter((entry) => entry.value != null && entry.dataKey);
+
+  return (
+    <div className={styles.tooltip}>
+      <div className={styles.tooltipLabel}>
+        {row.timestamp ? formatSubtitleDate(row.timestamp) : ''}
+      </div>
+      {items.map((entry) => {
+        const key = entry.dataKey;
+        const decimals = VALUE_DECIMALS[key] ?? 2;
+        const unit = paramUnit(key);
+        const text = `${Number(entry.value).toFixed(decimals)}${unit ? ` ${unit}` : ''}`;
+        return (
+          <div key={key} className={styles.tooltipRow} style={{ color: entry.color }}>
+            {paramLabel(key)} : {text}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
@@ -102,24 +116,28 @@ export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
     () =>
       points.map((pt) => ({
         timestamp: pt.timestamp,
-        label: formatAxisLabel(pt.timestamp, range),
+        timeMs: new Date(pt.timestamp).getTime(),
         ...pt.readings,
       })),
-    [points, range]
+    [points]
   );
+
+  const timeDomain = useMemo(() => {
+    if (!chartData.length) return ['dataMin', 'dataMax'];
+    const times = chartData.map((d) => d.timeMs).filter(Number.isFinite);
+    if (!times.length) return ['dataMin', 'dataMax'];
+    return [Math.min(...times), Math.max(...times)];
+  }, [chartData]);
 
   const seriesKeys = useMemo(() => {
     if (parameters.length) return parameters.map((p) => p.key);
     if (chartData.length) {
-      return Object.keys(chartData[0]).filter((k) => !['timestamp', 'label'].includes(k));
+      return Object.keys(chartData[0]).filter((k) => !['timestamp', 'timeMs'].includes(k));
     }
     return [];
   }, [parameters, chartData]);
 
-  const subtitle = buildSubtitle(chartMeta);
-
-  const paramLabel = (key) => parameters.find((p) => p.key === key)?.label || key;
-  const paramUnit = (key) => parameters.find((p) => p.key === key)?.unit || '';
+  const subtitle = buildChartSubtitle(chartMeta);
 
   if (!meterId) return null;
 
@@ -132,7 +150,7 @@ export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
             {subtitle && <p className={styles.chartSubtitle}>{subtitle}</p>}
           </div>
           <div className={styles.rangePills}>
-            {RANGES.map((r) => (
+            {CHART_RANGES.map((r) => (
               <button
                 key={r.key}
                 type="button"
@@ -154,12 +172,19 @@ export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
           ) : chartData.length === 0 ? (
             <div className={styles.empty}>No historical data for this range.</div>
           ) : (
-            <ResponsiveContainer width="100%" height={230}>
-              <LineChart data={chartData}>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart
+                data={chartData}
+                margin={{ top: 36, right: 16, left: 4, bottom: 8 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                 <XAxis
-                  dataKey="label"
+                  dataKey="timeMs"
+                  type="number"
+                  scale="time"
+                  domain={timeDomain}
                   tick={{ fontSize: 10 }}
+                  tickFormatter={(ms) => formatAxisLabel(ms, range)}
                   minTickGap={range === '7d' ? 48 : range === '24h' ? 32 : 16}
                   interval="preserveStartEnd"
                 />
@@ -177,18 +202,21 @@ export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
                   stroke="#6c757d"
                   label={{ value: 'V / A / kW', angle: 90, position: 'insideRight', fontSize: 10 }}
                 />
-                <Tooltip
-                  labelFormatter={(_, payload) => {
-                    const ts = payload?.[0]?.payload?.timestamp;
-                    return ts ? formatSubtitleDate(ts) : '';
-                  }}
-                  formatter={(value, name) => {
-                    const unit = paramUnit(name);
-                    return [`${value}${unit ? ` ${unit}` : ''}`, paramLabel(name)];
-                  }}
-                />
                 <Legend
-                  formatter={(value) => paramLabel(value)}
+                  verticalAlign="top"
+                  align="center"
+                  wrapperStyle={{ fontSize: 11, paddingBottom: 4 }}
+                  formatter={(value) =>
+                    parameters.find((p) => p.key === value)?.label || value
+                  }
+                />
+                <Tooltip
+                  shared
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                  content={(props) => (
+                    <DetailChartTooltip {...props} parameters={parameters} />
+                  )}
                 />
                 {seriesKeys.map((key) => (
                   <Line
@@ -198,8 +226,10 @@ export default function EnergyDetailChart({ meterId, refreshKey = 0 }) {
                     dataKey={key}
                     stroke={SERIES_COLORS[key] || '#333'}
                     dot={false}
+                    activeDot={{ r: 3 }}
                     strokeWidth={2}
                     name={key}
+                    isAnimationActive={false}
                   />
                 ))}
               </LineChart>
