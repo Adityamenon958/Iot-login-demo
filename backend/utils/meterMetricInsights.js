@@ -230,5 +230,6 @@ async function buildMeterMetricInsights(device, metricKey, rangeKey = '24h') {
 
 module.exports = {
   buildMeterMetricInsights,
+  buildMetricInsights,
   PF_DRILLDOWN_REFERENCE_LINES,
 };

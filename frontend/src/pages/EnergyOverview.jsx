@@ -6,6 +6,7 @@ import styles from './EnergyOverview.module.css';
 import mainStyles from './MainContent.module.css';
 import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
 import EnergyKpiCards from '../components/energy/EnergyKpiCards';
+import EnergyFleetKpiModal from '../components/energy/EnergyFleetKpiModal';
 import EnergyFleetChart from '../components/energy/EnergyFleetChart';
 import EnergyElectricalHealth from '../components/energy/EnergyElectricalHealth';
 import EnergyMeterCard from '../components/energy/EnergyMeterCard';
@@ -41,6 +42,7 @@ export default function EnergyOverview() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const [selectedParameterKey, setSelectedParameterKey] = useState(null);
+  const [selectedFleetKpiKey, setSelectedFleetKpiKey] = useState(null);
   const isMobile = useIsMobile();
 
   const fetchOverview = useCallback(async () => {
@@ -226,7 +228,17 @@ export default function EnergyOverview() {
               </div>
             </div>
 
-            <EnergyKpiCards kpis={overview?.kpis} />
+            <EnergyKpiCards
+              kpis={overview?.kpis}
+              onKpiClick={setSelectedFleetKpiKey}
+            />
+
+            <EnergyFleetKpiModal
+              show={Boolean(selectedFleetKpiKey)}
+              kpiKey={selectedFleetKpiKey}
+              onHide={() => setSelectedFleetKpiKey(null)}
+              refreshKey={dataRefreshKey}
+            />
             <EnergyFleetChart refreshKey={dataRefreshKey} />
             <EnergyElectricalHealth refreshKey={dataRefreshKey} />
 

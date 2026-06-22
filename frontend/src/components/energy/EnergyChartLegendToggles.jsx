@@ -1,6 +1,6 @@
 import React from 'react';
 import { Form } from 'react-bootstrap';
-import { CHART_COLORS } from './energyChartShared';
+import { CHART_COLORS, formatMeterDisplayLabel } from './energyChartShared';
 import styles from './EnergyChartLegendToggles.module.css';
 
 export default function EnergyChartLegendToggles({
@@ -24,7 +24,7 @@ export default function EnergyChartLegendToggles({
       {filtered.map((s) => {
         const idx = chartSeries.findIndex((c) => c.meterId === s.meterId);
         const color = CHART_COLORS[idx % CHART_COLORS.length];
-        const label = s.machineName ? `${s.meterId} (${s.machineName})` : s.meterId;
+        const label = formatMeterDisplayLabel(s.meterId, s.machineName);
         return (
           <Form.Check
             key={s.meterId}

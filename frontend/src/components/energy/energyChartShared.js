@@ -19,6 +19,14 @@ export const CHART_COLORS = [
 export const METER_SEARCH_THRESHOLD = 10;
 export const MINI_CHART_METER_LIMIT = 5;
 
+export function formatMeterDisplayLabel(meterId, machineName) {
+  const id = String(meterId || '').trim();
+  const name = String(machineName || '').trim();
+  if (!id) return name || '—';
+  if (!name) return id;
+  return `${id} (${name})`;
+}
+
 export function formatAxisLabel(timestamp, range) {
   const d = new Date(timestamp);
   if (range === '15m' || range === '1h') {

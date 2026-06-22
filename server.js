@@ -78,6 +78,8 @@ const {
 } = require("./backend/utils/electricalHealthService");
 const { buildMeterConsumptionInsights } = require("./backend/utils/meterConsumptionInsights");
 const { buildMeterMetricInsights } = require("./backend/utils/meterMetricInsights");
+const { buildFleetConsumptionInsights } = require("./backend/utils/fleetConsumptionInsights");
+const { buildFleetMetricInsights } = require("./backend/utils/fleetMetricInsights");
 const { ALLOWED_METRIC_KEYS } = require("./backend/utils/electricalHealthMetrics");
 const {
   buildEnergyMeterPayload,
@@ -6316,6 +6318,35 @@ app.get('/api/energy-meter/meter-metric-insights', authenticateToken, async (req
     res.json(insights);
   } catch (err) {
     console.error('Meter metric insights error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/fleet-consumption-insights', authenticateToken, async (req, res) => {
+  try {
+    const { period } = req.query;
+    const meters = await getVisibleEnergyMeters(req);
+    const insights = await buildFleetConsumptionInsights(meters, period || '7d');
+    res.json(insights);
+  } catch (err) {
+    console.error('Fleet consumption insights error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/fleet-metric-insights', authenticateToken, async (req, res) => {
+  try {
+    const { metric, range } = req.query;
+    if (!metric) return res.status(400).json({ message: 'metric is required' });
+    if (!ALLOWED_METRIC_KEYS.includes(metric)) {
+      return res.status(400).json({ message: 'Invalid metric' });
+    }
+
+    const meters = await getVisibleEnergyMeters(req);
+    const insights = await buildFleetMetricInsights(meters, metric, range || '24h');
+    res.json(insights);
+  } catch (err) {
+    console.error('Fleet metric insights error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });

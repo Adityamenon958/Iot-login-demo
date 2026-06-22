@@ -1,0 +1,26 @@
+.wrap {
+  margin-top: 0.75rem;
+}
+
+.title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6c757d;
+  margin-bottom: 0.4rem;
+}
+
+.table {
+  font-size: 0.8125rem;
+  margin-bottom: 0;
+}
+
+.valueCol {
+  text-align: right;
+  font-weight: 600;
+}
+
+.muted {
+  color: #6c757d;
+}

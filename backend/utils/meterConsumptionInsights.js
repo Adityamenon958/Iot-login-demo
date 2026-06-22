@@ -15,8 +15,8 @@ const {
   bucketLogsByIstDate,
   sumDailyKwhInRange,
   computePeakUsageHourToday,
+  buildHourlyConsumptionToday,
   projectMonthEndKwh,
-  buildTrendSeries,
   getDefaultInsightsConfig,
   istStartUtcFromYMD,
 } = require('./meterInsightsUtils');
@@ -81,7 +81,7 @@ async function buildMeterConsumptionInsights(device, periodKey = '7d') {
     config: getDefaultInsightsConfig(),
     summary: {},
     comparisons: {},
-    charts: { dailyBreakdown: [], trendSeries: [] },
+    charts: { dailyBreakdown: [], hourlyBreakdownToday: [] },
     insights: {},
   };
 
@@ -121,10 +121,9 @@ async function buildMeterConsumptionInsights(device, periodKey = '7d') {
   const projectedMonthEndKwh = projectMonthEndKwh(monthKwh, daysElapsed, daysInMonth);
 
   const peakUsageHourToday = computePeakUsageHourToday(logs, extractEnergy, todayStart);
+  const hourlyBreakdownToday = buildHourlyConsumptionToday(logs, extractEnergy, todayStart);
 
   const minimalUsageDays = dailyInPeriod.filter((d) => d.kwh < 0.01).length;
-
-  const periodLogs = logs.filter((log) => new Date(log.timestamp) >= periodStart);
 
   return {
     meterId,
@@ -149,7 +148,7 @@ async function buildMeterConsumptionInsights(device, periodKey = '7d') {
     },
     charts: {
       dailyBreakdown: dailyInPeriod,
-      trendSeries: buildTrendSeries(periodLogs, extractEnergy),
+      hourlyBreakdownToday,
     },
     insights: {
       peakUsageHourToday,

@@ -6,6 +6,7 @@ export default function EnergyMeterDrilldownModal({
   show,
   title,
   subtitle,
+  snapshot,
   onHide,
   toolbar,
   summary,
@@ -18,6 +19,7 @@ export default function EnergyMeterDrilldownModal({
       <Modal.Header closeButton>
         <div>
           <Modal.Title>{title}</Modal.Title>
+          {snapshot}
           {subtitle && <div className={styles.subtitle}>{subtitle}</div>}
         </div>
       </Modal.Header>

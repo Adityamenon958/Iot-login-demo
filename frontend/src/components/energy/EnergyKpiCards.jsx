@@ -74,8 +74,10 @@ function getPfHealthBadge(pf) {
   return { label: 'Poor', variant: 'danger' };
 }
 
-export default function EnergyKpiCards({ kpis }) {
+export default function EnergyKpiCards({ kpis, onKpiClick }) {
   if (!kpis) return null;
+
+  const clickable = typeof onKpiClick === 'function';
 
   return (
     <Row className="g-2 mb-2">
@@ -85,12 +87,32 @@ export default function EnergyKpiCards({ kpis }) {
 
         return (
           <Col key={cfg.key} xs={12} sm={6} lg={4} xl={2}>
-            <div className={`${styles.kpiCard} ${styles[cfg.variant]}`}>
+            <div
+              className={`${styles.kpiCard} ${styles[cfg.variant]} ${clickable ? styles.clickable : ''}`}
+              role={clickable ? 'button' : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onClick={clickable ? () => onKpiClick(cfg.key) : undefined}
+              onKeyDown={
+                clickable
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onKpiClick(cfg.key);
+                      }
+                    }
+                  : undefined
+              }
+            >
               <OverlayTrigger
                 placement="bottom"
                 overlay={<Tooltip id={`energy-kpi-tip-${cfg.key}`}>{cfg.tooltip}</Tooltip>}
               >
-                <span className={styles.kpiHelp} aria-label={`About ${cfg.label}`}>
+                <span
+                  className={styles.kpiHelp}
+                  aria-label={`About ${cfg.label}`}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                   <HelpCircle size={15} />
                 </span>
               </OverlayTrigger>
@@ -112,6 +134,7 @@ export default function EnergyKpiCards({ kpis }) {
                   {formatKpiText(kpis, cfg)}
                 </span>
               </div>
+              {clickable && <div className={styles.hint}>Tap for fleet details</div>}
             </div>
           </Col>
         );

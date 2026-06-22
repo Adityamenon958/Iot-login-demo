@@ -6,40 +6,43 @@ import EnergyInsightStatGrid from './EnergyInsightStatGrid';
 import EnergyInsightsPanel from './EnergyInsightsPanel';
 import EnergyDailyBarChart from './EnergyDailyBarChart';
 import EnergyHourlyBarChart from './EnergyHourlyBarChart';
+import EnergyFleetSnapshot from './EnergyFleetSnapshot';
+import EnergyFleetMeterRanking from './EnergyFleetMeterRanking';
 import { CONSUMPTION_PERIODS } from './meterParameterConfig';
+import { RANKING_LABELS, getFleetRankingKeys } from './fleetKpiConfig';
 
-export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refreshKey = 0 }) {
+export default function EnergyFleetConsumptionDrilldown({ show, kpiKey, onHide, refreshKey = 0 }) {
   const [period, setPeriod] = useState('7d');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const fetchInsights = useCallback(async () => {
-    if (!meterId) return;
     setLoading(true);
     try {
-      const res = await axios.get('/api/energy-meter/consumption-insights', {
-        params: { meterId, period },
+      const res = await axios.get('/api/energy-meter/fleet-consumption-insights', {
+        params: { period },
         withCredentials: true,
       });
       setData(res.data);
     } catch (err) {
-      console.error('Consumption insights fetch failed:', err);
+      console.error('Fleet consumption insights fetch failed:', err);
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [meterId, period]);
+  }, [period]);
 
   useEffect(() => {
-    if (show && meterId) fetchInsights();
-  }, [show, meterId, fetchInsights, refreshKey]);
+    if (show) fetchInsights();
+  }, [show, fetchInsights, refreshKey]);
 
   const summary = data?.summary || {};
   const comparisons = data?.comparisons || {};
   const insights = data?.insights || {};
+  const rankings = data?.rankings || {};
 
-  const summaryItems = useMemo(() => {
-    const items = [
+  const summaryItems = useMemo(
+    () => [
       {
         key: 'today',
         label: "Today's Consumption",
@@ -88,16 +91,9 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
         value: summary.projectedMonthEndKwh,
         unit: 'kWh',
       },
-      {
-        key: 'register',
-        label: 'Cumulative Register',
-        value: summary.cumulativeRegisterKwh,
-        unit: 'kWh',
-        sublabel: 'Lifetime meter reading',
-      },
-    ];
-    return items;
-  }, [summary, comparisons, period]);
+    ],
+    [summary, comparisons, period]
+  );
 
   const insightItems = useMemo(() => {
     const items = [];
@@ -125,21 +121,24 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
         value: insights.lowestDay,
       });
     }
-    if (insights.minimalUsageDays != null) {
-      items.push({
-        key: 'minimal',
-        label: 'Days with Minimal Usage',
-        value: insights.minimalUsageDays,
-      });
-    }
     return items;
   }, [insights]);
+
+  const rankingSections = getFleetRankingKeys(kpiKey).map((key) => (
+    <EnergyFleetMeterRanking
+      key={key}
+      title={RANKING_LABELS[key]}
+      rows={rankings[key] || []}
+      unit="kWh"
+    />
+  ));
 
   return (
     <EnergyMeterDrilldownModal
       show={show}
-      title="Energy Consumption"
-      subtitle="Period consumption from meter register deltas (IST)"
+      title="Fleet Energy Consumption"
+      subtitle="Fleet-wide consumption from meter register deltas (IST)"
+      snapshot={<EnergyFleetSnapshot snapshot={data?.fleetSnapshot} />}
       onHide={onHide}
       loading={loading}
       toolbar={
@@ -155,7 +154,12 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
           />
         </>
       }
-      insights={<EnergyInsightsPanel items={insightItems} />}
+      insights={
+        <>
+          <EnergyInsightsPanel items={insightItems} />
+          {rankingSections}
+        </>
+      }
     />
   );
 }
