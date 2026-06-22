@@ -10,6 +10,7 @@ import EnergyFleetChart from '../components/energy/EnergyFleetChart';
 import EnergyElectricalHealth from '../components/energy/EnergyElectricalHealth';
 import EnergyMeterCard from '../components/energy/EnergyMeterCard';
 import EnergyParameterTiles from '../components/energy/EnergyParameterTiles';
+import EnergyMeterParameterModal from '../components/energy/EnergyMeterParameterModal';
 import EnergyDetailChart from '../components/energy/EnergyDetailChart';
 import EnergyLogsTable from '../components/energy/EnergyLogsTable';
 import EnergyRawPayloadPanel from '../components/energy/EnergyRawPayloadPanel';
@@ -39,6 +40,7 @@ export default function EnergyOverview() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
+  const [selectedParameterKey, setSelectedParameterKey] = useState(null);
   const isMobile = useIsMobile();
 
   const fetchOverview = useCallback(async () => {
@@ -138,6 +140,7 @@ export default function EnergyOverview() {
   const handleBackToFleet = () => {
     setViewMode('fleet');
     setSelectedMeterId(null);
+    setSelectedParameterKey(null);
     setDetailLatest(null);
     setDetailLogs([]);
     setSelectedLog(null);
@@ -272,28 +275,37 @@ export default function EnergyOverview() {
             ) : (
               <>
                 <div className={styles.detailHeader}>
-                  <div>
+                  <div className={styles.detailTitleRow}>
                     <h4 className={styles.detailTitle}>{selectedMeterId}</h4>
-                    <div className={styles.breadcrumb}>
-                      {[device?.siteName, device?.plantName, device?.machineName]
-                        .filter(Boolean)
-                        .join(' > ')}
-                    </div>
-                    <small className="text-muted">
-                      UID: {device?.uid || '—'}
-                      {detailLatest?.timestamp && (
-                        <> | Last reading: {new Date(detailLatest.timestamp).toLocaleString()}</>
-                      )}
-                    </small>
+                    <Badge bg={detailLatest?.online ? 'success' : 'secondary'}>
+                      {detailLatest?.online ? 'ONLINE' : 'OFFLINE'}
+                    </Badge>
                   </div>
-                  <Badge bg={detailLatest?.online ? 'success' : 'secondary'}>
-                    {detailLatest?.online ? 'ONLINE' : 'OFFLINE'}
-                  </Badge>
+                  <div className={styles.breadcrumb}>
+                    {[device?.siteName, device?.plantName, device?.machineName]
+                      .filter(Boolean)
+                      .join(' > ')}
+                  </div>
+                  <small className="text-muted">
+                    UID: {device?.uid || '—'}
+                    {detailLatest?.timestamp && (
+                      <> | Last reading: {new Date(detailLatest.timestamp).toLocaleString()}</>
+                    )}
+                  </small>
                 </div>
 
                 <EnergyParameterTiles
                   readings={detailLatest?.readings || {}}
                   parameters={parameters}
+                  onParameterClick={setSelectedParameterKey}
+                />
+
+                <EnergyMeterParameterModal
+                  show={Boolean(selectedParameterKey)}
+                  parameterKey={selectedParameterKey}
+                  meterId={selectedMeterId}
+                  onHide={() => setSelectedParameterKey(null)}
+                  refreshKey={dataRefreshKey}
                 />
 
                 {isMobile ? (

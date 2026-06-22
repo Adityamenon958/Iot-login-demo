@@ -76,6 +76,8 @@ const {
   buildElectricalHealthSummary,
   buildFleetMetricHistory,
 } = require("./backend/utils/electricalHealthService");
+const { buildMeterConsumptionInsights } = require("./backend/utils/meterConsumptionInsights");
+const { buildMeterMetricInsights } = require("./backend/utils/meterMetricInsights");
 const { ALLOWED_METRIC_KEYS } = require("./backend/utils/electricalHealthMetrics");
 const {
   buildEnergyMeterPayload,
@@ -6276,6 +6278,44 @@ app.get('/api/energy-meter/metric-history', authenticateToken, async (req, res) 
     res.json(history);
   } catch (err) {
     console.error('Metric history error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/consumption-insights', authenticateToken, async (req, res) => {
+  try {
+    const { meterId, period } = req.query;
+    if (!meterId) return res.status(400).json({ message: 'meterId is required' });
+
+    const meters = await getVisibleEnergyMeters(req);
+    const allowed = meters.find((m) => m.deviceId === meterId);
+    if (!allowed) return res.status(403).json({ message: 'Access denied' });
+
+    const insights = await buildMeterConsumptionInsights(allowed, period || '7d');
+    res.json(insights);
+  } catch (err) {
+    console.error('Consumption insights error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/meter-metric-insights', authenticateToken, async (req, res) => {
+  try {
+    const { meterId, metric, range } = req.query;
+    if (!meterId) return res.status(400).json({ message: 'meterId is required' });
+    if (!metric) return res.status(400).json({ message: 'metric is required' });
+    if (!ALLOWED_METRIC_KEYS.includes(metric)) {
+      return res.status(400).json({ message: 'Invalid metric' });
+    }
+
+    const meters = await getVisibleEnergyMeters(req);
+    const allowed = meters.find((m) => m.deviceId === meterId);
+    if (!allowed) return res.status(403).json({ message: 'Access denied' });
+
+    const insights = await buildMeterMetricInsights(allowed, metric, range || '24h');
+    res.json(insights);
+  } catch (err) {
+    console.error('Meter metric insights error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });

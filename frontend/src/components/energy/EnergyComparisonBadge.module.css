@@ -1,0 +1,29 @@
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+
+.up {
+  color: #198754;
+  background: rgba(25, 135, 84, 0.1);
+}
+
+.down {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.flat {
+  color: #6c757d;
+  background: rgba(108, 117, 125, 0.1);
+}
+
+.hint {
+  font-weight: 500;
+  opacity: 0.85;
+}

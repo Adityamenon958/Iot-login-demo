@@ -1,0 +1,17 @@
+.wrap {
+  margin-top: 0.75rem;
+}
+
+.chartTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6c757d;
+  margin-bottom: 0.35rem;
+}
+
+.empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: #6c757d;
+  font-size: 0.875rem;
+}

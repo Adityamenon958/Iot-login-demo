@@ -7,6 +7,28 @@
   height: 100%;
 }
 
+.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.clickable:hover {
+  border-color: #0d6efd;
+  box-shadow: 0 4px 16px rgba(13, 110, 253, 0.12);
+  transform: translateY(-1px);
+}
+
+.clickable:focus-visible {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+.hint {
+  font-size: 0.65rem;
+  color: #adb5bd;
+  margin-top: 0.35rem;
+}
+
 .tileLabel {
   font-size: 0.75rem;
   color: #6c757d;

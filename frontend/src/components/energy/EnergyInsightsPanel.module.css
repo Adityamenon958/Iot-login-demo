@@ -1,0 +1,52 @@
+.panel {
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #eee;
+}
+
+.title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6c757d;
+  margin-bottom: 0.65rem;
+}
+
+.card {
+  background: #f8f9fa;
+  border-radius: 0.625rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #eee;
+  height: 100%;
+  min-height: 4.5rem;
+}
+
+.cardLabel {
+  font-size: 0.68rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+  line-height: 1.35;
+}
+
+.cardValue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.3;
+}
+
+.primaryValue {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  word-break: break-word;
+}
+
+.secondaryValue {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #495057;
+}
