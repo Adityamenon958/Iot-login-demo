@@ -122,12 +122,82 @@ function readingsToRawValues(readings, parameters = DEFAULT_PARAMETERS) {
   });
 }
 
+function applyReadingOverrides(baseReadings, overrideReadings = {}) {
+  const merged = { ...baseReadings };
+  if (!overrideReadings) return merged;
+  const keys = ['voltage', 'current', 'activePower', 'energy', 'powerFactor', 'frequency'];
+  keys.forEach((key) => {
+    const val = overrideReadings[key];
+    if (val != null && Number.isFinite(Number(val))) {
+      merged[key] = Number(val);
+    }
+  });
+  return merged;
+}
+
+function getOverrideRemainingMs(override) {
+  if (!override?.enabled || !override.startedAt) return null;
+  if (!override.durationMinutes) return null;
+  const end = new Date(override.startedAt).getTime() + override.durationMinutes * 60 * 1000;
+  return Math.max(0, end - Date.now());
+}
+
+function isOverrideExpired(override) {
+  if (!override?.enabled) return false;
+  if (!override.durationMinutes) return false;
+  const remaining = getOverrideRemainingMs(override);
+  return remaining !== null && remaining <= 0;
+}
+
+function getActiveOverrideReadings(device) {
+  const override = device?.energyReadingOverride;
+  if (!override?.enabled) return null;
+  if (isOverrideExpired(override)) return null;
+  return override.readings || null;
+}
+
+/**
+ * Build payload from base generation + optional reading overrides.
+ */
+function buildPayloadFromReadings(device, readingOverrides = null, options = {}) {
+  const { advanceReading = true, now = new Date() } = options;
+  const { readings: baseReadings, breakdown, energyKwh: baseEnergy } = generateElectricalReadings(device, {
+    advanceEnergy: advanceReading,
+    now,
+  });
+
+  const merged = readingOverrides
+    ? applyReadingOverrides(baseReadings, readingOverrides)
+    : baseReadings;
+
+  const energyKwh = merged.energy != null ? merged.energy : baseEnergy;
+  const rawValues = readingsToRawValues(merged);
+  const dateStr = formatEnergyMeterDate(now);
+  const meterKey = device.deviceId;
+
+  return {
+    payload: {
+      [meterKey]: `${dateStr},[${rawValues.join(',')}]`,
+    },
+    readings: merged,
+    rawValues,
+    energyKwh,
+    breakdown,
+    dateStr,
+  };
+}
+
 /**
  * Build webhook payload:
  * { "Energy Meter_1": "DD/MM/YYYY HH:mm:ss,[V,A,kW,kWh,PF,Hz]" }
  */
 function buildEnergyMeterPayload(device, options = {}) {
   const { advanceReading = true, now = new Date() } = options;
+  const activeOverride = getActiveOverrideReadings(device);
+  if (activeOverride) {
+    return buildPayloadFromReadings(device, activeOverride, { advanceReading, now });
+  }
+
   const { readings, breakdown, energyKwh } = generateElectricalReadings(device, {
     advanceEnergy: advanceReading,
     now,
@@ -170,6 +240,11 @@ module.exports = {
   generateElectricalReadings,
   readingsToRawValues,
   buildEnergyMeterPayload,
+  buildPayloadFromReadings,
+  applyReadingOverrides,
+  getOverrideRemainingMs,
+  isOverrideExpired,
+  getActiveOverrideReadings,
   buildUidFromCompany,
   normalizeSimDevice,
 };

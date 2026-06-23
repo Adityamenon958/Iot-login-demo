@@ -128,6 +128,24 @@ const simulatorDeviceSchema = new mongoose.Schema({
   occupancyPercent: { type: Number, min: 0, max: 100, default: 100 },
   minVoltage: { type: Number, default: 220 },
   maxVoltage: { type: Number, default: 240 },
+
+  // Alarm test live override (energy meter only)
+  energyReadingOverride: {
+    enabled: { type: Boolean, default: false },
+    readings: {
+      voltage: { type: Number, default: null },
+      current: { type: Number, default: null },
+      activePower: { type: Number, default: null },
+      energy: { type: Number, default: null },
+      powerFactor: { type: Number, default: null },
+      frequency: { type: Number, default: null },
+    },
+    durationMinutes: { type: Number, default: null },
+    startedAt: { type: Date, default: null },
+    breachMode: { type: String, enum: ['standard', 'aggressive'], default: 'standard' },
+    sourceRuleIds: [{ type: mongoose.Schema.Types.ObjectId }],
+    label: { type: String, default: '' },
+  },
 }, {
   timestamps: true // Adds createdAt and updatedAt automatically
 });

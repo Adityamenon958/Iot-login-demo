@@ -1,0 +1,81 @@
+.alarmTestModal :global(.modal-body) {
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.metricGroup {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.metricGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  font-weight: 600;
+}
+
+.ruleRow {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  border-top: 1px solid var(--bs-border-color-translucent, #eee);
+}
+
+.ruleRow:hover {
+  background: rgba(13, 110, 253, 0.04);
+}
+
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.breachToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.outcomeTable {
+  font-size: 0.875rem;
+}
+
+.outcomeTable th {
+  white-space: nowrap;
+}
+
+.overrideBanner {
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.4);
+}
+
+.advancedSection {
+  margin-top: 20px;
+  border-top: 1px dashed var(--bs-border-color, #dee2e6);
+  padding-top: 16px;
+}
+
+.consumptionCard {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 24px;
+  color: var(--bs-secondary-color);
+}

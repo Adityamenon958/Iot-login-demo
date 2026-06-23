@@ -16,6 +16,11 @@ import EnergyMeterParameterModal from '../components/energy/EnergyMeterParameter
 import EnergyDetailChart from '../components/energy/EnergyDetailChart';
 import EnergyLogsTable from '../components/energy/EnergyLogsTable';
 import EnergyRawPayloadPanel from '../components/energy/EnergyRawPayloadPanel';
+import EnergyAlarmKpiCard from '../components/energy/EnergyAlarmKpiCard';
+import EnergyFleetActiveAlarmsPanel from '../components/energy/EnergyFleetActiveAlarmsPanel';
+import EnergyMeterActiveAlarms from '../components/energy/EnergyMeterActiveAlarms';
+import EnergyMeterAlarmSettings from '../components/energy/EnergyMeterAlarmSettings';
+import EnergyMeterAlarmHistory from '../components/energy/EnergyMeterAlarmHistory';
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
@@ -44,6 +49,9 @@ export default function EnergyOverview() {
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const [selectedParameterKey, setSelectedParameterKey] = useState(null);
   const [selectedFleetKpiKey, setSelectedFleetKpiKey] = useState(null);
+  const [alarmSummary, setAlarmSummary] = useState(null);
+  const [showFleetAlarms, setShowFleetAlarms] = useState(false);
+  const [alarmRefreshKey, setAlarmRefreshKey] = useState(0);
   const isMobile = useIsMobile();
   const mainScrollRef = useRef(null);
 
@@ -80,6 +88,29 @@ export default function EnergyOverview() {
   useEffect(() => {
     loadViewSettings();
   }, [loadViewSettings]);
+
+  const fetchAlarmSummary = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/energy-meter/alarms/summary', {
+        withCredentials: true,
+      });
+      setAlarmSummary(res.data);
+    } catch (err) {
+      console.error('Failed to load alarm summary', err);
+      setAlarmSummary(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAlarmSummary();
+    const interval = setInterval(fetchAlarmSummary, 30000);
+    return () => clearInterval(interval);
+  }, [fetchAlarmSummary, dataRefreshKey, alarmRefreshKey]);
+
+  const handleAlarmChanged = () => {
+    setAlarmRefreshKey((k) => k + 1);
+    fetchAlarmSummary();
+  };
 
   const handleSimulatorToggle = async (e) => {
     const showSimulatorData = e.target.checked;
@@ -264,6 +295,19 @@ export default function EnergyOverview() {
             <EnergyKpiCards
               kpis={overview?.kpis}
               onKpiClick={setSelectedFleetKpiKey}
+              trailingSlot={(
+                <EnergyAlarmKpiCard
+                  summary={alarmSummary}
+                  onClick={() => setShowFleetAlarms(true)}
+                />
+              )}
+            />
+
+            <EnergyFleetActiveAlarmsPanel
+              show={showFleetAlarms}
+              onHide={() => setShowFleetAlarms(false)}
+              refreshKey={alarmRefreshKey}
+              onChanged={handleAlarmChanged}
             />
 
             <EnergyFleetKpiModal
@@ -293,7 +337,11 @@ export default function EnergyOverview() {
               ) : (
                 overview.meters.map((meter) => (
                   <Col key={meter.meterId} xs={12} md={6} lg={3} xl={3}>
-                    <EnergyMeterCard meter={meter} onSelect={handleSelectMeter} />
+                    <EnergyMeterCard
+                      meter={meter}
+                      onSelect={handleSelectMeter}
+                      alarmInfo={alarmSummary?.byMeter?.[meter.meterId]}
+                    />
                   </Col>
                 ))
               )}
@@ -350,6 +398,22 @@ export default function EnergyOverview() {
                   parameters={parameters}
                   parameterStats24h={detailLatest?.parameterStats24h}
                   onParameterClick={setSelectedParameterKey}
+                />
+
+                <EnergyMeterActiveAlarms
+                  meterId={selectedMeterId}
+                  refreshKey={alarmRefreshKey}
+                  onChanged={handleAlarmChanged}
+                />
+
+                <EnergyMeterAlarmSettings
+                  meterId={selectedMeterId}
+                  refreshKey={alarmRefreshKey}
+                />
+
+                <EnergyMeterAlarmHistory
+                  meterId={selectedMeterId}
+                  refreshKey={alarmRefreshKey}
                 />
 
                 <EnergyMeterParameterModal

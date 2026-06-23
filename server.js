@@ -82,11 +82,39 @@ const { buildFleetConsumptionInsights } = require("./backend/utils/fleetConsumpt
 const { buildFleetMetricInsights } = require("./backend/utils/fleetMetricInsights");
 const { buildFleetMetersTable } = require("./backend/utils/fleetMetersTable");
 const { buildMeterParameterStats24h } = require("./backend/utils/meterParameterStats");
+const {
+  evaluateEnergyMeterAlarms,
+  listRules,
+  createRule,
+  updateRule,
+  deleteRule,
+  toggleRule,
+  listEvents,
+  listActiveEvents,
+  buildAlarmSummary,
+  acknowledgeEvents,
+  acknowledgeSingleEvent,
+  clearEvent,
+  getMetricsMetadata,
+  serializeRule,
+} = require("./backend/utils/energyMeterAlarmService");
 const { ALLOWED_METRIC_KEYS } = require("./backend/utils/electricalHealthMetrics");
 const {
   buildEnergyMeterPayload,
+  buildPayloadFromReadings,
   VALID_INTERVALS_SECONDS,
+  getOverrideRemainingMs,
+  isOverrideExpired,
 } = require("./backend/utils/energyMeterSim");
+const {
+  loadEnabledRulesForMeter,
+  buildAlarmTestPlan,
+  resolveRuleSelections,
+  computeBreachReadingsForBounds,
+  buildExpectedOutcomes,
+  planConsumptionBurst,
+  formatReadingsSummary,
+} = require("./backend/utils/energyAlarmTestUtils");
 const {
   getCatalog,
   getRoomPresets,
@@ -312,9 +340,33 @@ function getSimulatorIntervalMs(device) {
   return device.frequencyMinutes * 60 * 1000;
 }
 
+async function clearExpiredEnergyOverride(deviceId) {
+  const device = await SimulatorDevice.findOne({ deviceId });
+  if (!device?.energyReadingOverride?.enabled) return false;
+  if (!isOverrideExpired(device.energyReadingOverride)) return false;
+  device.energyReadingOverride.enabled = false;
+  device.energyReadingOverride.readings = {
+    voltage: null,
+    current: null,
+    activePower: null,
+    energy: null,
+    powerFactor: null,
+    frequency: null,
+  };
+  device.energyReadingOverride.durationMinutes = null;
+  device.energyReadingOverride.startedAt = null;
+  device.energyReadingOverride.sourceRuleIds = [];
+  device.energyReadingOverride.label = '';
+  await device.save();
+  return true;
+}
+
 async function postEnergyMeterSimPayload(device) {
-  const { payload, energyKwh } = buildEnergyMeterPayload(device, { advanceReading: true });
-  const deviceId = device.deviceId;
+  await clearExpiredEnergyOverride(device.deviceId);
+  const fresh = await SimulatorDevice.findOne({ deviceId: device.deviceId }).lean();
+  const simDevice = fresh || device;
+  const { payload, energyKwh } = buildEnergyMeterPayload(simDevice, { advanceReading: true });
+  const deviceId = simDevice.deviceId;
 
   try {
     await retryAsync(async () => {
@@ -5678,6 +5730,10 @@ if (ENABLE_SIMULATOR) {
         appliances: device.appliances || [],
         singleApplianceType: device.singleApplianceType || 'ac_split',
         occupancyPercent: device.occupancyPercent ?? 100,
+        energyReadingOverride: device.energyReadingOverride || null,
+        overrideRemainingMs: device.energyReadingOverride?.enabled
+          ? getOverrideRemainingMs(device.energyReadingOverride)
+          : null,
         configSummary: device.deviceType === 'energyMeter' ? buildConfigSummary(device) : undefined,
         isRunning: device.isRunning === true,
         timerActive,
@@ -5786,6 +5842,325 @@ if (ENABLE_SIMULATOR) {
     } catch (err) {
       console.error('[sim] ❌ Preview payload error:', err);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ GET: Alarm test plan for a meter (enabled rules + breach previews)
+  app.get('/api/sim/energy-alarm-test-plan/:meterId', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      const { meterId } = req.params;
+      const { device, rules } = await loadEnabledRulesForMeter(meterId);
+      const plan = buildAlarmTestPlan(rules);
+      const simDevice = await SimulatorDevice.findOne({ deviceId: meterId }).lean();
+      res.json({
+        meterId,
+        companyName: device.companyName,
+        ...plan,
+        activeOverride: simDevice?.energyReadingOverride?.enabled
+          ? {
+              ...simDevice.energyReadingOverride,
+              remainingMs: getOverrideRemainingMs(simDevice.energyReadingOverride),
+            }
+          : null,
+      });
+    } catch (err) {
+      console.error('[sim] ❌ Alarm test plan error:', err);
+      res.status(err.statusCode || 500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Recompute expected outcomes for selection + breach mode
+  app.post('/api/sim/energy-expected-outcomes', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      const { meterId, selection, breachMode = 'standard' } = req.body;
+      if (!meterId) return res.status(400).json({ error: 'meterId is required' });
+      const { rules } = await loadEnabledRulesForMeter(meterId);
+      const bounds = resolveRuleSelections(rules, selection || {});
+      const outcomes = buildExpectedOutcomes(bounds, breachMode);
+      const { readings, conflicts } = computeBreachReadingsForBounds(bounds, breachMode);
+      res.json({ outcomes, readings, conflicts, breachMode });
+    } catch (err) {
+      console.error('[sim] ❌ Expected outcomes error:', err);
+      res.status(err.statusCode || 500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Unified trigger — selected rules, all rules, or severity filter
+  app.post('/api/sim/energy-trigger-rules', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const {
+        DeviceID,
+        mode = 'send_once',
+        breachMode = 'standard',
+        durationMinutes,
+        selection = {},
+      } = req.body;
+
+      if (!DeviceID) return res.status(400).json({ error: 'DeviceID is required' });
+      if (!['send_once', 'live_override'].includes(mode)) {
+        return res.status(400).json({ error: 'mode must be send_once or live_override' });
+      }
+      if (!['standard', 'aggressive'].includes(breachMode)) {
+        return res.status(400).json({ error: 'breachMode must be standard or aggressive' });
+      }
+
+      const simDevice = await SimulatorDevice.findOne({ deviceId: DeviceID });
+      if (!simDevice) return res.status(404).json({ error: 'Simulator device not found' });
+      if ((simDevice.deviceType || 'crane') !== 'energyMeter') {
+        return res.status(400).json({ error: 'Only energy meter simulators support alarm testing' });
+      }
+
+      const { rules } = await loadEnabledRulesForMeter(DeviceID);
+      const bounds = resolveRuleSelections(rules, selection);
+      if (!bounds.length) {
+        return res.status(400).json({ error: 'No matching enabled alarm rules to trigger' });
+      }
+
+      const { readings, conflicts } = computeBreachReadingsForBounds(bounds, breachMode);
+      const outcomes = buildExpectedOutcomes(bounds, breachMode);
+      const sourceRuleIds = [...new Set(bounds.map(({ rule }) => rule._id))];
+      const label = `${bounds.length} rule${bounds.length > 1 ? 's' : ''} — ${mode === 'live_override' ? 'Live Override' : 'Send Once'}`;
+
+      if (mode === 'live_override') {
+        simDevice.energyReadingOverride = {
+          enabled: true,
+          readings: {
+            voltage: readings.voltage ?? null,
+            current: readings.current ?? null,
+            activePower: readings.activePower ?? null,
+            energy: readings.energy ?? null,
+            powerFactor: readings.powerFactor ?? null,
+            frequency: readings.frequency ?? null,
+          },
+          durationMinutes: durationMinutes != null && durationMinutes !== '' ? Number(durationMinutes) : null,
+          startedAt: new Date(),
+          breachMode,
+          sourceRuleIds,
+          label,
+        };
+        await simDevice.save();
+
+        const result = await postEnergyMeterSimPayload(simDevice.toObject());
+        return res.json({
+          success: true,
+          mode,
+          breachMode,
+          readings,
+          outcomes,
+          conflicts,
+          override: simDevice.energyReadingOverride,
+          remainingMs: getOverrideRemainingMs(simDevice.energyReadingOverride),
+          ingest: result,
+        });
+      }
+
+      const { payload, energyKwh } = buildPayloadFromReadings(simDevice.toObject(), readings, {
+        advanceReading: true,
+      });
+      await ingestEnergyMeterPayload(payload, 'simulator');
+      await SimulatorDevice.updateOne({ deviceId: DeviceID }, { energyBaseReading: energyKwh });
+
+      res.json({
+        success: true,
+        mode,
+        breachMode,
+        readings,
+        outcomes,
+        conflicts,
+        payload,
+      });
+    } catch (err) {
+      console.error('[sim] ❌ Trigger rules error:', err);
+      res.status(err.statusCode || 500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Advanced mode — manual readings send once
+  app.post('/api/sim/energy-send-readings', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const { DeviceID, readings } = req.body;
+      if (!DeviceID) return res.status(400).json({ error: 'DeviceID is required' });
+      if (!readings || typeof readings !== 'object') {
+        return res.status(400).json({ error: 'readings object is required' });
+      }
+
+      const simDevice = await SimulatorDevice.findOne({ deviceId: DeviceID }).lean();
+      if (!simDevice) return res.status(404).json({ error: 'Simulator device not found' });
+      if ((simDevice.deviceType || 'crane') !== 'energyMeter') {
+        return res.status(400).json({ error: 'Only energy meter simulators support manual readings' });
+      }
+
+      const { payload, energyKwh, readings: merged } = buildPayloadFromReadings(simDevice, readings, {
+        advanceReading: true,
+      });
+      await ingestEnergyMeterPayload(payload, 'simulator');
+      await SimulatorDevice.updateOne({ deviceId: DeviceID }, { energyBaseReading: energyKwh });
+
+      res.json({ success: true, payload, readings: merged, energyKwh });
+    } catch (err) {
+      console.error('[sim] ❌ Send readings error:', err);
+      res.status(err.statusCode || 500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Restore normal readings for one meter
+  app.post('/api/sim/energy-reading-override/restore', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+      const { DeviceID } = req.body;
+      if (!DeviceID) return res.status(400).json({ error: 'DeviceID is required' });
+
+      const device = await SimulatorDevice.findOne({ deviceId: DeviceID });
+      if (!device) return res.status(404).json({ error: 'Device not found' });
+
+      device.energyReadingOverride = {
+        enabled: false,
+        readings: {
+          voltage: null, current: null, activePower: null,
+          energy: null, powerFactor: null, frequency: null,
+        },
+        durationMinutes: null,
+        startedAt: null,
+        breachMode: 'standard',
+        sourceRuleIds: [],
+        label: '',
+      };
+      await device.save();
+      res.json({ success: true, message: `Override cleared for ${DeviceID}` });
+    } catch (err) {
+      console.error('[sim] ❌ Restore override error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Restore all energy reading overrides
+  app.post('/api/sim/energy-reading-override/restore-all', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const result = await SimulatorDevice.updateMany(
+        { deviceType: 'energyMeter', 'energyReadingOverride.enabled': true },
+        {
+          $set: {
+            'energyReadingOverride.enabled': false,
+            'energyReadingOverride.readings': {
+              voltage: null, current: null, activePower: null,
+              energy: null, powerFactor: null, frequency: null,
+            },
+            'energyReadingOverride.durationMinutes': null,
+            'energyReadingOverride.startedAt': null,
+            'energyReadingOverride.breachMode': 'standard',
+            'energyReadingOverride.sourceRuleIds': [],
+            'energyReadingOverride.label': '',
+          },
+        }
+      );
+
+      res.json({ success: true, restoredCount: result.modifiedCount });
+    } catch (err) {
+      console.error('[sim] ❌ Restore all overrides error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ GET: Fleet active energy reading overrides
+  app.get('/api/sim/energy-active-overrides', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const devices = await SimulatorDevice.find({
+        deviceType: 'energyMeter',
+        'energyReadingOverride.enabled': true,
+      }).lean();
+
+      const overrides = devices
+        .filter((d) => !isOverrideExpired(d.energyReadingOverride))
+        .map((d) => ({
+          deviceId: d.deviceId,
+          label: d.energyReadingOverride.label || '',
+          readings: d.energyReadingOverride.readings,
+          readingsSummary: formatReadingsSummary(d.energyReadingOverride.readings),
+          breachMode: d.energyReadingOverride.breachMode || 'standard',
+          startedAt: d.energyReadingOverride.startedAt,
+          durationMinutes: d.energyReadingOverride.durationMinutes,
+          remainingMs: getOverrideRemainingMs(d.energyReadingOverride),
+          sourceRuleIds: d.energyReadingOverride.sourceRuleIds || [],
+        }));
+
+      res.json({ overrides });
+    } catch (err) {
+      console.error('[sim] ❌ Active overrides error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ POST: Consumption burst for energyConsumption alarm rules
+  app.post('/api/sim/energy-consumption-burst', authenticateToken, async (req, res) => {
+    try {
+      const { role } = req.user;
+      if (role !== 'superadmin') {
+        return res.status(403).json({ error: 'Access denied. Superadmin only.' });
+      }
+
+      const { DeviceID, ruleId, breachMode = 'standard' } = req.body;
+      if (!DeviceID || !ruleId) {
+        return res.status(400).json({ error: 'DeviceID and ruleId are required' });
+      }
+
+      const simDevice = await SimulatorDevice.findOne({ deviceId: DeviceID });
+      if (!simDevice) return res.status(404).json({ error: 'Simulator device not found' });
+
+      const { rules } = await loadEnabledRulesForMeter(DeviceID);
+      const rule = rules.find((r) => String(r._id) === String(ruleId));
+      if (!rule || rule.metric !== 'energyConsumption') {
+        return res.status(404).json({ error: 'Consumption alarm rule not found' });
+      }
+
+      const plan = planConsumptionBurst(rule, simDevice.toObject(), { breachMode });
+      const executed = [];
+
+      for (const step of plan.steps) {
+        const { payload, energyKwh } = buildPayloadFromReadings(simDevice.toObject(), {
+          energy: step.energyKwh,
+        }, { advanceReading: false });
+        await ingestEnergyMeterPayload(payload, 'simulator');
+        simDevice.energyBaseReading = energyKwh;
+        await simDevice.save();
+        executed.push({ step: step.step, energyKwh, payload });
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      res.json({ success: true, plan, executed });
+    } catch (err) {
+      console.error('[sim] ❌ Consumption burst error:', err);
+      res.status(err.statusCode || 500).json({ error: err.message || 'Internal server error' });
     }
   });
 
@@ -5961,7 +6336,9 @@ async function ingestEnergyMeterPayload(rawPayload, dataSource) {
     docsToSave.push(await buildEnergyLogDoc(rawPayload, meterId, value, receivedAt, dataSource));
   }
 
-  return EnergyMeterLog.insertMany(docsToSave, { ordered: false });
+  const saved = await EnergyMeterLog.insertMany(docsToSave, { ordered: false });
+  evaluateEnergyMeterAlarms(saved).catch((err) => console.error('Energy alarm eval failed', err));
+  return saved;
 }
 
 app.post('/api/energy-meter/log', async (req, res) => {
@@ -6361,6 +6738,209 @@ app.get('/api/energy-meter/fleet-metric-insights', authenticateToken, async (req
     res.json(insights);
   } catch (err) {
     console.error('Fleet metric insights error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+// --- Energy meter alarms ---
+app.get('/api/energy-meter/alarms/metrics', authenticateToken, async (req, res) => {
+  try {
+    res.json(getMetricsMetadata());
+  } catch (err) {
+    console.error('Alarm metrics error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/alarms/rules', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const { meterId, metric, enabled, severity } = req.query;
+    const rules = await listRules(meters, { meterId, metric, enabled, severity });
+    res.json({ data: rules.map(serializeRule) });
+  } catch (err) {
+    console.error('Alarm rules list error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/energy-meter/alarms/rules', authenticateToken, async (req, res) => {
+  try {
+    const { meterId } = req.body;
+    if (!meterId) return res.status(400).json({ message: 'meterId is required' });
+
+    const meters = await getVisibleEnergyMeters(req);
+    const allowed = meters.find((m) => m.deviceId === meterId);
+    if (!allowed) return res.status(403).json({ message: 'Access denied' });
+
+    const rule = await createRule(meterId, allowed.companyName, req.body, req.user?.id || '');
+    res.status(201).json({ data: serializeRule(rule) });
+  } catch (err) {
+    if (err.statusCode === 400) return res.status(400).json({ message: err.message });
+    console.error('Alarm rule create error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.put('/api/energy-meter/alarms/rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const rule = await updateRule(req.params.id, meters, req.body);
+    res.json({ data: serializeRule(rule) });
+  } catch (err) {
+    if (err.statusCode === 400) return res.status(400).json({ message: err.message });
+    if (err.statusCode === 404) return res.status(404).json({ message: err.message });
+    console.error('Alarm rule update error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.delete('/api/energy-meter/alarms/rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    await deleteRule(req.params.id, meters);
+    res.json({ message: 'Rule deleted' });
+  } catch (err) {
+    if (err.statusCode === 404) return res.status(404).json({ message: err.message });
+    console.error('Alarm rule delete error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/energy-meter/alarms/rules/:id/toggle', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const enabled = req.body?.enabled !== false;
+    const rule = await toggleRule(req.params.id, meters, enabled);
+    res.json({ data: serializeRule(rule) });
+  } catch (err) {
+    if (err.statusCode === 404) return res.status(404).json({ message: err.message });
+    console.error('Alarm rule toggle error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/alarms/events', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const { meterId, status, metric, severity, from, to, page, limit } = req.query;
+    const result = await listEvents(
+      meters,
+      { meterId, status, metric, severity, from, to },
+      Number(page) || 1,
+      Number(limit) || 20
+    );
+    res.json(result);
+  } catch (err) {
+    console.error('Alarm events list error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/alarms/events/active', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const { meterId } = req.query;
+    const data = await listActiveEvents(meters, meterId || null);
+    res.json({ data });
+  } catch (err) {
+    if (err.statusCode === 403) return res.status(403).json({ message: err.message });
+    console.error('Active alarms error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/energy-meter/alarms/summary', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const summary = await buildAlarmSummary(meters);
+    res.json(summary);
+  } catch (err) {
+    console.error('Alarm summary error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/energy-meter/alarms/events/:id/acknowledge', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const comment = req.body?.comment || '';
+    const event = await acknowledgeSingleEvent(req.params.id, meters, req.user?.id || '', comment);
+    res.json({ data: event });
+  } catch (err) {
+    if (err.statusCode === 404) return res.status(404).json({ message: err.message });
+    console.error('Alarm acknowledge error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/energy-meter/alarms/events/acknowledge', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const { eventIds, comment } = req.body || {};
+    if (!eventIds?.length) return res.status(400).json({ message: 'eventIds is required' });
+
+    const companyName = meters[0]?.companyName;
+    if (!companyName) return res.status(403).json({ message: 'Access denied' });
+
+    const result = await acknowledgeEvents(
+      { companyName, eventIds },
+      req.user?.id || '',
+      comment || ''
+    );
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode === 400) return res.status(400).json({ message: err.message });
+    console.error('Bulk alarm acknowledge error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/energy-meter/alarms/events/acknowledge/meter/:meterId', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const meterIds = meters.map((m) => m.deviceId);
+    if (!meterIds.includes(req.params.meterId)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const companyName = meters.find((m) => m.deviceId === req.params.meterId)?.companyName;
+    const result = await acknowledgeEvents(
+      { companyName, meterId: req.params.meterId },
+      req.user?.id || '',
+      req.body?.comment || ''
+    );
+    res.json(result);
+  } catch (err) {
+    console.error('Meter alarm acknowledge error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/energy-meter/alarms/events/acknowledge/all', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const companyName = meters[0]?.companyName;
+    if (!companyName) return res.status(403).json({ message: 'Access denied' });
+    const result = await acknowledgeEvents(
+      { companyName, allForCompany: true },
+      req.user?.id || '',
+      req.body?.comment || ''
+    );
+    res.json(result);
+  } catch (err) {
+    console.error('Fleet alarm acknowledge error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.patch('/api/energy-meter/alarms/events/:id/clear', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    const event = await clearEvent(req.params.id, meters);
+    res.json({ data: event });
+  } catch (err) {
+    if (err.statusCode === 404) return res.status(404).json({ message: err.message });
+    console.error('Alarm clear error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });

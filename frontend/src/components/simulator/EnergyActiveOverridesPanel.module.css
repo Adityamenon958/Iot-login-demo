@@ -1,0 +1,8 @@
+.panel {
+  border-color: rgba(255, 193, 7, 0.35);
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+  color: var(--bs-warning-text-emphasis, #664d03);
+}

@@ -28,6 +28,7 @@ import {
   Sliders,
   Zap,
   Send,
+  Bell,
 } from 'lucide-react';
 import axios from 'axios';
 import styles from './Simulator.module.css';
@@ -36,6 +37,8 @@ import EnergySimForm, {
   buildEnergyPreviewBody,
   buildEnergyAddPayload,
 } from '../components/simulator/EnergySimForm';
+import EnergyAlarmTestModal from '../components/simulator/EnergyAlarmTestModal';
+import EnergyActiveOverridesPanel from '../components/simulator/EnergyActiveOverridesPanel';
 
 // ✅ Default form values
 const defaultCraneForm = {
@@ -109,6 +112,8 @@ export default function Simulator() {
   const [stoppingDevice, setStoppingDevice] = useState('');
   const [updatingDevice, setUpdatingDevice] = useState('');
   const [energyCatalog, setEnergyCatalog] = useState(null);
+  const [alarmTestDeviceId, setAlarmTestDeviceId] = useState(null);
+  const [overridesRefreshKey, setOverridesRefreshKey] = useState(0);
 
   const craneDevices = useMemo(() => devices.filter((d) => (d.deviceType || 'crane') === 'crane'), [devices]);
   const elevatorDevices = useMemo(() => devices.filter((d) => d.deviceType === 'elevator'), [devices]);
@@ -529,6 +534,15 @@ export default function Simulator() {
     <div className="d-flex flex-wrap gap-1 align-items-center">
       <Button
         size="sm"
+        variant="outline-warning"
+        onClick={() => setAlarmTestDeviceId(device.DeviceID)}
+        title="Test configured alarm rules"
+      >
+        <Bell size={16} className="me-1" />
+        Test Alarms
+      </Button>
+      <Button
+        size="sm"
         variant="outline-secondary"
         onClick={() => fetchPayloadPreview({ DeviceID: device.DeviceID })}
         title="Refresh payload preview"
@@ -766,6 +780,15 @@ export default function Simulator() {
         </Card.Body>
       </Card>
 
+      {/* ---------- Active energy alarm overrides ---------- */}
+      <EnergyActiveOverridesPanel
+        refreshKey={overridesRefreshKey}
+        onRestore={() => {
+          setOverridesRefreshKey((k) => k + 1);
+          fetchDevices();
+        }}
+      />
+
       {/* ---------- Section 3: Energy Meter Simulator ---------- */}
       <Card className="mb-4">
         <Card.Header className="d-flex justify-content-between align-items-center">
@@ -794,6 +817,7 @@ export default function Simulator() {
                   <th>Occ.</th>
                   <th>Interval</th>
                   <th>Base kWh</th>
+                  <th>Override</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -807,6 +831,13 @@ export default function Simulator() {
                     <td>{device.occupancyPercent ?? 100}%</td>
                     <td><Clock size={14} className="me-1" />{device.intervalSeconds || 60}s</td>
                     <td>{device.energyBaseReading != null ? device.energyBaseReading : '—'}</td>
+                    <td>
+                      {device.energyReadingOverride?.enabled ? (
+                        <Badge bg="warning" text="dark">OVERRIDE</Badge>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                     <td>{getEnergyStatusCell(device)}</td>
                     <td><EnergyActionButtons device={device} /></td>
                   </tr>
@@ -1202,6 +1233,17 @@ export default function Simulator() {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      <EnergyAlarmTestModal
+        show={!!alarmTestDeviceId}
+        deviceId={alarmTestDeviceId}
+        onHide={() => setAlarmTestDeviceId(null)}
+        onSuccess={() => {
+          setOverridesRefreshKey((k) => k + 1);
+          setSuccess('Alarm test executed successfully');
+          fetchDevices();
+        }}
+      />
 
       {/* ---------- Info ---------- */}
       <Card>

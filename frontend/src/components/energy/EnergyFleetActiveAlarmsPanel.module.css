@@ -1,0 +1,4 @@
+.body {
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}

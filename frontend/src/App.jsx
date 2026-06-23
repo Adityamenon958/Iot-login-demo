@@ -19,6 +19,7 @@ import CraneDashboard from './pages/CraneDashboard';
 import CraneOverview from './pages/CraneOverview';
 import ElevatorOverview from './pages/ElevatorOverview';
 import EnergyOverview from './pages/EnergyOverview';
+import EnergyFleetAlarmSettings from './pages/EnergyFleetAlarmSettings';
 import Simulator from './pages/Simulator';
 import SimulatorRouteGuard from './components/SimulatorRouteGuard';
 
@@ -68,6 +69,12 @@ function App() {
         <Route path="energy-overview" element={
           <RouteGuard requiredAccess="energyOverview">
             <EnergyOverview />
+          </RouteGuard>
+        } />
+
+        <Route path="energy-alarms" element={
+          <RouteGuard requiredAccess="energyOverview">
+            <EnergyFleetAlarmSettings />
           </RouteGuard>
         } />
         

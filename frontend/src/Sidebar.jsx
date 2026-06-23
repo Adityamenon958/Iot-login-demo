@@ -10,7 +10,7 @@ import { PlusSquare } from 'lucide-react';
 import { MdOutlineSubscriptions } from "react-icons/md";
 import { Truck } from 'lucide-react';
 import { PiElevatorDuotone } from "react-icons/pi";
-import { Zap } from 'lucide-react';
+import { Zap, Bell } from 'lucide-react';
 import Dlogo from './assets/GSN Solutions 1.png';
 
 import axios from 'axios';
@@ -214,6 +214,13 @@ export default function Sidebar({ isOpen, closeSidebar }) {
           <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/energy-overview' ? styles.active : ''}`} onClick={() => navigate('/dashboard/energy-overview')}>
             <Zap size={22} className={`${styles.navText} me-2`} />
             Energy Overview
+          </Button>
+          )}
+
+          {(role === 'superadmin' || companyAccess.energyOverview) && (
+          <Button className={`${styles.iconButton} ${location.pathname === '/dashboard/energy-alarms' ? styles.active : ''}`} onClick={() => navigate('/dashboard/energy-alarms')}>
+            <Bell size={20} className={`${styles.navText} me-2`} />
+            Fleet Alarms
           </Button>
           )}
 

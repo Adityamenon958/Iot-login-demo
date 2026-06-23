@@ -1,0 +1,70 @@
+.kpiCard {
+  position: relative;
+  background: #fff;
+  border-radius: 1rem;
+  padding: 0.625rem 0.75rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  min-height: 80px;
+  border: 1px solid transparent;
+}
+
+.hasCritical {
+  border-color: rgba(220, 53, 69, 0.25);
+}
+
+.kpiIcon {
+  color: #6c757d;
+  margin-bottom: 0.25rem;
+}
+
+.kpiLabel {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kpiValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #dc3545;
+  line-height: 1.2;
+}
+
+.breakdown {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.critical {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.warning {
+  color: #fd7e14;
+  font-weight: 600;
+}
+
+.sep {
+  margin: 0 0.25rem;
+  color: #adb5bd;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.clickable:hover {
+  border-color: rgba(220, 53, 69, 0.4);
+  box-shadow: 0 6px 20px rgba(220, 53, 69, 0.12);
+  transform: translateY(-1px);
+}
+
+.hint {
+  font-size: 0.65rem;
+  color: #adb5bd;
+  margin-top: 0.35rem;
+}

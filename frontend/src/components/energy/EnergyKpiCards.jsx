@@ -74,7 +74,7 @@ function getPfHealthBadge(pf) {
   return { label: 'Poor', variant: 'danger' };
 }
 
-export default function EnergyKpiCards({ kpis, onKpiClick }) {
+export default function EnergyKpiCards({ kpis, onKpiClick, trailingSlot }) {
   if (!kpis) return null;
 
   const clickable = typeof onKpiClick === 'function';
@@ -139,6 +139,7 @@ export default function EnergyKpiCards({ kpis, onKpiClick }) {
           </Col>
         );
       })}
+      {trailingSlot}
     </Row>
   );
 }

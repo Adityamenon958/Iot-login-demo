@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Badge, Button } from 'react-bootstrap';
 import { ChevronRight } from 'lucide-react';
+import EnergyAlarmBadge from './EnergyAlarmBadge';
 import styles from './EnergyMeterCard.module.css';
 
 function MiniSparkline({ data = [], color = '#0d6efd' }) {
@@ -42,7 +43,7 @@ function MiniSparkline({ data = [], color = '#0d6efd' }) {
   );
 }
 
-export default function EnergyMeterCard({ meter, onSelect }) {
+export default function EnergyMeterCard({ meter, onSelect, alarmInfo }) {
   const {
     meterId,
     siteName,
@@ -66,7 +67,12 @@ export default function EnergyMeterCard({ meter, onSelect }) {
     >
       <Card.Body>
         <div className={styles.cardHeader}>
-          <h6 className={styles.meterName}>{meterId}</h6>
+          <h6 className={styles.meterName}>
+            {meterId}
+            {alarmInfo?.count > 0 && (
+              <EnergyAlarmBadge severity={alarmInfo.highestSeverity} count={alarmInfo.count} />
+            )}
+          </h6>
           <Badge bg={online ? 'success' : 'secondary'}>{online ? 'ONLINE' : 'OFFLINE'}</Badge>
         </div>
 
