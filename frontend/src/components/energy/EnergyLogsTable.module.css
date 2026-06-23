@@ -13,9 +13,24 @@
   margin-bottom: 0.625rem;
 }
 
+.tableScroll {
+  max-height: min(50vh, 420px);
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 0.5rem;
+}
+
 .table {
   font-size: 0.8125rem;
   margin-bottom: 0;
+}
+
+.table :global(thead th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 0 1px 0 #dee2e6;
 }
 
 .table :global(th),

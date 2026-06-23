@@ -7,7 +7,7 @@ export default function EnergyLogsTable({ logs = [], selectedLogId, onSelectLog 
     <Card className={styles.tableCard}>
       <Card.Body>
         <h6 className={styles.title}>Reading History</h6>
-        <div className="table-responsive">
+        <div className={styles.tableScroll}>
           <Table hover size="sm" className={styles.table}>
             <thead>
               <tr>

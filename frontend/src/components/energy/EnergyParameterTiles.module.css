@@ -23,6 +23,13 @@
   outline-offset: 2px;
 }
 
+.minMax {
+  font-size: 0.6875rem;
+  color: #6c757d;
+  margin-top: 0.35rem;
+  line-height: 1.35;
+}
+
 .hint {
   font-size: 0.65rem;
   color: #adb5bd;

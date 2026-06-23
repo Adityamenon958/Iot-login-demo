@@ -92,6 +92,7 @@ const DOWNSAMPLE_MAX_POINTS = {
   '1h': 300,
   '24h': 200,
   '7d': 300,
+  '30d': 300,
 };
 
 const SPARKLINE_MAX_POINTS = 24;

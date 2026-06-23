@@ -468,6 +468,7 @@ module.exports = {
   fetchVisibleLogsInRange,
   buildElectricalHealthSummary,
   buildFleetMetricHistory,
+  buildChartSeriesForMetric,
   extractLogMetricValue,
   downsampleSeries,
 };

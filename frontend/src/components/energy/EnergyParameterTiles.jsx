@@ -11,7 +11,21 @@ function formatTileValue(key, value, unit) {
   return num.toFixed(decimals);
 }
 
-export default function EnergyParameterTiles({ readings = {}, parameters = [], onParameterClick }) {
+function formatMinMax(key, minMax, unit) {
+  if (!minMax || minMax.min == null || minMax.max == null) return null;
+  const decimals = VALUE_DECIMALS[key] ?? 2;
+  const min = Number(minMax.min).toFixed(decimals);
+  const max = Number(minMax.max).toFixed(decimals);
+  const suffix = unit ? ` ${unit}` : '';
+  return `24h min ${min}${suffix} · max ${max}${suffix}`;
+}
+
+export default function EnergyParameterTiles({
+  readings = {},
+  parameters = [],
+  parameterStats24h = null,
+  onParameterClick,
+}) {
   const entries = parameters.length
     ? parameters.map((p) => ({
         key: p.key,
@@ -36,9 +50,13 @@ export default function EnergyParameterTiles({ readings = {}, parameters = [], o
 
   const clickable = typeof onParameterClick === 'function';
 
+  const statsMap = parameterStats24h?.stats || {};
+
   return (
     <Row className="g-2 mb-2">
-      {entries.map(({ key, label, unit, value }) => (
+      {entries.map(({ key, label, unit, value }) => {
+        const minMaxLabel = formatMinMax(key, statsMap[key], unit);
+        return (
         <Col key={key} xs={6} md={4} lg={3}>
           <div
             className={`${styles.tile} ${clickable ? styles.clickable : ''}`}
@@ -61,10 +79,12 @@ export default function EnergyParameterTiles({ readings = {}, parameters = [], o
               {formatTileValue(key, value, unit)}
               {unit && value != null && <span className={styles.unit}> {unit}</span>}
             </div>
+            {minMaxLabel && <div className={styles.minMax}>{minMaxLabel}</div>}
             {clickable && <div className={styles.hint}>Tap for details</div>}
           </div>
         </Col>
-      ))}
+        );
+      })}
     </Row>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Col, Row, Badge, Button, Spinner, Form } from 'react-bootstrap';
 import { ArrowLeft, Zap } from 'lucide-react';
 import axios from 'axios';
@@ -8,6 +8,7 @@ import { useBackgroundRefresh } from '../hooks/useBackgroundRefresh';
 import EnergyKpiCards from '../components/energy/EnergyKpiCards';
 import EnergyFleetKpiModal from '../components/energy/EnergyFleetKpiModal';
 import EnergyFleetChart from '../components/energy/EnergyFleetChart';
+import EnergyFleetMetersTable from '../components/energy/EnergyFleetMetersTable';
 import EnergyElectricalHealth from '../components/energy/EnergyElectricalHealth';
 import EnergyMeterCard from '../components/energy/EnergyMeterCard';
 import EnergyParameterTiles from '../components/energy/EnergyParameterTiles';
@@ -44,6 +45,11 @@ export default function EnergyOverview() {
   const [selectedParameterKey, setSelectedParameterKey] = useState(null);
   const [selectedFleetKpiKey, setSelectedFleetKpiKey] = useState(null);
   const isMobile = useIsMobile();
+  const mainScrollRef = useRef(null);
+
+  const scrollMainToTop = useCallback((behavior = 'auto') => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior });
+  }, []);
 
   const fetchOverview = useCallback(async () => {
     const res = await axios.get('/api/energy-meter/overview', { withCredentials: true });
@@ -133,10 +139,22 @@ export default function EnergyOverview() {
     }
   }, [viewMode, selectedMeterId, fetchDetail]);
 
+  useEffect(() => {
+    if (viewMode === 'detail' && selectedMeterId) {
+      scrollMainToTop('auto');
+    }
+  }, [viewMode, selectedMeterId, scrollMainToTop]);
+
+  useEffect(() => {
+    if (viewMode === 'detail' && detailLatest && !detailLoading) {
+      scrollMainToTop('auto');
+    }
+  }, [viewMode, detailLatest, detailLoading, scrollMainToTop]);
+
   const handleSelectMeter = (meterId) => {
     setSelectedMeterId(meterId);
     setViewMode('detail');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollMainToTop('auto');
   };
 
   const handleBackToFleet = () => {
@@ -146,6 +164,7 @@ export default function EnergyOverview() {
     setDetailLatest(null);
     setDetailLogs([]);
     setSelectedLog(null);
+    scrollMainToTop('auto');
   };
 
   const device = detailLatest?.device;
@@ -156,7 +175,14 @@ export default function EnergyOverview() {
 
   if (!isInitialized || settingsLoading) {
     return (
-      <Col xs={12} md={9} lg={10} xl={10} className={mainStyles.main}>
+      <Col
+        ref={mainScrollRef}
+        xs={12}
+        md={9}
+        lg={10}
+        xl={10}
+        className={mainStyles.main}
+      >
         <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '50vh' }}>
           <Spinner animation="border" variant="primary" />
         </div>
@@ -165,7 +191,14 @@ export default function EnergyOverview() {
   }
 
   return (
-    <Col xs={12} md={9} lg={10} xl={10} className={mainStyles.main}>
+    <Col
+      ref={mainScrollRef}
+      xs={12}
+      md={9}
+      lg={10}
+      xl={10}
+      className={mainStyles.main}
+    >
       <div className={styles.page}>
         <div className={styles.viewContainer}>
           {/* Fleet layer */}
@@ -265,6 +298,12 @@ export default function EnergyOverview() {
                 ))
               )}
             </Row>
+
+            <EnergyFleetMetersTable
+              refreshKey={dataRefreshKey}
+              onSelectMeter={handleSelectMeter}
+              simDataHidden={simDataHidden}
+            />
           </div>
 
           {/* Detail layer */}
@@ -309,6 +348,7 @@ export default function EnergyOverview() {
                 <EnergyParameterTiles
                   readings={detailLatest?.readings || {}}
                   parameters={parameters}
+                  parameterStats24h={detailLatest?.parameterStats24h}
                   onParameterClick={setSelectedParameterKey}
                 />
 

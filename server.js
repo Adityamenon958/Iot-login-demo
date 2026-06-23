@@ -80,6 +80,8 @@ const { buildMeterConsumptionInsights } = require("./backend/utils/meterConsumpt
 const { buildMeterMetricInsights } = require("./backend/utils/meterMetricInsights");
 const { buildFleetConsumptionInsights } = require("./backend/utils/fleetConsumptionInsights");
 const { buildFleetMetricInsights } = require("./backend/utils/fleetMetricInsights");
+const { buildFleetMetersTable } = require("./backend/utils/fleetMetersTable");
+const { buildMeterParameterStats24h } = require("./backend/utils/meterParameterStats");
 const { ALLOWED_METRIC_KEYS } = require("./backend/utils/electricalHealthMetrics");
 const {
   buildEnergyMeterPayload,
@@ -6334,6 +6336,18 @@ app.get('/api/energy-meter/fleet-consumption-insights', authenticateToken, async
   }
 });
 
+app.get('/api/energy-meter/fleet-table', authenticateToken, async (req, res) => {
+  try {
+    const { range } = req.query;
+    const meters = await getVisibleEnergyMeters(req);
+    const table = await buildFleetMetersTable(meters, range || '24h');
+    res.json(table);
+  } catch (err) {
+    console.error('Fleet meters table error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/energy-meter/fleet-metric-insights', authenticateToken, async (req, res) => {
   try {
     const { metric, range } = req.query;
@@ -6433,16 +6447,19 @@ app.get('/api/energy-meter/latest', authenticateToken, async (req, res) => {
     if (!allowed) return res.status(403).json({ message: 'Access denied' });
 
     const logFilter = await buildLogFilterForCompany(allowed.companyName, { meterId });
-    const latest = await EnergyMeterLog.findOne(logFilter).sort({ timestamp: -1 }).lean();
+    const [latest, parameters, parameterStats24h] = await Promise.all([
+      EnergyMeterLog.findOne(logFilter).sort({ timestamp: -1 }).lean(),
+      getParameterMap(meterId),
+      buildMeterParameterStats24h(allowed),
+    ]);
     if (!latest) return res.status(404).json({ message: 'No data found' });
-
-    const parameters = await getParameterMap(meterId);
 
     res.json({
       ...latest,
       device: allowed,
       online: isMeterOnline(latest.timestamp),
       parameters,
+      parameterStats24h,
     });
   } catch (err) {
     console.error('Energy latest error:', err);
