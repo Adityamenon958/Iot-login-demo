@@ -1,6 +1,7 @@
 import React from 'react';
 import { Row, Col } from 'react-bootstrap';
 import { VALUE_DECIMALS } from './meterParameterConfig';
+import attentionStyles from './energyAlarmAttention.module.css';
 import styles from './EnergyParameterTiles.module.css';
 
 function formatTileValue(key, value, unit) {
@@ -26,6 +27,8 @@ export default function EnergyParameterTiles({
   parameterStats24h = null,
   onParameterClick,
   suffix = null,
+  highlightedKeys = [],
+  highlightSeverity = 'warning',
 }) {
   const entries = parameters.length
     ? parameters.map((p) => ({
@@ -54,12 +57,23 @@ export default function EnergyParameterTiles({
   const statsMap = parameterStats24h?.stats || {};
   const frequencyIndex = entries.findIndex((entry) => entry.key === 'frequency');
 
+  const highlightSet = new Set(highlightedKeys);
+  const isCriticalHighlight = highlightSeverity === 'critical';
+
   const renderParameterTile = ({ key, label, unit, value }) => {
     const minMaxLabel = formatMinMax(key, statsMap[key], unit);
+    const isAlarmTile = highlightSet.has(key);
+    const tileClass = [
+      styles.tile,
+      clickable ? styles.clickable : '',
+      isAlarmTile && isCriticalHighlight ? attentionStyles.tileAlarmCritical : '',
+      isAlarmTile && !isCriticalHighlight ? attentionStyles.tileAlarmWarning : '',
+    ].filter(Boolean).join(' ');
+
     return (
       <Col key={key} xs={6} md={4} lg={3}>
         <div
-          className={`${styles.tile} ${clickable ? styles.clickable : ''}`}
+          className={tileClass}
           role={clickable ? 'button' : undefined}
           tabIndex={clickable ? 0 : undefined}
           onClick={clickable ? () => onParameterClick(key) : undefined}
@@ -80,6 +94,17 @@ export default function EnergyParameterTiles({
             {unit && value != null && <span className={styles.unit}> {unit}</span>}
           </div>
           {minMaxLabel && <div className={styles.minMax}>{minMaxLabel}</div>}
+          {isAlarmTile && (
+            <span
+              className={`${attentionStyles.tileAlarmChip} ${
+                isCriticalHighlight
+                  ? attentionStyles.tileAlarmChipCritical
+                  : attentionStyles.tileAlarmChipWarning
+              }`}
+            >
+              Alarm
+            </span>
+          )}
           {clickable && <div className={styles.hint}>Tap for details</div>}
         </div>
       </Col>

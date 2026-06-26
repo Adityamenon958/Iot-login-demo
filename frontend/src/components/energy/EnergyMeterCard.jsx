@@ -2,6 +2,8 @@ import React from 'react';
 import { Card, Badge, Button } from 'react-bootstrap';
 import { ChevronRight } from 'lucide-react';
 import EnergyAlarmBadge from './EnergyAlarmBadge';
+import attentionStyles from './energyAlarmAttention.module.css';
+import { formatRelativeTime } from './energyAlarmConfig';
 import styles from './EnergyMeterCard.module.css';
 
 function MiniSparkline({ data = [], color = '#0d6efd' }) {
@@ -43,7 +45,7 @@ function MiniSparkline({ data = [], color = '#0d6efd' }) {
   );
 }
 
-export default function EnergyMeterCard({ meter, onSelect, alarmInfo }) {
+export default function EnergyMeterCard({ meter, onSelect, alarmInfo, attention }) {
   const {
     meterId,
     siteName,
@@ -57,9 +59,27 @@ export default function EnergyMeterCard({ meter, onSelect, alarmInfo }) {
     energySparkline = [],
   } = meter;
 
+  const openCount = alarmInfo?.count ?? attention?.count ?? 0;
+  const borderSeverity = attention?.borderSeverity || alarmInfo?.highestSeverity;
+  const pulse = attention?.pulse ?? false;
+  const relativeTime = formatRelativeTime(
+    attention?.latestTriggeredAt || alarmInfo?.latestTriggeredAt
+  );
+
+  const alarmBorderClass =
+    openCount > 0 && borderSeverity === 'critical'
+      ? attentionStyles.leftBorderCritical
+      : openCount > 0 && borderSeverity === 'warning'
+        ? attentionStyles.leftBorderWarning
+        : '';
+
   return (
     <Card
-      className={`${styles.card} ${online ? styles.online : styles.offline}`}
+      className={[
+        styles.card,
+        online ? styles.online : styles.offline,
+        alarmBorderClass,
+      ].filter(Boolean).join(' ')}
       onClick={() => onSelect(meterId)}
       role="button"
       tabIndex={0}
@@ -69,8 +89,12 @@ export default function EnergyMeterCard({ meter, onSelect, alarmInfo }) {
         <div className={styles.cardHeader}>
           <h6 className={styles.meterName}>
             {meterId}
-            {alarmInfo?.count > 0 && (
-              <EnergyAlarmBadge severity={alarmInfo.highestSeverity} count={alarmInfo.count} />
+            {openCount > 0 && (
+              <EnergyAlarmBadge
+                severity={borderSeverity}
+                count={openCount}
+                pulse={pulse}
+              />
             )}
           </h6>
           <Badge bg={online ? 'success' : 'secondary'}>{online ? 'ONLINE' : 'OFFLINE'}</Badge>
@@ -109,7 +133,13 @@ export default function EnergyMeterCard({ meter, onSelect, alarmInfo }) {
         </div>
 
         <div className={styles.footer}>
-          <small className="text-muted">Last: {lastCommunication}</small>
+          <small className="text-muted">
+            {relativeTime && openCount > 0 ? (
+              <>Alarm: {relativeTime}</>
+            ) : (
+              <>Last: {lastCommunication}</>
+            )}
+          </small>
           <Button variant="outline-primary" size="sm" className={styles.detailBtn}>
             View Details <ChevronRight size={14} />
           </Button>

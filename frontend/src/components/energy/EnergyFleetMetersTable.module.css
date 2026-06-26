@@ -36,6 +36,17 @@
   font-size: 0.8125rem;
 }
 
+.alarmFilterGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.alarmFilterBtn {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+}
+
 .resetSortBtn {
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;

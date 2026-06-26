@@ -509,33 +509,84 @@ async function buildAlarmSummary(visibleMeters) {
   let acknowledgedCount = 0;
   let criticalCount = 0;
   let warningCount = 0;
+  let activeCriticalCount = 0;
+  let activeWarningCount = 0;
   const byMeter = {};
 
   openEvents.forEach((e) => {
-    if (e.status === 'active') activeCount += 1;
+    if (e.status === 'active') {
+      activeCount += 1;
+      if (e.severity === 'critical') activeCriticalCount += 1;
+      if (e.severity === 'warning') activeWarningCount += 1;
+    }
     if (e.status === 'acknowledged') acknowledgedCount += 1;
     if (e.severity === 'critical') criticalCount += 1;
     if (e.severity === 'warning') warningCount += 1;
 
     if (!byMeter[e.meterId]) {
-      byMeter[e.meterId] = { count: 0, highestSeverity: null, events: [] };
+      byMeter[e.meterId] = {
+        count: 0,
+        activeCount: 0,
+        acknowledgedCount: 0,
+        highestSeverity: null,
+        highestActiveSeverity: null,
+        metrics: [],
+        activeMetrics: [],
+        latestTriggeredAt: null,
+        events: [],
+        activeEvents: [],
+      };
     }
-    byMeter[e.meterId].count += 1;
-    byMeter[e.meterId].events.push(e);
+    const entry = byMeter[e.meterId];
+    entry.count += 1;
+    entry.events.push(e);
+    if (e.status === 'active') {
+      entry.activeCount += 1;
+      entry.activeEvents.push(e);
+      if (!entry.activeMetrics.includes(e.metric)) {
+        entry.activeMetrics.push(e.metric);
+      }
+    }
+    if (e.status === 'acknowledged') entry.acknowledgedCount += 1;
+    if (!entry.metrics.includes(e.metric)) entry.metrics.push(e.metric);
+    const triggeredAt = e.triggeredAt ? new Date(e.triggeredAt) : null;
+    if (triggeredAt && (!entry.latestTriggeredAt || triggeredAt > new Date(entry.latestTriggeredAt))) {
+      entry.latestTriggeredAt = triggeredAt.toISOString();
+    }
   });
 
   Object.keys(byMeter).forEach((meterId) => {
-    byMeter[meterId].highestSeverity = highestSeverity(byMeter[meterId].events);
-    delete byMeter[meterId].events;
+    const entry = byMeter[meterId];
+    entry.highestSeverity = highestSeverity(entry.events);
+    entry.highestActiveSeverity = entry.activeEvents.length
+      ? highestSeverity(entry.activeEvents)
+      : null;
+    delete entry.events;
+    delete entry.activeEvents;
   });
+
+  let fleetStatus = 'normal';
+  if (criticalCount > 0) fleetStatus = 'critical';
+  else if (warningCount > 0) fleetStatus = 'warning';
 
   return {
     activeCount,
     acknowledgedCount,
     criticalCount,
     warningCount,
+    activeCriticalCount,
+    activeWarningCount,
     openCount: openEvents.length,
     todayTriggeredCount,
+    fleetStatus,
+    banner: {
+      openCount: openEvents.length,
+      activeCount,
+      criticalCount,
+      warningCount,
+      activeCriticalCount,
+      activeWarningCount,
+    },
     byMeter,
   };
 }

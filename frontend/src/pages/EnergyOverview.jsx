@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Col, Row, Badge, Button, Spinner, Form } from 'react-bootstrap';
 import { ArrowLeft, Zap } from 'lucide-react';
 import axios from 'axios';
@@ -20,6 +20,11 @@ import EnergyAlarmKpiCard from '../components/energy/EnergyAlarmKpiCard';
 import EnergyFleetActiveAlarmsPanel from '../components/energy/EnergyFleetActiveAlarmsPanel';
 import EnergyMeterAlarmSummaryCard from '../components/energy/EnergyMeterAlarmSummaryCard';
 import EnergyMeterAlarmDetailModal from '../components/energy/EnergyMeterAlarmDetailModal';
+import EnergyAlarmBanner from '../components/energy/EnergyAlarmBanner';
+import EnergyFleetStatusIndicator from '../components/energy/EnergyFleetStatusIndicator';
+import EnergyAlarmFab from '../components/energy/EnergyAlarmFab';
+import EnergyAlarmToastStack from '../components/energy/EnergyAlarmToastStack';
+import useEnergyAlarmAttention from '../hooks/useEnergyAlarmAttention';
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
@@ -48,12 +53,27 @@ export default function EnergyOverview() {
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const [selectedParameterKey, setSelectedParameterKey] = useState(null);
   const [selectedFleetKpiKey, setSelectedFleetKpiKey] = useState(null);
-  const [alarmSummary, setAlarmSummary] = useState(null);
   const [showFleetAlarms, setShowFleetAlarms] = useState(false);
   const [showMeterAlarms, setShowMeterAlarms] = useState(false);
+  const [showAlarmingMetersOnly, setShowAlarmingMetersOnly] = useState(false);
   const [alarmRefreshKey, setAlarmRefreshKey] = useState(0);
   const isMobile = useIsMobile();
   const mainScrollRef = useRef(null);
+
+  const alarmAttention = useEnergyAlarmAttention(alarmRefreshKey);
+  const {
+    summary: alarmSummary,
+    byMeter: alarmByMeter,
+    banner: alarmBanner,
+    fleetStatus,
+    pendingToasts,
+    dismissToast,
+    refresh: refreshAlarms,
+    soundEnabled,
+    toggleSound,
+    shouldPulseFleet,
+    getMeterAttention,
+  } = alarmAttention;
 
   const scrollMainToTop = useCallback((behavior = 'auto') => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior });
@@ -89,28 +109,15 @@ export default function EnergyOverview() {
     loadViewSettings();
   }, [loadViewSettings]);
 
-  const fetchAlarmSummary = useCallback(async () => {
-    try {
-      const res = await axios.get('/api/energy-meter/alarms/summary', {
-        withCredentials: true,
-      });
-      setAlarmSummary(res.data);
-    } catch (err) {
-      console.error('Failed to load alarm summary', err);
-      setAlarmSummary(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAlarmSummary();
-    const interval = setInterval(fetchAlarmSummary, 30000);
-    return () => clearInterval(interval);
-  }, [fetchAlarmSummary, dataRefreshKey, alarmRefreshKey]);
-
   const handleAlarmChanged = () => {
     setAlarmRefreshKey((k) => k + 1);
-    fetchAlarmSummary();
   };
+
+  useEffect(() => {
+    if (alarmRefreshKey > 0) {
+      refreshAlarms();
+    }
+  }, [alarmRefreshKey, refreshAlarms]);
 
   const handleSimulatorToggle = async (e) => {
     const showSimulatorData = e.target.checked;
@@ -205,6 +212,34 @@ export default function EnergyOverview() {
   const parseStatus = selectedLog?.parseStatus ?? detailLatest?.parseStatus;
   const simDataHidden = !viewSettings.showSimulatorData;
 
+  const openFleetAlarms = () => {
+    refreshAlarms();
+    if (viewMode === 'detail') {
+      setShowMeterAlarms(true);
+    } else {
+      setShowFleetAlarms(true);
+    }
+  };
+
+  const handleToastClick = (toast) => {
+    dismissToast(toast.id);
+    if (!toast.grouped && toast.meterId) {
+      handleSelectMeter(toast.meterId);
+      return;
+    }
+    openFleetAlarms();
+  };
+
+  const visibleMeters = useMemo(() => {
+    const meters = overview?.meters || [];
+    if (!showAlarmingMetersOnly) return meters;
+    return meters.filter((m) => (alarmByMeter[m.meterId]?.count ?? 0) > 0);
+  }, [overview?.meters, showAlarmingMetersOnly, alarmByMeter]);
+
+  const selectedMeterAttention = selectedMeterId
+    ? getMeterAttention(selectedMeterId)
+    : null;
+
   if (!isInitialized || settingsLoading) {
     return (
       <Col
@@ -232,17 +267,41 @@ export default function EnergyOverview() {
       className={mainStyles.main}
     >
       <div className={styles.page}>
+        <EnergyAlarmToastStack
+          toasts={pendingToasts}
+          onDismiss={dismissToast}
+          onToastClick={handleToastClick}
+        />
+
+        <EnergyAlarmFab
+          activeCount={alarmSummary?.activeCount ?? 0}
+          pulse={shouldPulseFleet()}
+          severity={(alarmSummary?.criticalCount ?? 0) > 0 ? 'critical' : 'warning'}
+          onClick={openFleetAlarms}
+        />
+
         <div className={styles.viewContainer}>
           {/* Fleet layer */}
           <div
             className={`${styles.fleetLayer} ${viewMode === 'fleet' ? styles.layerActive : ''}`}
           >
+            <EnergyAlarmBanner
+              banner={alarmBanner}
+              summary={alarmSummary}
+              soundEnabled={soundEnabled}
+              onToggleSound={toggleSound}
+              onViewAlarms={openFleetAlarms}
+            />
+
             <div className={styles.pageHeader}>
               <div>
-                <h5 className={styles.pageTitle}>
-                  <Zap size={18} className="me-2" />
-                  Energy Overview
-                </h5>
+                <div className={styles.titleRow}>
+                  <h5 className={styles.pageTitle}>
+                    <Zap size={18} className="me-2" />
+                    Energy Overview
+                  </h5>
+                  <EnergyFleetStatusIndicator fleetStatus={fleetStatus} />
+                </div>
                 <p className={styles.pageSubtitle}>
                   Fleet monitoring for all registered energy meters
                 </p>
@@ -299,10 +358,8 @@ export default function EnergyOverview() {
               trailingSlot={(
                 <EnergyAlarmKpiCard
                   summary={alarmSummary}
-                  onClick={() => {
-                    fetchAlarmSummary();
-                    setShowFleetAlarms(true);
-                  }}
+                  pulse={shouldPulseFleet()}
+                  onClick={openFleetAlarms}
                 />
               )}
             />
@@ -311,7 +368,7 @@ export default function EnergyOverview() {
               show={showFleetAlarms}
               onHide={() => {
                 setShowFleetAlarms(false);
-                fetchAlarmSummary();
+                refreshAlarms();
               }}
               refreshKey={alarmRefreshKey}
               onChanged={handleAlarmChanged}
@@ -327,12 +384,24 @@ export default function EnergyOverview() {
             <EnergyFleetChart refreshKey={dataRefreshKey} />
             <EnergyElectricalHealth refreshKey={dataRefreshKey} />
 
-            <h6 className={styles.sectionTitle}>Energy Meters</h6>
+            <div className={styles.meterGridHeader}>
+              <h6 className={styles.sectionTitle}>Energy Meters</h6>
+              <Form.Check
+                type="switch"
+                id="show-alarming-meters-only"
+                className={styles.alarmMeterFilter}
+                label="Show alarming meters only"
+                checked={showAlarmingMetersOnly}
+                onChange={(e) => setShowAlarmingMetersOnly(e.target.checked)}
+              />
+            </div>
             <Row className="g-2">
-              {(overview?.meters || []).length === 0 ? (
+              {visibleMeters.length === 0 ? (
                 <Col xs={12}>
                   <div className={styles.emptyState}>
-                    {simDataHidden
+                    {showAlarmingMetersOnly
+                      ? 'No meters with open alarms.'
+                      : simDataHidden
                       ? 'No live meter data. Simulator data is hidden.'
                       : (
                         <>
@@ -343,12 +412,13 @@ export default function EnergyOverview() {
                   </div>
                 </Col>
               ) : (
-                overview.meters.map((meter) => (
+                visibleMeters.map((meter) => (
                   <Col key={meter.meterId} xs={12} md={6} lg={3} xl={3}>
                     <EnergyMeterCard
                       meter={meter}
                       onSelect={handleSelectMeter}
-                      alarmInfo={alarmSummary?.byMeter?.[meter.meterId]}
+                      alarmInfo={alarmByMeter[meter.meterId]}
+                      attention={getMeterAttention(meter.meterId)}
                     />
                   </Col>
                 ))
@@ -359,6 +429,7 @@ export default function EnergyOverview() {
               refreshKey={dataRefreshKey}
               onSelectMeter={handleSelectMeter}
               simDataHidden={simDataHidden}
+              alarmByMeter={alarmByMeter}
             />
           </div>
 
@@ -381,12 +452,32 @@ export default function EnergyOverview() {
               </div>
             ) : (
               <>
+                <EnergyAlarmBanner
+                  banner={alarmBanner}
+                  summary={alarmSummary}
+                  soundEnabled={soundEnabled}
+                  onToggleSound={toggleSound}
+                  onViewAlarms={openFleetAlarms}
+                />
+
                 <div className={styles.detailHeader}>
                   <div className={styles.detailTitleRow}>
                     <h4 className={styles.detailTitle}>{selectedMeterId}</h4>
                     <Badge bg={detailLatest?.online ? 'success' : 'secondary'}>
                       {detailLatest?.online ? 'ONLINE' : 'OFFLINE'}
                     </Badge>
+                    {selectedMeterAttention?.count > 0 && (
+                      <Badge
+                        bg={
+                          selectedMeterAttention.borderSeverity === 'critical'
+                            ? 'danger'
+                            : 'warning'
+                        }
+                      >
+                        {selectedMeterAttention.count} alarm
+                        {selectedMeterAttention.count !== 1 ? 's' : ''}
+                      </Badge>
+                    )}
                   </div>
                   <div className={styles.breadcrumb}>
                     {[device?.siteName, device?.plantName, device?.machineName]
@@ -406,10 +497,13 @@ export default function EnergyOverview() {
                   parameters={parameters}
                   parameterStats24h={detailLatest?.parameterStats24h}
                   onParameterClick={setSelectedParameterKey}
+                  highlightedKeys={selectedMeterAttention?.parameterKeys || []}
+                  highlightSeverity={selectedMeterAttention?.borderSeverity || 'warning'}
                   suffix={(
                     <EnergyMeterAlarmSummaryCard
                       meterId={selectedMeterId}
                       refreshKey={alarmRefreshKey}
+                      attention={selectedMeterAttention}
                       onClick={() => setShowMeterAlarms(true)}
                     />
                   )}

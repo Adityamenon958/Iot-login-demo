@@ -1,0 +1,51 @@
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.normal {
+  background: rgba(25, 135, 84, 0.1);
+  border-color: rgba(25, 135, 84, 0.25);
+  color: #157347;
+}
+
+.normal .dot {
+  background: #198754;
+}
+
+.warning {
+  background: rgba(253, 126, 20, 0.1);
+  border-color: rgba(253, 126, 20, 0.28);
+  color: #c45a00;
+}
+
+.warning .dot {
+  background: #fd7e14;
+}
+
+.critical {
+  background: rgba(220, 53, 69, 0.1);
+  border-color: rgba(220, 53, 69, 0.25);
+  color: #b02a37;
+}
+
+.critical .dot {
+  background: #dc3545;
+}
+
+.label {
+  line-height: 1.2;
+}

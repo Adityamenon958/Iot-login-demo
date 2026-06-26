@@ -53,6 +53,32 @@
   font-size: 1.25rem;
 }
 
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.meterGridHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.meterGridHeader .sectionTitle {
+  margin-bottom: 0;
+}
+
+.alarmMeterFilter {
+  margin: 0;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
 .pageSubtitle {
   margin: 0.25rem 0 0;
   color: #6c757d;

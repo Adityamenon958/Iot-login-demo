@@ -117,3 +117,37 @@ export function formToPayload(form) {
   }
   return payload;
 }
+
+/** Map alarm metric keys to parameter tile keys on the meter detail page. */
+export function alarmMetricToParameterKey(metric) {
+  if (metric === 'energyConsumption') return 'energy';
+  return metric;
+}
+
+export function mapAlarmMetricsToParameterKeys(metrics = []) {
+  const keys = new Set();
+  metrics.forEach((m) => {
+    const key = alarmMetricToParameterKey(m);
+    if (key) keys.add(key);
+  });
+  return Array.from(keys);
+}
+
+export function formatRelativeTime(iso) {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return null;
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
+}
+
+export const PULSE_ATTENTION_MS = 8000;
+export const ALARM_SOUND_STORAGE_KEY = 'energyAlarmSoundEnabled';
+export const ENERGY_PAGE_TITLE_BASE = 'Energy Dashboard';
+export const SEEN_ALARM_EVENTS_KEY = 'energyAlarmSeenEventIds';

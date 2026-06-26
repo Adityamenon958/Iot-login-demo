@@ -1,0 +1,88 @@
+@keyframes alarmPulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.18);
+  }
+}
+
+@keyframes alarmPulseGlowWarning {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(253, 126, 20, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(253, 126, 20, 0.2);
+  }
+}
+
+.pulseNewCritical {
+  animation: alarmPulseGlow 2.5s ease-in-out infinite;
+}
+
+.pulseNewWarning {
+  animation: alarmPulseGlowWarning 2.5s ease-in-out infinite;
+}
+
+.borderCritical {
+  border-color: rgba(220, 53, 69, 0.55) !important;
+}
+
+.borderWarning {
+  border-color: rgba(253, 126, 20, 0.55) !important;
+}
+
+.leftBorderCritical {
+  border-left: 4px solid #dc3545 !important;
+}
+
+.leftBorderWarning {
+  border-left: 4px solid #fd7e14 !important;
+}
+
+.tileAlarmCritical {
+  border-color: rgba(220, 53, 69, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(220, 53, 69, 0.12);
+}
+
+.tileAlarmWarning {
+  border-color: rgba(253, 126, 20, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(253, 126, 20, 0.12);
+}
+
+.tileAlarmChip {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tileAlarmChipCritical {
+  background: rgba(220, 53, 69, 0.12);
+  color: #dc3545;
+}
+
+.tileAlarmChipWarning {
+  background: rgba(253, 126, 20, 0.14);
+  color: #c45a00;
+}
+
+.rowAlarmCritical {
+  background-color: rgba(220, 53, 69, 0.05) !important;
+}
+
+.rowAlarmWarning {
+  background-color: rgba(253, 126, 20, 0.06) !important;
+}
+
+.stickyBanner {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}

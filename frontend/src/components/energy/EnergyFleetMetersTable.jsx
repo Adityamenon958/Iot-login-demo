@@ -18,6 +18,36 @@ import {
   DEFAULT_DENSITY,
 } from './fleetTableConfig';
 import styles from './EnergyFleetMetersTable.module.css';
+import attentionStyles from './energyAlarmAttention.module.css';
+
+const ALARM_FILTER_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'acknowledged', label: 'Acknowledged' },
+  { key: 'critical', label: 'Critical' },
+  { key: 'warning', label: 'Warning' },
+];
+
+function matchesAlarmFilter(row, alarmInfo, alarmFilter) {
+  if (!alarmFilter || alarmFilter === 'all') return true;
+  if (!alarmInfo?.count) return false;
+  if (alarmFilter === 'active') return (alarmInfo.activeCount ?? 0) > 0;
+  if (alarmFilter === 'acknowledged') {
+    return (alarmInfo.acknowledgedCount ?? 0) > 0 && (alarmInfo.activeCount ?? 0) === 0;
+  }
+  if (alarmFilter === 'critical') return alarmInfo.highestSeverity === 'critical';
+  if (alarmFilter === 'warning') {
+    return alarmInfo.highestSeverity === 'warning' && alarmInfo.highestSeverity !== 'critical';
+  }
+  return true;
+}
+
+function getRowAlarmClass(alarmInfo) {
+  if (!alarmInfo?.count) return '';
+  if (alarmInfo.highestSeverity === 'critical') return attentionStyles.rowAlarmCritical;
+  if (alarmInfo.highestSeverity === 'warning') return attentionStyles.rowAlarmWarning;
+  return '';
+}
 
 function HealthIndicator({ status }) {
   const key = status || 'unknown';
@@ -66,12 +96,14 @@ export default function EnergyFleetMetersTable({
   refreshKey = 0,
   onSelectMeter,
   simDataHidden = false,
+  alarmByMeter = {},
 }) {
   const [range, setRange] = useState('24h');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [alarmFilter, setAlarmFilter] = useState('all');
   const [sortKey, setSortKey] = useState(DEFAULT_SORT_KEY);
   const [sortDirection, setSortDirection] = useState('asc');
 
@@ -97,16 +129,17 @@ export default function EnergyFleetMetersTable({
     return () => clearInterval(interval);
   }, [fetchTable, refreshKey]);
 
-  const displayRows = useMemo(
-    () =>
-      filterAndSortRows(data?.meters || [], {
-        searchQuery,
-        statusFilter,
-        sortKey,
-        sortDirection,
-      }),
-    [data?.meters, searchQuery, statusFilter, sortKey, sortDirection]
-  );
+  const displayRows = useMemo(() => {
+    const sorted = filterAndSortRows(data?.meters || [], {
+      searchQuery,
+      statusFilter,
+      sortKey,
+      sortDirection,
+    });
+    return sorted.filter((row) =>
+      matchesAlarmFilter(row, alarmByMeter[row.meterId], alarmFilter)
+    );
+  }, [data?.meters, searchQuery, statusFilter, sortKey, sortDirection, alarmByMeter, alarmFilter]);
 
   const footerStats = useMemo(
     () => computeFooterStats(displayRows, range),
@@ -192,6 +225,19 @@ export default function EnergyFleetMetersTable({
             </option>
           ))}
         </Form.Select>
+        <div className={styles.alarmFilterGroup} role="group" aria-label="Filter by alarm status">
+          {ALARM_FILTER_OPTIONS.map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={alarmFilter === opt.key ? 'primary' : 'outline-secondary'}
+              className={styles.alarmFilterBtn}
+              onClick={() => setAlarmFilter(opt.key)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
         {sortKey !== DEFAULT_SORT_KEY && (
           <Button
             variant="outline-secondary"
@@ -231,21 +277,28 @@ export default function EnergyFleetMetersTable({
                     {sortKey === col.key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
                   </th>
                 ))}
+                <th scope="col">Alarms</th>
                 <th scope="col">View Details</th>
               </tr>
             </thead>
             <tbody>
               {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={SORTABLE_COLUMNS.length + 1} className={styles.empty}>
+                  <td colSpan={SORTABLE_COLUMNS.length + 2} className={styles.empty}>
                     No meters match filters.
                   </td>
                 </tr>
               ) : (
-                displayRows.map((row) => (
+                displayRows.map((row) => {
+                  const alarmInfo = alarmByMeter[row.meterId];
+                  return (
                   <tr
                     key={row.meterId}
-                    className={`${styles.dataRow} ${getRowHealthClass(row.healthStatus)}`}
+                    className={[
+                      styles.dataRow,
+                      getRowHealthClass(row.healthStatus),
+                      getRowAlarmClass(alarmInfo),
+                    ].filter(Boolean).join(' ')}
                     onClick={() => handleRowActivate(row.meterId)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -275,6 +328,15 @@ export default function EnergyFleetMetersTable({
                     </td>
                     <td>{row.lastCommunication || '—'}</td>
                     <td>
+                      {alarmInfo?.count > 0 ? (
+                        <Badge bg={alarmInfo.highestSeverity === 'critical' ? 'danger' : 'warning'}>
+                          {alarmInfo.count}
+                        </Badge>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>
                       <Button
                         variant="outline-primary"
                         size="sm"
@@ -288,7 +350,8 @@ export default function EnergyFleetMetersTable({
                       </Button>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </Table>

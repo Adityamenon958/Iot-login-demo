@@ -1,22 +1,24 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Spinner } from 'react-bootstrap';
 import { Bell } from 'lucide-react';
 import tileStyles from './EnergyParameterTiles.module.css';
+import attentionStyles from './energyAlarmAttention.module.css';
 import styles from './EnergyMeterAlarmSummaryCard.module.css';
 
 export default function EnergyMeterAlarmSummaryCard({
   meterId,
   refreshKey = 0,
   onClick,
+  attention,
 }) {
-  const [loading, setLoading] = useState(true);
-  const [activeCount, setActiveCount] = useState(0);
+  const [loading, setLoading] = useState(!attention);
+  const [activeCount, setActiveCount] = useState(attention?.activeCount ?? 0);
   const [rulesCount, setRulesCount] = useState(0);
   const [enabledRulesCount, setEnabledRulesCount] = useState(0);
 
   const fetchSummary = useCallback(async () => {
-    if (!meterId) return;
+    if (!meterId || attention) return;
     try {
       setLoading(true);
       const [activeRes, rulesRes] = await Promise.all([
@@ -42,14 +44,27 @@ export default function EnergyMeterAlarmSummaryCard({
     } finally {
       setLoading(false);
     }
-  }, [meterId]);
+  }, [meterId, attention]);
 
   useEffect(() => {
+    if (attention) {
+      setActiveCount(attention.activeCount ?? 0);
+      setLoading(false);
+      return;
+    }
     fetchSummary();
-  }, [fetchSummary, refreshKey]);
+  }, [fetchSummary, refreshKey, attention]);
 
   const clickable = typeof onClick === 'function';
-  const hasActive = activeCount > 0;
+  const hasOpen = (attention?.count ?? 0) > 0 || activeCount > 0;
+  const hasActive = (attention?.activeCount ?? activeCount) > 0;
+  const pulse = attention?.pulse ?? false;
+  const borderSeverity = attention?.borderSeverity;
+  const pulseClass = pulse
+    ? borderSeverity === 'critical'
+      ? attentionStyles.pulseNewCritical
+      : attentionStyles.pulseNewWarning
+    : '';
 
   const subline = rulesCount
     ? `${enabledRulesCount} rule${enabledRulesCount !== 1 ? 's' : ''} enabled`
@@ -60,7 +75,10 @@ export default function EnergyMeterAlarmSummaryCard({
       className={[
         tileStyles.tile,
         clickable ? tileStyles.clickable : '',
-        hasActive ? styles.hasActive : '',
+        hasOpen && borderSeverity === 'critical' ? attentionStyles.borderCritical : '',
+        hasOpen && borderSeverity === 'warning' ? attentionStyles.borderWarning : '',
+        hasOpen && !borderSeverity && hasActive ? styles.hasActive : '',
+        pulseClass,
       ].filter(Boolean).join(' ')}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
