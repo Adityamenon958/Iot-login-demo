@@ -80,13 +80,13 @@ export default function EnergyKpiCards({ kpis, onKpiClick, trailingSlot }) {
   const clickable = typeof onKpiClick === 'function';
 
   return (
-    <Row className="g-2 mb-2">
+    <Row className={`g-1 mb-2 ${styles.kpiRow}`}>
       {KPI_CONFIG.map((cfg) => {
         const Icon = cfg.icon;
         const pfBadge = cfg.showPfBadge ? getPfHealthBadge(kpis[cfg.key]) : null;
 
         return (
-          <Col key={cfg.key} xs={12} sm={6} lg={4} xl={2}>
+          <Col key={cfg.key} xs={12} sm={6} lg={4} xl={2} className="d-flex">
             <div
               className={`${styles.kpiCard} ${styles[cfg.variant]} ${clickable ? styles.clickable : ''}`}
               role={clickable ? 'button' : undefined}
@@ -113,7 +113,7 @@ export default function EnergyKpiCards({ kpis, onKpiClick, trailingSlot }) {
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                 >
-                  <HelpCircle size={15} />
+                  <HelpCircle size={13} />
                 </span>
               </OverlayTrigger>
               {pfBadge && kpis[cfg.key] != null && (
@@ -126,7 +126,7 @@ export default function EnergyKpiCards({ kpis, onKpiClick, trailingSlot }) {
                 </Badge>
               )}
               <div className={styles.kpiIcon}>
-                <Icon size={18} />
+                <Icon size={15} />
               </div>
               <div className={styles.kpiLabel}>{cfg.label}</div>
               <div className={styles.kpiValue}>

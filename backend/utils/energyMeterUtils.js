@@ -3,6 +3,7 @@ const EnergyMeterParameterMap = require('../models/EnergyMeterParameterMap');
 const CompanyDashboardAccess = require('../models/CompanyDashboardAccess');
 const SimulatorDevice = require('../models/SimulatorDevice');
 const EnergyMeterLog = require('../models/EnergyMeterLog');
+const { istStartUtcFromYMD } = require('./meterInsightsUtils');
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
@@ -42,13 +43,16 @@ function mergeParameterMaps(existingParams = [], defaults = DEFAULT_PARAMETERS) 
   return [...byIndex.values()].sort((a, b) => a.index - b.index);
 }
 
+/** Device payload dates are IST (DD/MM/YYYY HH:mm:ss) — convert to UTC instant. */
 function parseDeviceDateString(d) {
   if (typeof d !== 'string' || !d.includes('/')) return null;
   const [date, time = '00:00:00'] = d.split(' ');
   const [dd, mm, yyyy] = date.split('/').map(Number);
   const [h, m, s] = time.split(':').map(Number);
   if (!yyyy || !mm || !dd) return null;
-  return new Date(Date.UTC(yyyy, mm - 1, dd, h || 0, m || 0, s || 0));
+  const dayStart = istStartUtcFromYMD(yyyy, mm - 1, dd);
+  const offsetMs = ((h || 0) * 3600 + (m || 0) * 60 + (s || 0)) * 1000;
+  return new Date(dayStart.getTime() + offsetMs);
 }
 
 function parseBracketArray(str) {

@@ -25,6 +25,7 @@ export default function EnergyParameterTiles({
   parameters = [],
   parameterStats24h = null,
   onParameterClick,
+  suffix = null,
 }) {
   const entries = parameters.length
     ? parameters.map((p) => ({
@@ -51,40 +52,57 @@ export default function EnergyParameterTiles({
   const clickable = typeof onParameterClick === 'function';
 
   const statsMap = parameterStats24h?.stats || {};
+  const frequencyIndex = entries.findIndex((entry) => entry.key === 'frequency');
+
+  const renderParameterTile = ({ key, label, unit, value }) => {
+    const minMaxLabel = formatMinMax(key, statsMap[key], unit);
+    return (
+      <Col key={key} xs={6} md={4} lg={3}>
+        <div
+          className={`${styles.tile} ${clickable ? styles.clickable : ''}`}
+          role={clickable ? 'button' : undefined}
+          tabIndex={clickable ? 0 : undefined}
+          onClick={clickable ? () => onParameterClick(key) : undefined}
+          onKeyDown={
+            clickable
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onParameterClick(key);
+                  }
+                }
+              : undefined
+          }
+        >
+          <div className={styles.tileLabel}>{label}</div>
+          <div className={styles.tileValue}>
+            {formatTileValue(key, value, unit)}
+            {unit && value != null && <span className={styles.unit}> {unit}</span>}
+          </div>
+          {minMaxLabel && <div className={styles.minMax}>{minMaxLabel}</div>}
+          {clickable && <div className={styles.hint}>Tap for details</div>}
+        </div>
+      </Col>
+    );
+  };
 
   return (
     <Row className="g-2 mb-2">
-      {entries.map(({ key, label, unit, value }) => {
-        const minMaxLabel = formatMinMax(key, statsMap[key], unit);
-        return (
-        <Col key={key} xs={6} md={4} lg={3}>
-          <div
-            className={`${styles.tile} ${clickable ? styles.clickable : ''}`}
-            role={clickable ? 'button' : undefined}
-            tabIndex={clickable ? 0 : undefined}
-            onClick={clickable ? () => onParameterClick(key) : undefined}
-            onKeyDown={
-              clickable
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onParameterClick(key);
-                    }
-                  }
-                : undefined
-            }
-          >
-            <div className={styles.tileLabel}>{label}</div>
-            <div className={styles.tileValue}>
-              {formatTileValue(key, value, unit)}
-              {unit && value != null && <span className={styles.unit}> {unit}</span>}
-            </div>
-            {minMaxLabel && <div className={styles.minMax}>{minMaxLabel}</div>}
-            {clickable && <div className={styles.hint}>Tap for details</div>}
-          </div>
+      {entries.map((entry, index) => (
+        <React.Fragment key={entry.key}>
+          {renderParameterTile(entry)}
+          {suffix && frequencyIndex >= 0 && index === frequencyIndex && (
+            <Col xs={6} md={4} lg={3}>
+              {suffix}
+            </Col>
+          )}
+        </React.Fragment>
+      ))}
+      {suffix && frequencyIndex < 0 && (
+        <Col xs={6} md={4} lg={3}>
+          {suffix}
         </Col>
-        );
-      })}
+      )}
     </Row>
   );
 }

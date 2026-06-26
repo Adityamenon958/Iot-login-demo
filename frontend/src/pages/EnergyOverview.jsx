@@ -18,9 +18,8 @@ import EnergyLogsTable from '../components/energy/EnergyLogsTable';
 import EnergyRawPayloadPanel from '../components/energy/EnergyRawPayloadPanel';
 import EnergyAlarmKpiCard from '../components/energy/EnergyAlarmKpiCard';
 import EnergyFleetActiveAlarmsPanel from '../components/energy/EnergyFleetActiveAlarmsPanel';
-import EnergyMeterActiveAlarms from '../components/energy/EnergyMeterActiveAlarms';
-import EnergyMeterAlarmSettings from '../components/energy/EnergyMeterAlarmSettings';
-import EnergyMeterAlarmHistory from '../components/energy/EnergyMeterAlarmHistory';
+import EnergyMeterAlarmSummaryCard from '../components/energy/EnergyMeterAlarmSummaryCard';
+import EnergyMeterAlarmDetailModal from '../components/energy/EnergyMeterAlarmDetailModal';
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
@@ -51,6 +50,7 @@ export default function EnergyOverview() {
   const [selectedFleetKpiKey, setSelectedFleetKpiKey] = useState(null);
   const [alarmSummary, setAlarmSummary] = useState(null);
   const [showFleetAlarms, setShowFleetAlarms] = useState(false);
+  const [showMeterAlarms, setShowMeterAlarms] = useState(false);
   const [alarmRefreshKey, setAlarmRefreshKey] = useState(0);
   const isMobile = useIsMobile();
   const mainScrollRef = useRef(null);
@@ -192,6 +192,7 @@ export default function EnergyOverview() {
     setViewMode('fleet');
     setSelectedMeterId(null);
     setSelectedParameterKey(null);
+    setShowMeterAlarms(false);
     setDetailLatest(null);
     setDetailLogs([]);
     setSelectedLog(null);
@@ -298,16 +299,23 @@ export default function EnergyOverview() {
               trailingSlot={(
                 <EnergyAlarmKpiCard
                   summary={alarmSummary}
-                  onClick={() => setShowFleetAlarms(true)}
+                  onClick={() => {
+                    fetchAlarmSummary();
+                    setShowFleetAlarms(true);
+                  }}
                 />
               )}
             />
 
             <EnergyFleetActiveAlarmsPanel
               show={showFleetAlarms}
-              onHide={() => setShowFleetAlarms(false)}
+              onHide={() => {
+                setShowFleetAlarms(false);
+                fetchAlarmSummary();
+              }}
               refreshKey={alarmRefreshKey}
               onChanged={handleAlarmChanged}
+              onSelectMeter={handleSelectMeter}
             />
 
             <EnergyFleetKpiModal
@@ -398,22 +406,21 @@ export default function EnergyOverview() {
                   parameters={parameters}
                   parameterStats24h={detailLatest?.parameterStats24h}
                   onParameterClick={setSelectedParameterKey}
+                  suffix={(
+                    <EnergyMeterAlarmSummaryCard
+                      meterId={selectedMeterId}
+                      refreshKey={alarmRefreshKey}
+                      onClick={() => setShowMeterAlarms(true)}
+                    />
+                  )}
                 />
 
-                <EnergyMeterActiveAlarms
+                <EnergyMeterAlarmDetailModal
+                  show={showMeterAlarms}
                   meterId={selectedMeterId}
+                  onHide={() => setShowMeterAlarms(false)}
                   refreshKey={alarmRefreshKey}
                   onChanged={handleAlarmChanged}
-                />
-
-                <EnergyMeterAlarmSettings
-                  meterId={selectedMeterId}
-                  refreshKey={alarmRefreshKey}
-                />
-
-                <EnergyMeterAlarmHistory
-                  meterId={selectedMeterId}
-                  refreshKey={alarmRefreshKey}
                 />
 
                 <EnergyMeterParameterModal

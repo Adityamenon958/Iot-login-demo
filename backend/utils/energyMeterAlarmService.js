@@ -491,10 +491,19 @@ async function listActiveEvents(visibleMeters, meterId = null) {
 
 async function buildAlarmSummary(visibleMeters) {
   const meterIds = visibleMeters.map((m) => m.deviceId);
-  const openEvents = await EnergyMeterAlarmEvent.find({
-    meterId: { $in: meterIds },
-    status: { $in: OPEN_STATUSES },
-  }).lean();
+  const todayStart = getTodayStartIstUtc();
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  const [openEvents, todayTriggeredCount] = await Promise.all([
+    EnergyMeterAlarmEvent.find({
+      meterId: { $in: meterIds },
+      status: { $in: OPEN_STATUSES },
+    }).lean(),
+    EnergyMeterAlarmEvent.countDocuments({
+      meterId: { $in: meterIds },
+      triggeredAt: { $gte: todayStart, $lt: tomorrowStart },
+    }),
+  ]);
 
   let activeCount = 0;
   let acknowledgedCount = 0;
@@ -526,6 +535,7 @@ async function buildAlarmSummary(visibleMeters) {
     criticalCount,
     warningCount,
     openCount: openEvents.length,
+    todayTriggeredCount,
     byMeter,
   };
 }

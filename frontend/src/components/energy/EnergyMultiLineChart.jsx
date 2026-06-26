@@ -15,6 +15,7 @@ import {
   CHART_COLORS,
   formatAxisLabel,
   buildMultiSeriesChartData,
+  computeChartYDomain,
 } from './energyChartShared';
 import ChartMultiSeriesTooltip from './ChartMultiSeriesTooltip';
 import styles from './EnergyMultiLineChart.module.css';
@@ -34,8 +35,13 @@ export default function EnergyMultiLineChart({
   );
 
   const { chartData, meterIds } = useMemo(
-    () => buildMultiSeriesChartData(chartSeries, visibleSet, range),
-    [chartSeries, visibleSet, range]
+    () => buildMultiSeriesChartData(chartSeries, visibleSet),
+    [chartSeries, visibleSet]
+  );
+
+  const yDomain = useMemo(
+    () => computeChartYDomain(chartData, meterIds, referenceLines),
+    [chartData, meterIds, referenceLines]
   );
 
   if (loading) {
@@ -64,7 +70,12 @@ export default function EnergyMultiLineChart({
           tickFormatter={(ts) => formatAxisLabel(new Date(Number(ts)), range)}
           minTickGap={range === '7d' ? 48 : 24}
         />
-        <YAxis tick={{ fontSize: 11 }} unit={unit ? ` ${unit}` : ''} width={48} />
+        <YAxis
+          tick={{ fontSize: 11 }}
+          unit={unit ? ` ${unit}` : ''}
+          width={48}
+          domain={yDomain}
+        />
         <Tooltip
           shared
           content={(props) => (
@@ -84,11 +95,11 @@ export default function EnergyMultiLineChart({
         {meterIds.map((meterId, idx) => (
           <Line
             key={meterId}
-            type="monotone"
+            type="linear"
             dataKey={meterId}
             name={meterId}
             stroke={CHART_COLORS[idx % CHART_COLORS.length]}
-            dot={false}
+            dot={chartData.length <= 400}
             activeDot={{ r: 4 }}
             strokeWidth={2}
             connectNulls

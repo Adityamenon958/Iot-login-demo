@@ -1,0 +1,30 @@
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.icon {
+  color: #6c757d;
+  flex-shrink: 0;
+}
+
+.hasActive {
+  border-color: rgba(220, 53, 69, 0.25);
+}
+
+.hasActive:hover {
+  border-color: rgba(220, 53, 69, 0.45);
+  box-shadow: 0 4px 16px rgba(220, 53, 69, 0.12);
+}
+
+.activeValue {
+  color: #dc3545;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  min-height: 2.5rem;
+}

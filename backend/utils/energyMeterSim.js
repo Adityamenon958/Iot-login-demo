@@ -13,7 +13,9 @@ function pad(n) {
 }
 
 function formatEnergyMeterDate(d = new Date()) {
-  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  return `${pad(ist.getUTCDate())}/${pad(ist.getUTCMonth() + 1)}/${ist.getUTCFullYear()} ${pad(ist.getUTCHours())}:${pad(ist.getUTCMinutes())}:${pad(ist.getUTCSeconds())}`;
 }
 
 function randBetween(min, max) {

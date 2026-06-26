@@ -56,7 +56,7 @@ export default function EnergyFleetChart({ refreshKey = 0 }) {
   );
 
   const { chartData, meterIds } = useMemo(
-    () => buildMultiSeriesChartData(chartSeries, visibleSet, range),
+    () => buildMultiSeriesChartData(chartSeries, visibleSet),
     [chartSeries, visibleSet, range]
   );
 

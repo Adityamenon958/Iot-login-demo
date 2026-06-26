@@ -80,24 +80,8 @@ export function formatRangeValue(latestRange, unit, decimals) {
   return `${Number(latestRange.min).toFixed(decimals)}–${Number(latestRange.max).toFixed(decimals)}${unit ? ` ${unit}` : ''}`;
 }
 
-/** Align per-meter points into time buckets so tooltips show all meters at once. */
-export function getChartBucketMs(rangeKey) {
-  switch (rangeKey) {
-    case '15m':
-      return 30 * 1000;
-    case '1h':
-      return 60 * 1000;
-    case '24h':
-      return 5 * 60 * 1000;
-    case '7d':
-      return 15 * 60 * 1000;
-    default:
-      return 60 * 1000;
-  }
-}
-
-export function buildMultiSeriesChartData(chartSeries, visibleSet, rangeKey) {
-  const bucketMs = getChartBucketMs(rangeKey);
+/** Align per-meter points by exact timestamp so dips and spikes are not averaged away. */
+export function buildMultiSeriesChartData(chartSeries, visibleSet) {
   const map = new Map();
   const meterIds = [];
 
@@ -108,17 +92,39 @@ export function buildMultiSeriesChartData(chartSeries, visibleSet, rangeKey) {
     (series.points || []).forEach((pt) => {
       const t = new Date(pt.timestamp).getTime();
       if (!Number.isFinite(t)) return;
-      const bucket = Math.floor(t / bucketMs) * bucketMs;
-      if (!map.has(bucket)) {
-        map.set(bucket, {
-          bucketTs: bucket,
-          timestamp: new Date(bucket).toISOString(),
+      if (!map.has(t)) {
+        map.set(t, {
+          bucketTs: t,
+          timestamp: new Date(t).toISOString(),
         });
       }
-      map.get(bucket)[series.meterId] = pt.value;
+      map.get(t)[series.meterId] = pt.value;
     });
   });
 
   const chartData = Array.from(map.values()).sort((a, b) => a.bucketTs - b.bucketTs);
   return { chartData, meterIds };
+}
+
+/** Y-axis padding so normal operating range fills the chart instead of 0..max. */
+export function computeChartYDomain(chartData, meterIds, referenceLines = []) {
+  const values = [];
+  chartData.forEach((row) => {
+    meterIds.forEach((id) => {
+      const v = row[id];
+      if (v != null && Number.isFinite(Number(v))) values.push(Number(v));
+    });
+  });
+  (referenceLines || []).forEach((ref) => {
+    if (ref?.value != null && Number.isFinite(Number(ref.value))) {
+      values.push(Number(ref.value));
+    }
+  });
+  if (!values.length) return ['auto', 'auto'];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, 1);
+  const pad = Math.max(span * 0.1, 1);
+  return [min - pad, max + pad];
 }

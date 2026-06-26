@@ -60,6 +60,19 @@ async function fetchVisibleLogsInRange(meters, rangeKey) {
   return { rangeKey: key, requestedSince, requestedUntil, logs, meterMeta };
 }
 
+function pointKey(pt) {
+  return `${new Date(pt.timestamp).getTime()}:${pt.value}`;
+}
+
+function addUniquePoint(seen, result, pt) {
+  if (!pt) return;
+  const key = pointKey(pt);
+  if (seen.has(key)) return;
+  seen.add(key);
+  result.push(pt);
+}
+
+/** Keep first/last/min/max per time bucket so brief spikes and dips survive downsampling. */
 function downsampleSeries(points, maxPoints, rangeKey, requestedSince) {
   if (!points?.length) return { points: [], originalCount: 0, downsampled: false };
   const originalCount = points.length;
@@ -84,17 +97,44 @@ function downsampleSeries(points, maxPoints, rangeKey, requestedSince) {
   points.forEach((pt) => {
     const t = new Date(pt.timestamp).getTime();
     const bucket = Math.floor((t - rangeStart) / bucketWidth);
-    bucketMap.set(bucket, pt);
+    const existing = bucketMap.get(bucket);
+    if (!existing) {
+      bucketMap.set(bucket, { first: pt, last: pt, min: pt, max: pt });
+      return;
+    }
+    existing.last = pt;
+    if (pt.value < existing.min.value) existing.min = pt;
+    if (pt.value > existing.max.value) existing.max = pt;
+  });
+
+  const seen = new Set();
+  const result = [];
+
+  Array.from(bucketMap.keys())
+    .sort((a, b) => a - b)
+    .forEach((bucket) => {
+      const { first, last, min, max } = bucketMap.get(bucket);
+      addUniquePoint(seen, result, first);
+      addUniquePoint(seen, result, min);
+      addUniquePoint(seen, result, max);
+      addUniquePoint(seen, result, last);
+    });
+
+  let globalMin = points[0];
+  let globalMax = points[0];
+  points.forEach((pt) => {
+    if (pt.value < globalMin.value) globalMin = pt;
+    if (pt.value > globalMax.value) globalMax = pt;
   });
 
   const first = points[0];
   const last = points[points.length - 1];
-  const result = Array.from(bucketMap.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([, pt]) => pt);
+  addUniquePoint(seen, result, first);
+  addUniquePoint(seen, result, last);
+  addUniquePoint(seen, result, globalMin);
+  addUniquePoint(seen, result, globalMax);
 
-  if (result[0]?.timestamp !== first.timestamp) result.unshift(first);
-  if (result[result.length - 1]?.timestamp !== last.timestamp) result.push(last);
+  result.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   return { points: result, originalCount, downsampled: true };
 }

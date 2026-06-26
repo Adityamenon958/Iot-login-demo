@@ -5,9 +5,11 @@ import EnergyChartRangePills from './EnergyChartRangePills';
 import EnergyInsightStatGrid from './EnergyInsightStatGrid';
 import EnergyInsightsPanel from './EnergyInsightsPanel';
 import EnergyMultiLineChart from './EnergyMultiLineChart';
+import EnergyChartLegendToggles from './EnergyChartLegendToggles';
+import EnergyMeterSearch from './EnergyMeterSearch';
 import EnergyFleetSnapshot from './EnergyFleetSnapshot';
 import EnergyFleetMeterRanking from './EnergyFleetMeterRanking';
-import { CHART_RANGES, buildChartSubtitle } from './energyChartShared';
+import { CHART_RANGES, METER_SEARCH_THRESHOLD, buildChartSubtitle } from './energyChartShared';
 import {
   getFleetKpiConfig,
   getFleetRankingKeys,
@@ -242,6 +244,8 @@ export default function EnergyFleetMetricDrilldown({
   const [range, setRange] = useState('24h');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [visibleMeters, setVisibleMeters] = useState(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchInsights = useCallback(async () => {
     if (!metricKey) return;
@@ -261,17 +265,44 @@ export default function EnergyFleetMetricDrilldown({
   }, [metricKey, range]);
 
   useEffect(() => {
-    if (show && metricKey) fetchInsights();
+    if (show && metricKey) {
+      setSearchQuery('');
+      fetchInsights();
+    }
   }, [show, metricKey, fetchInsights, refreshKey]);
+
+  const chartSeries = data?.charts?.chartSeries || [];
+  const showSearch = chartSeries.length > METER_SEARCH_THRESHOLD;
+
+  useEffect(() => {
+    setVisibleMeters(new Set(chartSeries.map((s) => s.meterId)));
+  }, [chartSeries]);
+
+  const filteredVisibleMeters = useMemo(() => {
+    if (!searchQuery.trim()) return visibleMeters;
+    const q = searchQuery.trim().toLowerCase();
+    const matching = new Set();
+    chartSeries.forEach((s) => {
+      const hay = [s.meterId, s.machineName, s.siteName].filter(Boolean).join(' ').toLowerCase();
+      if (hay.includes(q) && visibleMeters.has(s.meterId)) {
+        matching.add(s.meterId);
+      }
+    });
+    return matching;
+  }, [chartSeries, visibleMeters, searchQuery]);
+
+  const handleToggle = (meterId) => {
+    setVisibleMeters((prev) => {
+      const next = new Set(prev);
+      if (next.has(meterId)) next.delete(meterId);
+      else next.add(meterId);
+      return next;
+    });
+  };
 
   const summary = data?.summary || {};
   const insights = data?.insights || {};
   const rankings = data?.rankings || {};
-  const chartSeries = data?.charts?.chartSeries || [];
-  const visibleMeters = useMemo(
-    () => new Set(chartSeries.map((s) => s.meterId)),
-    [chartSeries]
-  );
 
   const summaryItems = useMemo(() => {
     if (metricKey === 'activePower') return buildActivePowerSummary(summary);
@@ -315,15 +346,26 @@ export default function EnergyFleetMetricDrilldown({
       toolbar={<EnergyChartRangePills ranges={CHART_RANGES} value={range} onChange={setRange} />}
       summary={<EnergyInsightStatGrid items={summaryItems} />}
       charts={
-        <EnergyMultiLineChart
-          chartSeries={chartSeries}
-          visibleMeters={visibleMeters}
-          range={range}
-          unit={config.unit}
-          height={280}
-          referenceLines={data?.charts?.referenceLines || []}
-          loading={false}
-        />
+        <>
+          <EnergyMultiLineChart
+            chartSeries={chartSeries}
+            visibleMeters={searchQuery.trim() ? filteredVisibleMeters : visibleMeters}
+            range={range}
+            unit={config.unit}
+            height={280}
+            referenceLines={data?.charts?.referenceLines || []}
+            loading={false}
+          />
+          {showSearch && (
+            <EnergyMeterSearch value={searchQuery} onChange={setSearchQuery} />
+          )}
+          <EnergyChartLegendToggles
+            chartSeries={chartSeries}
+            visibleMeters={visibleMeters}
+            onToggle={handleToggle}
+            searchQuery={searchQuery}
+          />
+        </>
       }
       insights={
         <>
