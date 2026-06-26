@@ -357,13 +357,12 @@ async function createRule(meterId, companyName, body, userId) {
     throw err;
   }
 
-  const rule = await EnergyMeterAlarmRule.create({
+  const ruleData = {
     companyName,
     meterId,
     metric: body.metric,
     minThreshold: body.minThreshold != null && body.minThreshold !== '' ? Number(body.minThreshold) : null,
     maxThreshold: body.maxThreshold != null && body.maxThreshold !== '' ? Number(body.maxThreshold) : null,
-    consumptionPeriod: body.metric === 'energyConsumption' ? body.consumptionPeriod : null,
     severity: body.severity === 'critical' ? 'critical' : 'warning',
     enabled: body.enabled !== false,
     cooldownMinutes: body.cooldownMinutes != null ? Number(body.cooldownMinutes) : 5,
@@ -371,7 +370,12 @@ async function createRule(meterId, companyName, body, userId) {
     hysteresis: body.hysteresis != null && body.hysteresis !== '' ? Number(body.hysteresis) : null,
     label: body.label || '',
     createdBy: userId || '',
-  });
+  };
+  if (body.metric === 'energyConsumption') {
+    ruleData.consumptionPeriod = body.consumptionPeriod || 'today';
+  }
+
+  const rule = await EnergyMeterAlarmRule.create(ruleData);
 
   return rule;
 }

@@ -6777,6 +6777,7 @@ app.post('/api/energy-meter/alarms/rules', authenticateToken, async (req, res) =
     res.status(201).json({ data: serializeRule(rule) });
   } catch (err) {
     if (err.statusCode === 400) return res.status(400).json({ message: err.message });
+    if (err.name === 'ValidationError') return res.status(400).json({ message: err.message });
     console.error('Alarm rule create error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }

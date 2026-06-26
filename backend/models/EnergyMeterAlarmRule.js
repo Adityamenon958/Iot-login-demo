@@ -20,7 +20,7 @@ const energyMeterAlarmRuleSchema = new mongoose.Schema(
     maxThreshold: { type: Number, default: null },
     consumptionPeriod: {
       type: String,
-      enum: CONSUMPTION_PERIODS,
+      enum: [...CONSUMPTION_PERIODS, null],
       default: null,
     },
     severity: { type: String, enum: ['warning', 'critical'], default: 'warning' },
