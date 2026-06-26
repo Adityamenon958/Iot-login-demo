@@ -249,6 +249,35 @@ function bucketLogsByIstDate(logs, getEnergy) {
   return daily.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+function mergeFleetDailyWithBreakdown(meterDailyEntries) {
+  const fleetMap = new Map();
+
+  meterDailyEntries.forEach(({ meterId, machineName, daily }) => {
+    (daily || []).forEach((d) => {
+      const kwh = d.kwh || 0;
+      if (kwh <= 0) return;
+      if (!fleetMap.has(d.date)) {
+        fleetMap.set(d.date, { date: d.date, kwh: 0, byMeter: [] });
+      }
+      const row = fleetMap.get(d.date);
+      row.kwh = roundTo(row.kwh + kwh, 2);
+      row.byMeter.push({
+        meterId,
+        machineName: machineName || meterId,
+        kwh: roundTo(kwh, 2),
+      });
+    });
+  });
+
+  return Array.from(fleetMap.values())
+    .map((row) => ({
+      date: row.date,
+      kwh: row.kwh,
+      byMeter: row.byMeter.sort((a, b) => b.kwh - a.kwh),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function sumDailyKwhInRange(dailyBuckets, since, until) {
   const sinceMs = since.getTime();
   const untilMs = until.getTime();
@@ -264,7 +293,7 @@ function sumDailyKwhInRange(dailyBuckets, since, until) {
     .reduce((s, d) => s + (d.kwh || 0), 0);
 }
 
-function buildHourlyConsumptionToday(logs, getEnergy, todayStart) {
+function buildHourlyConsumptionToday(logs, getEnergy, todayStart, meterMeta = {}) {
   const todayLogs = logs.filter((log) => new Date(log.timestamp) >= todayStart);
 
   const byMeter = new Map();
@@ -275,8 +304,9 @@ function buildHourlyConsumptionToday(logs, getEnergy, todayStart) {
   });
 
   const fleetHourTotals = new Map();
+  const fleetHourByMeter = new Map();
 
-  byMeter.forEach((meterLogs) => {
+  byMeter.forEach((meterLogs, meterId) => {
     const sorted = [...meterLogs].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
@@ -296,14 +326,40 @@ function buildHourlyConsumptionToday(logs, getEnergy, todayStart) {
       const last = energies[energies.length - 1];
       const kwh = Math.max(0, last - first);
       fleetHourTotals.set(hour, (fleetHourTotals.get(hour) || 0) + kwh);
+      if (!fleetHourByMeter.has(hour)) fleetHourByMeter.set(hour, new Map());
+      const meterHourMap = fleetHourByMeter.get(hour);
+      meterHourMap.set(meterId, (meterHourMap.get(meterId) || 0) + kwh);
     });
   });
 
-  return Array.from({ length: 24 }, (_, hour) => ({
-    hour,
-    label: `${String(hour).padStart(2, '0')}:00`,
-    kwh: roundTo(fleetHourTotals.get(hour) || 0, 2),
-  }));
+  const meterIds = Array.from(byMeter.keys()).sort((a, b) => {
+    if (a === '__single__') return 1;
+    if (b === '__single__') return -1;
+    return a.localeCompare(b);
+  });
+
+  return Array.from({ length: 24 }, (_, hour) => {
+    const meterHourMap = fleetHourByMeter.get(hour) || new Map();
+    const byMeterBreakdown = meterIds
+      .map((meterId) => {
+        const kwh = roundTo(meterHourMap.get(meterId) || 0, 2);
+        if (kwh <= 0) return null;
+        const resolvedId = meterId === '__single__' ? null : meterId;
+        return {
+          meterId: resolvedId,
+          machineName: meterMeta[meterId]?.machineName || resolvedId || 'Meter',
+          kwh,
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      hour,
+      label: `${String(hour).padStart(2, '0')}:00`,
+      kwh: roundTo(fleetHourTotals.get(hour) || 0, 2),
+      byMeter: byMeterBreakdown,
+    };
+  });
 }
 
 function computePeakUsageHourToday(logs, getEnergy, todayStart) {
@@ -435,6 +491,7 @@ module.exports = {
   evaluateVoltageStatus,
   evaluateFrequencyStatus,
   bucketLogsByIstDate,
+  mergeFleetDailyWithBreakdown,
   sumDailyKwhInRange,
   computePeakUsageHourToday,
   buildHourlyConsumptionToday,

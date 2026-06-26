@@ -28,3 +28,38 @@
   min-width: 0;
   overflow: visible;
 }
+
+.tooltip {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.75rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  max-width: 260px;
+}
+
+.tooltipTitle {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #1a1a2e;
+}
+
+.tooltipTotal {
+  margin-bottom: 0.35rem;
+  color: #495057;
+}
+
+.tooltipList {
+  margin: 0;
+  padding-left: 1rem;
+  color: #495057;
+}
+
+.tooltipList li {
+  margin-bottom: 0.15rem;
+}
+
+.tooltipRow {
+  color: #495057;
+}

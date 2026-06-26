@@ -15,12 +15,12 @@ export default function EnergyComparisonBadge({ comparison, labelKey }) {
   const text = `${sign}${deltaPct}%`;
   const hint = labelKey ? LABELS[labelKey] || labelKey : '';
 
+  // ✅ For consumption: less usage = good (green), more usage = bad (red)
+  const toneClass =
+    direction === 'up' ? styles.down : direction === 'down' ? styles.up : styles.flat;
+
   return (
-    <span
-      className={`${styles.badge} ${
-        direction === 'up' ? styles.up : direction === 'down' ? styles.down : styles.flat
-      }`}
-    >
+    <span className={`${styles.badge} ${toneClass}`}>
       {text}
       {hint && <span className={styles.hint}> {hint}</span>}
     </span>

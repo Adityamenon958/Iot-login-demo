@@ -21,6 +21,7 @@ const {
   sumDailyKwhInRange,
   computePeakUsageHourToday,
   buildHourlyConsumptionToday,
+  mergeFleetDailyWithBreakdown,
   projectMonthEndKwh,
   getDefaultInsightsConfig,
   istStartUtcFromYMD,
@@ -49,19 +50,6 @@ function findHighestLowestDay(dailyBreakdown) {
     highestDay: { date: highest.date, kwh: highest.kwh },
     lowestDay: { date: lowest.date, kwh: lowest.kwh },
   };
-}
-
-function mergeFleetDaily(meterDailyMaps) {
-  const fleetMap = new Map();
-  meterDailyMaps.forEach((daily) => {
-    daily.forEach((d) => {
-      const prev = fleetMap.get(d.date) || 0;
-      fleetMap.set(d.date, roundTo(prev + d.kwh, 2));
-    });
-  });
-  return Array.from(fleetMap.entries())
-    .map(([date, kwh]) => ({ date, kwh }))
-    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 async function buildFleetConsumptionInsights(meters, periodKey = '7d') {
@@ -131,17 +119,22 @@ async function buildFleetConsumptionInsights(meters, periodKey = '7d') {
   });
 
   const reportingMeterCount = Object.keys(byMeter).length;
-  const meterDailyMaps = [];
+  const meterDailyEntries = [];
   const meterTodayKwh = [];
   const meterMonthKwh = [];
 
   Object.entries(byMeter).forEach(([meterId, meterLogs]) => {
     const dailyAll = bucketLogsByIstDate(meterLogs, extractEnergy);
-    meterDailyMaps.push(dailyAll);
+    const meta = meterMeta[meterId] || {};
+
+    meterDailyEntries.push({
+      meterId,
+      machineName: meta.machineName || meterId,
+      daily: dailyAll,
+    });
 
     const todayKwh = sumDailyKwhInRange(dailyAll, todayStart, now);
     const monthKwh = sumDailyKwhInRange(dailyAll, monthStart, now);
-    const meta = meterMeta[meterId] || {};
 
     meterTodayKwh.push({
       meterId,
@@ -159,8 +152,9 @@ async function buildFleetConsumptionInsights(meters, periodKey = '7d') {
     });
   });
 
-  const fleetDaily = mergeFleetDaily(meterDailyMaps);
-  const fleetDailyInPeriod = fleetDaily.filter((d) => {
+  const fleetDailyBreakdown = mergeFleetDailyWithBreakdown(meterDailyEntries);
+  const fleetDaily = fleetDailyBreakdown.map(({ date, kwh }) => ({ date, kwh }));
+  const fleetDailyInPeriod = fleetDailyBreakdown.filter((d) => {
     const dayStart = istStartUtcFromYMD(
       Number(d.date.slice(0, 4)),
       Number(d.date.slice(5, 7)) - 1,
@@ -186,7 +180,7 @@ async function buildFleetConsumptionInsights(meters, periodKey = '7d') {
 
   const { highestDay, lowestDay } = findHighestLowestDay(fleetDailyInPeriod);
   const peakUsageHourToday = computePeakUsageHourToday(logs, extractEnergy, todayStart);
-  const hourlyBreakdownToday = buildHourlyConsumptionToday(logs, extractEnergy, todayStart);
+  const hourlyBreakdownToday = buildHourlyConsumptionToday(logs, extractEnergy, todayStart, meterMeta);
 
   const onlineMeterCount = meters.filter((m) => {
     const meterLogs = byMeter[m.deviceId];

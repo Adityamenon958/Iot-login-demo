@@ -121,9 +121,27 @@ async function buildMeterConsumptionInsights(device, periodKey = '7d') {
   const projectedMonthEndKwh = projectMonthEndKwh(monthKwh, daysElapsed, daysInMonth);
 
   const peakUsageHourToday = computePeakUsageHourToday(logs, extractEnergy, todayStart);
-  const hourlyBreakdownToday = buildHourlyConsumptionToday(logs, extractEnergy, todayStart);
+  const meterMeta = {
+    [meterId]: { machineName: device.machineName || meterId },
+    __single__: { machineName: device.machineName || meterId },
+  };
+  const hourlyBreakdownToday = buildHourlyConsumptionToday(
+    logs,
+    extractEnergy,
+    todayStart,
+    meterMeta
+  );
 
   const minimalUsageDays = dailyInPeriod.filter((d) => d.kwh < 0.01).length;
+
+  const machineName = device.machineName || meterId;
+  const dailyBreakdownForCharts = dailyInPeriod.map((d) => ({
+    ...d,
+    byMeter:
+      d.kwh > 0
+        ? [{ meterId, machineName, kwh: roundTo(d.kwh, 2) }]
+        : [],
+  }));
 
   return {
     meterId,
@@ -147,7 +165,7 @@ async function buildMeterConsumptionInsights(device, periodKey = '7d') {
       monthVsPreviousMonth: buildComparison(monthKwh, prevMonthKwh),
     },
     charts: {
-      dailyBreakdown: dailyInPeriod,
+      dailyBreakdown: dailyBreakdownForCharts,
       hourlyBreakdownToday,
     },
     insights: {
