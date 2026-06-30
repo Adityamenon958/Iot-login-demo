@@ -34,10 +34,28 @@ function severityBadge(severity) {
   );
 }
 
+function buildSuccessMessage(data, mode) {
+  if (!data) return 'Done.';
+  if (data.restored) return 'Normal readings restored.';
+  if (data.advanced) return 'Custom readings sent and ingested.';
+
+  if (mode === 'live_override' || data.mode === 'live_override') {
+    return 'Live override started. Breach readings will repeat until restored or timer ends.';
+  }
+
+  const instantRules = (data.outcomes || []).filter((o) => !o.triggerDelayMinutes).length;
+  if (instantRules > 0) {
+    return `Log sent. ${instantRules} alarm rule${instantRules > 1 ? 's' : ''} may trigger now.`;
+  }
+
+  return 'Log sent and ingested successfully.';
+}
+
 export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [breachMode, setBreachMode] = useState('standard');
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [durationMinutes, setDurationMinutes] = useState('');
@@ -76,7 +94,10 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
   }, [deviceId]);
 
   useEffect(() => {
-    if (show && deviceId) loadPlan();
+    if (show && deviceId) {
+      setSuccess('');
+      loadPlan();
+    }
   }, [show, deviceId, loadPlan]);
 
   useEffect(() => {
@@ -145,6 +166,7 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
     }
     setTriggering(mode);
     setError('');
+    setSuccess('');
     try {
       const res = await axios.post('/api/sim/energy-trigger-rules', {
         DeviceID: deviceId,
@@ -158,6 +180,7 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
         setActiveOverride(res.data.override);
         setRemainingMs(res.data.remainingMs);
       }
+      setSuccess(buildSuccessMessage(res.data, mode));
       onSuccess?.(res.data);
       if (mode === 'send_once') loadPlan();
     } catch (err) {
@@ -170,6 +193,7 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
   const handleQuickTrigger = async (mode, selection) => {
     setTriggering(`quick-${mode}`);
     setError('');
+    setSuccess('');
     try {
       const res = await axios.post('/api/sim/energy-trigger-rules', {
         DeviceID: deviceId,
@@ -177,6 +201,7 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
         breachMode,
         selection,
       }, { withCredentials: true });
+      setSuccess(buildSuccessMessage(res.data, 'send_once'));
       onSuccess?.(res.data);
       loadPlan();
     } catch (err) {
@@ -188,12 +213,15 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
 
   const handleRestore = async () => {
     setTriggering('restore');
+    setError('');
+    setSuccess('');
     try {
       await axios.post('/api/sim/energy-reading-override/restore', { DeviceID: deviceId }, {
         withCredentials: true,
       });
       setActiveOverride(null);
       setRemainingMs(null);
+      setSuccess(buildSuccessMessage({ restored: true }));
       onSuccess?.({ restored: true });
       loadPlan();
     } catch (err) {
@@ -213,10 +241,13 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
       return;
     }
     setTriggering('advanced');
+    setError('');
+    setSuccess('');
     try {
       await axios.post('/api/sim/energy-send-readings', { DeviceID: deviceId, readings }, {
         withCredentials: true,
       });
+      setSuccess(buildSuccessMessage({ advanced: true }));
       onSuccess?.({ advanced: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Send failed');
@@ -228,12 +259,14 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
   const handleConsumptionBurst = async (ruleId) => {
     setBurstRunning(ruleId);
     setError('');
+    setSuccess('');
     try {
       const res = await axios.post('/api/sim/energy-consumption-burst', {
         DeviceID: deviceId,
         ruleId,
         breachMode,
       }, { withCredentials: true });
+      setSuccess(res.data?.message || 'Consumption burst sent.');
       onSuccess?.(res.data);
       loadPlan();
     } catch (err) {
@@ -266,6 +299,11 @@ export default function EnergyAlarmTestModal({ show, deviceId, onHide, onSuccess
       </Modal.Header>
       <Modal.Body>
         {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
+        {success && (
+          <Alert variant="success" dismissible onClose={() => setSuccess('')} className={styles.successAlert}>
+            {success}
+          </Alert>
+        )}
 
         {loading ? (
           <div className="text-center py-5"><Spinner animation="border" /></div>

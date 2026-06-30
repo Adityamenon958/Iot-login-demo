@@ -1,8 +1,11 @@
 import React from 'react';
-import { Col } from 'react-bootstrap';
-import { Bell } from 'lucide-react';
+import { Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Bell, HelpCircle } from 'lucide-react';
 import attentionStyles from './energyAlarmAttention.module.css';
 import styles from './EnergyAlarmKpiCard.module.css';
+
+const ALARM_KPI_TOOLTIP =
+  'Open = alarms not cleared yet. Today triggered = all alarms fired today (IST), including cleared ones.';
 
 export default function EnergyAlarmKpiCard({ summary, onClick, pulse = false }) {
   if (!summary) return null;
@@ -43,6 +46,19 @@ export default function EnergyAlarmKpiCard({ summary, onClick, pulse = false }) 
         }
         title={clickable ? 'View alarm details' : undefined}
       >
+        <OverlayTrigger
+          placement="bottom"
+          overlay={<Tooltip id="energy-alarm-kpi-tip">{ALARM_KPI_TOOLTIP}</Tooltip>}
+        >
+          <span
+            className={styles.kpiHelp}
+            aria-label="About Active Alarms"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <HelpCircle size={13} />
+          </span>
+        </OverlayTrigger>
         <div className={styles.kpiIcon}>
           <Bell size={15} />
         </div>

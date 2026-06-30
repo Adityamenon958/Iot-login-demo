@@ -17,6 +17,21 @@
   border-color: rgba(220, 53, 69, 0.25);
 }
 
+.kpiHelp {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: inline-flex;
+  color: #adb5bd;
+  cursor: help;
+  line-height: 0;
+  transition: color 0.15s ease;
+}
+
+.kpiHelp:hover {
+  color: #6c757d;
+}
+
 .kpiIcon {
   color: #6c757d;
   margin-bottom: 0.1rem;
