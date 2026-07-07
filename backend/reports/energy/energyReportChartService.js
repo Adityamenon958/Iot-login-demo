@@ -1,4 +1,5 @@
 const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
+const { CHART_FONT_FAMILY, registerChartFonts, applyChartFontDefaults } = require('./chartFont');
 
 const WIDTH = 700;
 const HEIGHT = 280;
@@ -20,7 +21,7 @@ const barValueLabelPlugin = {
       const barWidth = bar.width || 20;
 
       ctx.save();
-      ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
+      ctx.font = `bold 9px "${CHART_FONT_FAMILY}"`;
       const textWidth = ctx.measureText(label).width;
 
       if (barHeight > textWidth + 10) {
@@ -57,14 +58,17 @@ const barValueLabelPlugin = {
 };
 
 function createCanvas(height = HEIGHT) {
-  return new ChartJSNodeCanvas({
+  const canvas = new ChartJSNodeCanvas({
     width: WIDTH,
     height,
     backgroundColour: 'white',
+    chartCallback: applyChartFontDefaults,
     plugins: {
       modern: [barValueLabelPlugin],
     },
   });
+  registerChartFonts(canvas.registerFont.bind(canvas));
+  return canvas;
 }
 
 let canvasInstance = null;
