@@ -122,6 +122,8 @@ const {
   validateEnergySimBody,
   pickEnergySimFields,
 } = require("./backend/utils/energyApplianceCatalog");
+const { generateEnergyReport, listReportHistory } = require('./backend/reports/energy/energyReportOrchestrator');
+const { getStorageAdapter } = require('./backend/reports/energy/storage/reportStorageAdapter');
 
 function getEffectiveSubscriptionStatus(user) {
   return BYPASS_SUBSCRIPTION_CHECK ? 'active' : (user.subscriptionStatus || 'inactive');
@@ -7083,6 +7085,42 @@ app.get('/api/energy-meter/logs', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Energy logs error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/energy-meter/reports/generate', authenticateToken, async (req, res) => {
+  try {
+    const meters = await getVisibleEnergyMeters(req);
+    if (!meters.length) {
+      return res.status(400).json({ error: 'No visible energy meters for report generation' });
+    }
+
+    const companyName = req.user.companyName || meters[0]?.companyName || 'Company';
+    const result = await generateEnergyReport(meters, req.body, req.user, companyName);
+    const storage = getStorageAdapter();
+    storage.streamBuffer(result.pdfBuffer, res, {
+      fileName: result.fileName,
+      reportId: result.reportId,
+    });
+  } catch (err) {
+    console.error('[energy-report] Generate error:', err);
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message || 'Report generation failed' });
+  }
+});
+
+app.get('/api/energy-meter/reports/history', authenticateToken, async (req, res) => {
+  try {
+    const companyName = req.user.companyName;
+    if (!companyName && req.user.role !== 'superadmin') {
+      return res.status(400).json({ error: 'Company context required' });
+    }
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+    const history = await listReportHistory(companyName || req.query.companyName, limit);
+    res.json({ data: history });
+  } catch (err) {
+    console.error('[energy-report] History error:', err);
+    res.status(500).json({ error: err.message || 'Failed to load report history' });
   }
 });
 

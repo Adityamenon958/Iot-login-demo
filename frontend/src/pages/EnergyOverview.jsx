@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Col, Row, Badge, Button, Spinner, Form } from 'react-bootstrap';
-import { ArrowLeft, Zap } from 'lucide-react';
+import { ArrowLeft, Zap, FileText } from 'lucide-react';
 import axios from 'axios';
 import styles from './EnergyOverview.module.css';
 import mainStyles from './MainContent.module.css';
@@ -25,6 +25,8 @@ import EnergyFleetStatusIndicator from '../components/energy/EnergyFleetStatusIn
 import EnergyAlarmFab from '../components/energy/EnergyAlarmFab';
 import EnergyAlarmToastStack from '../components/energy/EnergyAlarmToastStack';
 import useEnergyAlarmAttention from '../hooks/useEnergyAlarmAttention';
+import EnergyReportModal from '../components/energy/EnergyReportModal';
+import EnergyReportHistoryPanel from '../components/energy/EnergyReportHistoryPanel';
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
@@ -57,6 +59,8 @@ export default function EnergyOverview() {
   const [showMeterAlarms, setShowMeterAlarms] = useState(false);
   const [showAlarmingMetersOnly, setShowAlarmingMetersOnly] = useState(false);
   const [alarmRefreshKey, setAlarmRefreshKey] = useState(0);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportHistoryRefreshKey, setReportHistoryRefreshKey] = useState(0);
   const isMobile = useIsMobile();
   const mainScrollRef = useRef(null);
 
@@ -344,6 +348,15 @@ export default function EnergyOverview() {
                   <Badge bg="secondary" className={styles.hiddenBadge}>Demo data hidden</Badge>
                 )}
                 <Badge bg="success" className={styles.liveBadge}>LIVE</Badge>
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  className={styles.reportBtn}
+                  onClick={() => setShowReportModal(true)}
+                >
+                  <FileText size={14} className="me-1" />
+                  Generate Report
+                </Button>
                 {lastUpdated && (
                   <small className={`text-muted ${styles.lastRefreshed}`}>
                     Last refreshed: {lastUpdated.toLocaleTimeString()}
@@ -430,6 +443,15 @@ export default function EnergyOverview() {
               onSelectMeter={handleSelectMeter}
               simDataHidden={simDataHidden}
               alarmByMeter={alarmByMeter}
+            />
+
+            <EnergyReportHistoryPanel refreshKey={reportHistoryRefreshKey} />
+
+            <EnergyReportModal
+              show={showReportModal}
+              onHide={() => setShowReportModal(false)}
+              meterCount={overview?.kpis?.totalMeters ?? overview?.meters?.length ?? 0}
+              onGenerated={() => setReportHistoryRefreshKey((k) => k + 1)}
             />
           </div>
 

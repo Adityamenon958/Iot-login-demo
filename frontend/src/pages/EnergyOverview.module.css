@@ -145,6 +145,11 @@
   line-height: 1.1;
 }
 
+.reportBtn {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
 @keyframes energyPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.65; }

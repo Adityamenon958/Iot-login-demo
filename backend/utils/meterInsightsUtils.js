@@ -65,6 +65,22 @@ function getPreviousMonthStartIstUtc(now = new Date()) {
   return istStartUtcFromYMD(year, month - 1, 1);
 }
 
+function getYearStartIstUtc(now = new Date()) {
+  const { year } = getISTDateComponentsFromUtcDate(now);
+  return istStartUtcFromYMD(year, 0, 1);
+}
+
+function getPreviousYearStartIstUtc(now = new Date()) {
+  const { year } = getISTDateComponentsFromUtcDate(now);
+  return istStartUtcFromYMD(year - 1, 0, 1);
+}
+
+function getPeriodEndIstUtc(endDate) {
+  const { year, month, day } = getISTDateComponentsFromUtcDate(endDate);
+  const dayStart = istStartUtcFromYMD(year, month, day);
+  return new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+}
+
 function getDaysInMonthIst(now = new Date()) {
   const { year, month } = getISTDateComponentsFromUtcDate(now);
   return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
@@ -476,6 +492,9 @@ module.exports = {
   getPreviousWeekStartIstUtc,
   getMonthStartIstUtc,
   getPreviousMonthStartIstUtc,
+  getYearStartIstUtc,
+  getPreviousYearStartIstUtc,
+  getPeriodEndIstUtc,
   getDaysInMonthIst,
   getDaysElapsedInMonthIst,
   formatIstDateKey,
@@ -499,6 +518,7 @@ module.exports = {
   buildTrendSeries,
   getDefaultInsightsConfig,
   istStartUtcFromYMD,
+  getISTDateComponentsFromUtcDate,
   computeFleetHealthScore,
   buildRankingRows,
   buildRankingRowsAsc,
