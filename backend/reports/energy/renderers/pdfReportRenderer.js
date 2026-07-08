@@ -193,7 +193,7 @@ function renderCoverPage(doc, payload) {
     ['2', 'Fleet Summary', 'Key KPIs: energy, power, voltage, frequency, alarms'],
     ['3', 'Energy Health Breakdown', 'Weighted factor-wise health analysis'],
     ['4', 'Fleet Charts', 'Daily consumption and trend visualizations'],
-    ['5', 'Meter & Alarm Tables', 'Per-device summary and alarm details'],
+    ['5', 'Meter & Alarm Tables', 'Per-meter operational analysis and alarm details'],
     ['6', 'Rankings & Recommendations', 'Top consumers and actionable insights'],
   ];
   const tocColW = [24, 148, CONTENT_WIDTH - 24 - 148];
@@ -641,54 +641,172 @@ function renderOptionalSection(doc, title, lines, startY) {
 }
 
 function renderMeterTable(doc, payload, startY) {
-  const meters = payload.meters || [];
-  if (!meters.length) return startY;
+  const profiles = payload.meterProfiles?.meters || [];
+  if (!profiles.length) return startY;
 
   let y = startY;
-  y = applyPage(doc, null, ensureSpace(y, 60, { majorBreak: y > PAGE_TOP + 80 }));
-  y = sectionTitle(doc, 'Individual Meter Summary', y);
+  y = applyPage(doc, null, ensureSpace(y, 86, { majorBreak: y > PAGE_TOP + 80 }));
+  y = sectionTitle(doc, 'Individual Meter Operational Analysis', y);
 
-  const headers = ['Device ID', 'Site', 'kWh', 'Peak kW', 'Avg V', 'Avg PF', 'Alarms', 'Status'];
-  const colWidths = [88, 68, 48, 44, 38, 38, 36, 42];
-
-  const drawHeader = () => {
-    let x = MARGIN;
-    doc.rect(MARGIN, y, CONTENT_WIDTH, 14).fillColor(BRAND).fill();
-    headers.forEach((h, i) => {
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#fff').text(h, x + 3, y + 3, { width: colWidths[i] - 4 });
-      x += colWidths[i];
-    });
-    y += 16;
+  const fmt = (value, suffix = '', decimals = 2) => {
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    const n = Number(value);
+    const out = Number.isInteger(n) ? String(n) : n.toFixed(decimals);
+    return `${out}${suffix}`;
   };
 
-  drawHeader();
+  const columnConfig = [
+    { id: 'label', label: payload.meterProfiles?.bucketMode === 'month' ? 'Month' : 'Date', width: 42, enabled: true, value: (r) => r.label },
+    { id: 'energy', label: 'kWh', width: 38, enabled: true, value: (r) => fmt(r.energyKwh, '', 1) },
+    { id: 'load', label: 'kW Min/Avg/Peak', width: 66, enabled: true, value: (r) => `${fmt(r.minPowerKw, '', 1)}/${fmt(r.avgPowerKw, '', 1)}/${fmt(r.peakPowerKw, '', 1)}` },
+    { id: 'avgVoltage', label: 'Avg V', width: 36, enabled: true, value: (r) => fmt(r.avgVoltage, '', 0) },
+    { id: 'voltageRange', label: 'V Min/Max', width: 45, enabled: true, value: (r) => `${fmt(r.minVoltage, '', 0)}/${fmt(r.maxVoltage, '', 0)}` },
+    { id: 'avgPowerFactor', label: 'PF', width: 30, enabled: true, value: (r) => fmt(r.avgPowerFactor, '', 2) },
+    { id: 'avgFrequency', label: 'Hz', width: 30, enabled: true, value: (r) => fmt(r.avgFrequency, '', 1) },
+    { id: 'alarms', label: 'Alm', width: 26, enabled: true, value: (r) => String(r.alarms?.total ?? 0) },
+    { id: 'health', label: 'Health', width: 34, enabled: true, value: (r) => (r.healthScore == null ? '—' : String(r.healthScore)) },
+    { id: 'status', label: 'Status', width: 52, enabled: true, value: (r) => r.status || '—' },
+    { id: 'avgCurrent', label: 'Avg A', width: 34, enabled: false, value: (r) => fmt(r.avgCurrent, '', 1) },
+  ].filter((c) => c.enabled);
 
-  meters.forEach((m, idx) => {
-    if (y + 14 > PAGE_BOTTOM) {
-      y = applyPage(doc, null, ensureSpace(y, 14));
-      drawHeader();
-    }
-    if (idx % 2 === 0) {
-      doc.rect(MARGIN, y - 1, CONTENT_WIDTH, 13).fillColor('#f8f9fa').fill();
-    }
-    let x = MARGIN;
-    const cells = [
-      (m.meterId || '—').slice(0, 16),
-      (m.siteName || '').slice(0, 11),
-      String(m.totalEnergyKwh ?? '—'),
-      m.peakPowerKw != null ? String(m.peakPowerKw) : '—',
-      m.avgVoltage != null ? String(m.avgVoltage) : '—',
-      m.avgPowerFactor != null ? String(m.avgPowerFactor) : '—',
-      String(m.alarmCount ?? 0),
-      m.online ? 'Online' : 'Offline',
+  const tableWidth = columnConfig.reduce((sum, c) => sum + c.width, 0);
+  const drawMeterHeading = (meter, continued = false) => {
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 18, 4).fillColor(BRAND).fill();
+    const status = meter.online ? 'Online' : 'Offline';
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#fff')
+      .text(`${meter.meterId}${continued ? ' (continued)' : ''}`, MARGIN + 8, y + 5, { width: 190 });
+    doc.fontSize(7).font('Helvetica').fillColor('#fff')
+      .text(`Site: ${meter.siteName || '—'}   Current Status: ${status}`, MARGIN + 205, y + 5, { width: CONTENT_WIDTH - 213 });
+    y += 22;
+  };
+
+  const drawSummaryCard = (meter) => {
+    const s = meter.summary || {};
+    const cardH = 48;
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, cardH, 5).fillColor('#f8f9fa').fill();
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, cardH, 5).strokeColor('#dee2e6').lineWidth(0.5).stroke();
+    const items = [
+      ['Total Energy', fmt(s.totalEnergyKwh, ' kWh')],
+      ['Overall Health', s.overallHealth != null ? `${s.overallHealth}/100` : '—'],
+      ['Avg PF', fmt(s.avgPowerFactor, '', 2)],
+      ['Avg Voltage', fmt(s.avgVoltage, ' V', 1)],
+      ['Peak Load', fmt(s.peakPowerKw, ' kW', 1)],
+      ['Total Alarms', String(s.totalAlarms ?? 0)],
+      ['Coverage', s.dataCoverageLabel || '—'],
+      ['Health Trend', s.healthTrend || '→ Stable'],
     ];
-    doc.fontSize(7).font('Helvetica').fillColor('#212529');
-    cells.forEach((cell, i) => {
-      doc.text(cell, x + 2, y, { width: colWidths[i] - 4 });
-      x += colWidths[i];
+    const colW = CONTENT_WIDTH / 4;
+    items.forEach(([label, value], idx) => {
+      const col = idx % 4;
+      const row = Math.floor(idx / 4);
+      const x = MARGIN + col * colW;
+      const ty = y + 7 + row * 21;
+      doc.fontSize(6.5).font('Helvetica').fillColor('#6c757d').text(label, x + 6, ty, { width: colW - 12 });
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#212529').text(value, x + 6, ty + 9, { width: colW - 12 });
     });
-    y += 13;
+    y += cardH + 8;
+  };
+
+  const drawTableHeader = () => {
+    let x = MARGIN;
+    doc.rect(MARGIN, y, tableWidth, 14).fillColor(BRAND).fill();
+    columnConfig.forEach((col) => {
+      doc.fontSize(6.3).font('Helvetica-Bold').fillColor('#fff')
+        .text(col.label, x + 2, y + 3, { width: col.width - 4 });
+      x += col.width;
+    });
+    y += 15;
+  };
+
+  const drawSummaryRow = (meter) => {
+    const s = meter.summary || {};
+    const rowH = 15;
+    doc.rect(MARGIN, y, tableWidth, rowH).fillColor('#eef2ff').fill();
+    doc.fontSize(6.8).font('Helvetica-Bold').fillColor('#212529')
+      .text('Summary', MARGIN + 2, y + 4, { width: 42 });
+    const values = [
+      fmt(s.totalEnergyKwh, '', 1),
+      `—/—/${fmt(s.peakPowerKw, '', 1)}`,
+      fmt(s.avgVoltage, '', 0),
+      '—',
+      fmt(s.avgPowerFactor, '', 2),
+      '—',
+      String(s.totalAlarms ?? 0),
+      s.overallHealth != null ? String(s.overallHealth) : '—',
+      s.dataCoveragePct != null ? `${s.dataCoveragePct}%` : '—',
+    ];
+    let x = MARGIN + columnConfig[0].width;
+    columnConfig.slice(1).forEach((col, idx) => {
+      doc.text(values[idx] || '—', x + 2, y + 4, { width: col.width - 4 });
+      x += col.width;
+    });
+    y += rowH + 5;
+  };
+
+  const drawHighlights = (meter) => {
+    const h = meter.highlights || {};
+    const rows = [
+      ['Best Health', h.bestHealth],
+      ['Worst Health', h.worstHealth],
+      ['Highest Consumption', h.highestConsumption],
+      ['Highest Peak Load', h.highestPeakLoad],
+      ['Most Alarms', h.mostAlarms],
+      ['Longest No Data', h.longestNoData],
+    ].filter(([, item]) => item);
+    if (!rows.length) return;
+    const blockH = 14 + Math.ceil(rows.length / 2) * 12;
+    y = applyPage(doc, null, ensureSpace(y, blockH + 6));
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(BRAND).text('Performance Highlights', MARGIN, y);
+    y += 12;
+    const colW = CONTENT_WIDTH / 2;
+    rows.forEach(([label, item], idx) => {
+      const x = MARGIN + (idx % 2) * colW;
+      const ty = y + Math.floor(idx / 2) * 12;
+      doc.fontSize(6.8).font('Helvetica').fillColor('#495057')
+        .text(`${label}: ${item.label} (${item.value})`, x, ty, { width: colW - 8 });
+    });
+    y += Math.ceil(rows.length / 2) * 12 + 8;
+  };
+
+  const drawDataRow = (row, idx) => {
+    const rowH = 13;
+    if (idx % 2 === 0) doc.rect(MARGIN, y - 1, tableWidth, rowH).fillColor('#f8f9fa').fill();
+    let x = MARGIN;
+    columnConfig.forEach((col) => {
+      const color = col.id === 'status' && row.status === 'Critical'
+        ? '#dc3545'
+        : col.id === 'status' && row.status === 'Warning'
+          ? '#fd7e14'
+          : row.status === 'No Data'
+            ? '#adb5bd'
+            : '#212529';
+      doc.fontSize(6.4).font(col.id === 'status' ? 'Helvetica-Bold' : 'Helvetica').fillColor(color)
+        .text(col.value(row), x + 2, y + 2, { width: col.width - 4 });
+      x += col.width;
+    });
+    y += rowH;
+  };
+
+  profiles.forEach((meter) => {
+    const minStart = 22 + 48 + 8 + 14 + 3 * 13;
+    y = applyPage(doc, null, ensureSpace(y, minStart, { majorBreak: false, minOrphanRows: 0 }));
+    drawMeterHeading(meter);
+    drawSummaryCard(meter);
+    drawTableHeader();
+    (meter.rows || []).forEach((row, idx) => {
+      if (y + 13 > PAGE_BOTTOM) {
+        y = applyPage(doc, null, ensureSpace(y, 13));
+        drawMeterHeading(meter, true);
+        drawTableHeader();
+      }
+      drawDataRow(row, idx);
+    });
+    y = applyPage(doc, null, ensureSpace(y, 60));
+    drawSummaryRow(meter);
+    drawHighlights(meter);
+    y += MINOR_GAP;
   });
+
   return y + SECTION_GAP;
 }
 
@@ -878,11 +996,18 @@ function buildSectionDescriptors(payload) {
       group: 'FleetTables',
       templates: ['analytics', 'tables'],
       measure: () => {
-        const rows = (payload.meters || []).length;
-        const h = rows ? 24 + 16 + rows * 13 + SECTION_GAP : 0;
+        const profiles = payload.meterProfiles?.meters || [];
+        const h = profiles.length
+          ? 24 + profiles.reduce((sum, meter) => {
+            const rowCount = meter.rows?.length || 0;
+            const highlights = Object.values(meter.highlights || {}).filter(Boolean).length;
+            const highlightsH = highlights ? 14 + Math.ceil(highlights / 2) * 12 + 8 : 0;
+            return sum + 22 + 56 + 15 + rowCount * 13 + 20 + highlightsH + SECTION_GAP;
+          }, 0)
+          : 0;
         return {
           preferredHeight: h,
-          minimumHeight: rows ? 80 : 0,
+          minimumHeight: profiles.length ? 120 : 0,
           canSplit: true,
           keepWithNext: true,
           priority: 68,

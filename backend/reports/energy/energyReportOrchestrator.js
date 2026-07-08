@@ -12,6 +12,7 @@ const { buildSustainabilitySection } = require('./energyReportSustainabilityServ
 const { buildCostSection } = require('./energyReportCostService');
 const { buildReportCharts } = require('./energyReportChartService');
 const { renderReport } = require('./energyReportRenderService');
+const { buildMeterOperationalProfiles } = require('./meterOperationalProfileService');
 const { LARGE_FLEET_ASYNC_THRESHOLD } = require('./reportTypes');
 
 function getGeneratedByDisplayName(user = {}) {
@@ -32,6 +33,12 @@ async function buildReportPayload(meters, request, user, companyName) {
 
   const agg = await aggregateReportData(meters, period);
   const alarms = await aggregateAlarmData(meters, period, agg.meters);
+  const meterProfiles = await buildMeterOperationalProfiles({
+    meters,
+    period,
+    alarmBuckets: alarms.byMeterBucket,
+    meterRows: agg.meters,
+  });
 
   agg.fleetSummary.alarmCounts = {
     total: alarms.summary.total,
@@ -89,6 +96,7 @@ async function buildReportPayload(meters, request, user, companyName) {
     recommendations,
     meters: agg.meters,
     alarms,
+    meterProfiles,
     dailyBreakdown: agg.dailyBreakdown,
     energyByMeter: agg.energyByMeter,
     trendSeries: agg.trendSeries,

@@ -1,9 +1,26 @@
 const EnergyMeterAlarmEvent = require('../../models/EnergyMeterAlarmEvent');
 const { ALARM_EVENTS_PDF_LIMIT } = require('./reportTypes');
 
+function resolveAlarmBucketMode(period) {
+  return period.reportType === 'yearly' ? 'month' : 'day';
+}
+
+function formatAlarmBucket(date, bucketMode) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const key = `${get('year')}-${get('month')}-${get('day')}`;
+  return bucketMode === 'month' ? key.slice(0, 7) : key;
+}
+
 async function aggregateAlarmData(meters, period, meterRows) {
   const meterIds = meters.map((m) => m.deviceId);
   const { from, to } = period;
+  const bucketMode = resolveAlarmBucketMode(period);
 
   const events = await EnergyMeterAlarmEvent.find({
     meterId: { $in: meterIds },
@@ -23,6 +40,7 @@ async function aggregateAlarmData(meters, period, meterRows) {
 
   const distribution = { critical: 0, warning: 0, acknowledged: 0, cleared: 0 };
   const byMeter = {};
+  const byMeterBucket = {};
 
   events.forEach((e) => {
     if (e.severity === 'critical') summary.critical += 1;
@@ -47,6 +65,15 @@ async function aggregateAlarmData(meters, period, meterRows) {
     byMeter[e.meterId].total += 1;
     if (e.severity === 'critical') byMeter[e.meterId].critical += 1;
     if (e.severity === 'warning') byMeter[e.meterId].warning += 1;
+
+    const bucket = formatAlarmBucket(new Date(e.triggeredAt), bucketMode);
+    if (!byMeterBucket[e.meterId]) byMeterBucket[e.meterId] = {};
+    if (!byMeterBucket[e.meterId][bucket]) {
+      byMeterBucket[e.meterId][bucket] = { total: 0, critical: 0, warning: 0 };
+    }
+    byMeterBucket[e.meterId][bucket].total += 1;
+    if (e.severity === 'critical') byMeterBucket[e.meterId][bucket].critical += 1;
+    if (e.severity === 'warning') byMeterBucket[e.meterId][bucket].warning += 1;
   });
 
   meterRows.forEach((row) => {
@@ -74,6 +101,7 @@ async function aggregateAlarmData(meters, period, meterRows) {
       alarmCounts: summary,
     },
     distribution,
+    byMeterBucket,
     events: eventRows,
     totalEvents: events.length,
     truncated: events.length > ALARM_EVENTS_PDF_LIMIT,
