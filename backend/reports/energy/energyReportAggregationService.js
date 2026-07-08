@@ -14,6 +14,7 @@ const {
   VOLTAGE_BAND,
   formatIstDateKey,
 } = require('../../utils/meterInsightsUtils');
+const { buildFleetLoadProfile, emptyLoadProfile } = require('./energyLoadProfileService');
 
 const NOMINAL_VOLTAGE = 230;
 const READING_KEYS = ['voltage', 'current', 'activePower', 'powerFactor', 'frequency', 'energy'];
@@ -127,6 +128,7 @@ async function aggregateReportData(meters, period) {
     dailyBreakdown: [],
     energyByMeter: [],
     trendSeries: { energy: [], activePower: [], powerFactor: [] },
+    loadProfile: emptyLoadProfile(),
     meters: [],
     periodDays,
   };
@@ -293,6 +295,7 @@ async function aggregateReportData(meters, period) {
     .sort((a, b) => b.kwh - a.kwh);
 
   const onlineMeters = meterRows.filter((m) => m.online).length;
+  const loadProfile = await buildFleetLoadProfile(meters, period);
 
   return {
     fleetSummary: {
@@ -329,6 +332,7 @@ async function aggregateReportData(meters, period) {
       })),
       powerFactor: bucketFleetTrendByDate(periodLogs, 'powerFactor', from, to),
     },
+    loadProfile,
     meters: meterRows,
     periodDays,
   };

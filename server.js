@@ -7096,7 +7096,10 @@ app.post('/api/energy-meter/reports/generate', authenticateToken, async (req, re
     }
 
     const companyName = req.user.companyName || meters[0]?.companyName || 'Company';
-    const result = await generateEnergyReport(meters, req.body, req.user, companyName);
+    // req.user (JWT) may not contain display name fields; hydrate from DB for report metadata.
+    const dbUser = await User.findById(req.user.id).select('name firstName lastName email username companyName role').lean();
+    const reportUser = dbUser || req.user;
+    const result = await generateEnergyReport(meters, req.body, reportUser, companyName);
     const storage = getStorageAdapter();
     storage.streamBuffer(result.pdfBuffer, res, {
       fileName: result.fileName,

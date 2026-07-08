@@ -90,6 +90,28 @@ function chartHeightForBarCount(count) {
   return 300;
 }
 
+function chartSizePresets(baseHeight) {
+  return {
+    Large: Math.round(baseHeight),
+    Medium: Math.max(130, Math.round(baseHeight * 0.86)),
+    Compact: Math.max(110, Math.round(baseHeight * 0.74)),
+  };
+}
+
+function formatHourRangeLabel(label) {
+  if (!label || typeof label !== 'string') return 'N/A';
+  const [start, end] = label.split('-');
+  if (!start || !end) return label;
+  return `${start}-${end}`;
+}
+
+function formatMetricValue(value, suffix = '', decimals = 2) {
+  if (value == null || !Number.isFinite(Number(value))) return 'N/A';
+  const n = Number(value);
+  const out = Number.isInteger(n) ? String(n) : n.toFixed(decimals);
+  return suffix ? `${out}${suffix}` : out;
+}
+
 async function renderDailyEnergyBarChart(title, labels, values) {
   const height = chartHeightForBarCount(labels.length);
   const canvas = createCanvas(height);
@@ -188,6 +210,119 @@ async function renderLineChart(title, labels, values, yLabel = '', color = '#4db
   return { buffer: await canvas.renderToBuffer(config), aspectHint: HEIGHT / WIDTH };
 }
 
+async function renderTypicalDailyLoadProfileChart(loadProfile = {}) {
+  const labels = (loadProfile.hourly || []).map((bucket) => bucket?.label || '');
+  const values = (loadProfile.hourly || []).map((bucket) => {
+    const v = Number(bucket?.avgKw);
+    return Number.isFinite(v) ? v : null;
+  });
+  const samples = (loadProfile.hourly || []).map((bucket) => Number(bucket?.sampleCount || 0));
+  const insights = loadProfile.insights || {};
+  const peakIndex = values.reduce((bestIdx, v, idx, arr) => {
+    if (!Number.isFinite(v)) return bestIdx;
+    if (bestIdx < 0) return idx;
+    return v > arr[bestIdx] ? idx : bestIdx;
+  }, -1);
+  const peakMarkerValues = values.map((_, idx) => (idx === peakIndex ? values[idx] : null));
+  const thresholdKw = Number.isFinite(Number(insights.thresholdKw)) ? Number(insights.thresholdKw) : null;
+  const thresholdSeries = values.map((v) => (Number.isFinite(v) && thresholdKw != null ? thresholdKw : null));
+
+  const canvas = getCanvas();
+  const config = {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Average Active Power',
+          data: values,
+          borderColor: '#0d6efd',
+          backgroundColor: '#0d6efd22',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 2,
+          spanGaps: true,
+        },
+        {
+          label: `Operating Threshold (${formatMetricValue(insights.operatingThresholdPct, '%', 0)} of peak)`,
+          data: thresholdSeries,
+          borderColor: '#fd7e14',
+          borderDash: [5, 4],
+          borderWidth: 1.25,
+          fill: false,
+          pointRadius: 0,
+          spanGaps: true,
+        },
+        {
+          label: 'Peak Operating Period',
+          data: peakMarkerValues,
+          borderColor: '#dc3545',
+          backgroundColor: '#dc3545',
+          pointBackgroundColor: '#dc3545',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1,
+          pointRadius: 4,
+          showLine: false,
+          spanGaps: true,
+        },
+      ],
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        title: { display: true, text: 'Typical Daily Load Profile', font: { size: 14, weight: 'bold' } },
+        subtitle: {
+          display: true,
+          text: 'Average hourly fleet active power across the selected reporting period.',
+          font: { size: 10 },
+        },
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 9 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items?.[0]?.dataIndex ?? 0;
+              const start = labels[idx] || 'N/A';
+              const endHour = `${String((idx + 1) % 24).padStart(2, '0')}:00`;
+              return `${start}-${endHour}`;
+            },
+            label: (ctx) => {
+              const v = ctx.parsed?.y;
+              return `Avg Active Power: ${Number.isFinite(v) ? v.toFixed(2) : 'N/A'} kW`;
+            },
+            afterLabel: (ctx) => `Samples: ${samples[ctx.dataIndex] || 0}`,
+          },
+        },
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Average Active Power (kW)' } },
+        x: {
+          ticks: {
+            maxRotation: 0,
+            callback: (_, index) => labels[index] || '',
+          },
+        },
+      },
+    },
+  };
+
+  const buffer = await canvas.renderToBuffer(config);
+  const insightPanel = [
+    { label: 'Peak Operating Period', value: formatHourRangeLabel(insights.peakOperatingPeriod) },
+    { label: 'Peak Load', value: formatMetricValue(insights.peakLoadKw, ' kW') },
+    { label: 'Average Load', value: formatMetricValue(insights.averageLoadKw, ' kW') },
+    { label: 'Load Factor', value: formatMetricValue(insights.loadFactorPct, '%', 1) },
+    { label: 'Base Load', value: formatMetricValue(insights.baseLoadKw, ' kW') },
+    { label: 'Operating Window', value: insights.operatingWindow || 'N/A' },
+    { label: 'Load Pattern', value: insights.loadPattern || 'Unavailable' },
+  ];
+
+  return {
+    buffer,
+    aspectHint: HEIGHT / WIDTH,
+    insightPanel,
+  };
+}
+
 async function renderDoughnutChart(title, labels, values) {
   const canvas = getCanvas();
   const config = {
@@ -257,7 +392,13 @@ function topMetersForDoughnut(energyByMeter, limit = 10) {
   return { labels, values };
 }
 
-async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, alarms }) {
+async function buildReportCharts({
+  dailyBreakdown,
+  trendSeries,
+  loadProfile,
+  energyByMeter,
+  alarms,
+}) {
   const charts = [];
 
   if (dailyBreakdown?.length) {
@@ -271,6 +412,7 @@ async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, a
       imageBuffer: buffer,
       aspectHint,
       preferredHeight: chartHeightForBarCount(labels.length) * (495 / WIDTH),
+      sizePresets: chartSizePresets(chartHeightForBarCount(labels.length) * (495 / WIDTH)),
     });
   }
 
@@ -284,6 +426,25 @@ async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, a
       caption: 'Fleet total energy over the reporting period',
       imageBuffer: buffer,
       aspectHint,
+      sizePresets: chartSizePresets(165),
+    });
+  }
+
+  if (loadProfile?.hourly?.some((h) => Number.isFinite(Number(h?.avgKw)))) {
+    const { buffer, aspectHint, insightPanel } = await renderTypicalDailyLoadProfileChart(loadProfile);
+    charts.push({
+      key: 'daily_load_profile',
+      title: 'Typical Daily Load Profile',
+      caption: 'Average hourly fleet active power across the selected reporting period.',
+      imageBuffer: buffer,
+      aspectHint,
+      sizePresets: {
+        Large: 195,
+        Medium: 172,
+        Compact: 150,
+      },
+      insightPanel,
+      prefersTwoColumn: true,
     });
   }
 
@@ -297,6 +458,7 @@ async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, a
       caption: 'Daily peak active power (kW)',
       imageBuffer: buffer,
       aspectHint,
+      sizePresets: chartSizePresets(165),
     });
   }
 
@@ -310,6 +472,7 @@ async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, a
       caption: 'Daily average fleet power factor',
       imageBuffer: buffer,
       aspectHint,
+      sizePresets: chartSizePresets(165),
     });
   }
 
@@ -323,6 +486,7 @@ async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, a
       imageBuffer: buffer,
       aspectHint,
       preferredHeight: 200,
+      sizePresets: chartSizePresets(200),
     });
   }
 
@@ -336,6 +500,7 @@ async function buildReportCharts({ dailyBreakdown, trendSeries, energyByMeter, a
         caption: 'Breakdown by severity and status',
         imageBuffer: buffer,
         aspectHint,
+        sizePresets: chartSizePresets(165),
       });
     }
   }

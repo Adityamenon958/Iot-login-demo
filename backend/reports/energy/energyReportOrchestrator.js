@@ -14,6 +14,18 @@ const { buildReportCharts } = require('./energyReportChartService');
 const { renderReport } = require('./energyReportRenderService');
 const { LARGE_FLEET_ASYNC_THRESHOLD } = require('./reportTypes');
 
+function getGeneratedByDisplayName(user = {}) {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  return (
+    user.name
+    || user.displayName
+    || fullName
+    || user.username
+    || user.email
+    || 'User'
+  );
+}
+
 async function buildReportPayload(meters, request, user, companyName) {
   const period = resolveReportPeriod(request.reportType, request.periodPreset);
   const config = getReportConfig(companyName);
@@ -54,7 +66,7 @@ async function buildReportPayload(meters, request, user, companyName) {
     meta: {
       reportId: uuidv4(),
       companyName,
-      generatedBy: user.name || user.email || 'User',
+      generatedBy: getGeneratedByDisplayName(user),
       generatedAt: new Date(),
       reportType: request.reportType,
       periodPreset: request.periodPreset,
@@ -80,6 +92,7 @@ async function buildReportPayload(meters, request, user, companyName) {
     dailyBreakdown: agg.dailyBreakdown,
     energyByMeter: agg.energyByMeter,
     trendSeries: agg.trendSeries,
+    loadProfile: agg.loadProfile,
   };
 
   partialPayload.executiveSummary = buildExecutiveSummary({
@@ -96,6 +109,7 @@ async function buildReportPayload(meters, request, user, companyName) {
   partialPayload.charts = await buildReportCharts({
     dailyBreakdown: agg.dailyBreakdown,
     trendSeries: agg.trendSeries,
+    loadProfile: agg.loadProfile,
     energyByMeter: agg.energyByMeter,
     alarms,
   });
@@ -125,7 +139,7 @@ async function generateEnergyReport(meters, body, user, companyName) {
     companyName,
     generatedBy: {
       userId: user.id || user._id,
-      name: user.name,
+      name: getGeneratedByDisplayName(user),
       email: user.email,
     },
     scope: request.scope,
