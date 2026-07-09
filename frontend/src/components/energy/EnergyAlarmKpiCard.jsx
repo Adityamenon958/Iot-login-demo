@@ -21,7 +21,7 @@ export default function EnergyAlarmKpiCard({ summary, onClick, pulse = false }) 
     : '';
 
   return (
-    <Col xs={12} sm={6} lg={4} xl={2} className="d-flex">
+    <Col xs={12} sm={6} lg={4} xl className={`d-flex ${styles.kpiCol}`}>
       <div
         className={[
           styles.kpiCard,
@@ -62,10 +62,10 @@ export default function EnergyAlarmKpiCard({ summary, onClick, pulse = false }) 
         <div className={styles.kpiIcon}>
           <Bell size={15} />
         </div>
-        <div className={styles.kpiLabel}>Active Alarms</div>
+        <div className={styles.kpiLabel}>Alarms</div>
         <div className={styles.kpiValue}>{openCount}</div>
         <div className={styles.todayLine}>
-          Today (IST): <strong>{todayTriggered}</strong> triggered
+          Today: <strong>{todayTriggered}</strong>
         </div>
         {clickable && <div className={styles.hint}>Tap for details</div>}
       </div>

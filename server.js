@@ -6470,6 +6470,7 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
         const online = isMeterOnline(latest?.timestamp);
         const displayReading = pickDisplayReading(latest?.readings);
         const currentPowerKw = pickActivePowerKw(latest?.readings);
+        const latestCurrent = pickReadingValue(latest?.readings, 'current');
         const latestPowerFactor = pickReadingValue(latest?.readings, 'powerFactor');
         const latestVoltage = pickReadingValue(latest?.readings, 'voltage');
         const latestFrequency = pickReadingValue(latest?.readings, 'frequency');
@@ -6513,6 +6514,7 @@ app.get('/api/energy-meter/overview', authenticateToken, async (req, res) => {
               }
             : null,
           currentPowerKw,
+          latestCurrent,
           latestPowerFactor,
           latestVoltage,
           latestFrequency,

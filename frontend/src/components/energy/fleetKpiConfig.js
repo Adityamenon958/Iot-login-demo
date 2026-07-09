@@ -32,6 +32,14 @@ export const FLEET_KPI_CONFIG = {
     decimals: 1,
     useRangePills: true,
   },
+  averageCurrent: {
+    type: 'metric',
+    metricKey: 'current',
+    title: 'Fleet Current',
+    unit: 'A',
+    decimals: 2,
+    useRangePills: true,
+  },
   averageFrequency: {
     type: 'metric',
     metricKey: 'frequency',
@@ -51,6 +59,7 @@ export const RANKING_LABELS = {
   lowestVoltage: 'Lowest Voltage Meters',
   worstPf: 'Worst PF Meters',
   bestPf: 'Best PF Meters',
+  topCurrentMeters: 'Top Current Meters',
   mostUnstableFrequency: 'Most Unstable Frequency Meters',
 };
 
@@ -59,6 +68,7 @@ export const FLEET_RANKING_KEYS = {
   todayEnergyConsumption: ['topConsumersToday', 'topConsumersThisMonth'],
   averagePowerFactor: ['worstPf', 'bestPf'],
   averageVoltage: ['mostUnstable', 'lowestVoltage'],
+  averageCurrent: ['topCurrentMeters'],
   averageFrequency: ['mostUnstableFrequency'],
 };
 

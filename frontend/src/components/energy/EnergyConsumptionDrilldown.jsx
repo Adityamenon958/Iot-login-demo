@@ -7,6 +7,7 @@ import EnergyInsightsPanel from './EnergyInsightsPanel';
 import EnergyDailyBarChart from './EnergyDailyBarChart';
 import EnergyHourlyBarChart from './EnergyHourlyBarChart';
 import { CONSUMPTION_PERIODS } from './meterParameterConfig';
+import { buildConsumptionSummaryDateHints } from '../../utils/consumptionSummaryDateHints';
 
 export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refreshKey = 0 }) {
   const [period, setPeriod] = useState('7d');
@@ -39,10 +40,12 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
   const insights = data?.insights || {};
 
   const summaryItems = useMemo(() => {
+    const dateHints = buildConsumptionSummaryDateHints(period);
     const items = [
       {
         key: 'today',
         label: "Today's Consumption",
+        dateHint: dateHints.today,
         value: summary.todayKwh,
         unit: 'kWh',
         comparison: comparisons.todayVsYesterday,
@@ -51,12 +54,14 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
       {
         key: 'yesterday',
         label: 'Yesterday',
+        dateHint: dateHints.yesterday,
         value: summary.yesterdayKwh,
         unit: 'kWh',
       },
       {
         key: 'week',
         label: 'This Week',
+        dateHint: dateHints.week,
         value: summary.weekKwh,
         unit: 'kWh',
         comparison: comparisons.weekVsPreviousWeek,
@@ -65,6 +70,7 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
       {
         key: 'month',
         label: 'This Month',
+        dateHint: dateHints.month,
         value: summary.monthKwh,
         unit: 'kWh',
         comparison: comparisons.monthVsPreviousMonth,
@@ -73,24 +79,28 @@ export default function EnergyConsumptionDrilldown({ show, meterId, onHide, refr
       {
         key: 'periodTotal',
         label: period === '30d' ? '30-Day Total' : '7-Day Total',
+        dateHint: dateHints.periodTotal,
         value: summary.periodTotalKwh,
         unit: 'kWh',
       },
       {
         key: 'avgDaily',
         label: 'Avg Daily',
+        dateHint: dateHints.avgDaily,
         value: summary.avgDailyKwh,
         unit: 'kWh',
       },
       {
         key: 'projected',
         label: 'Projected Month End',
+        dateHint: dateHints.projected,
         value: summary.projectedMonthEndKwh,
         unit: 'kWh',
       },
       {
         key: 'register',
         label: 'Cumulative Register',
+        dateHint: dateHints.register,
         value: summary.cumulativeRegisterKwh,
         unit: 'kWh',
         sublabel: 'Lifetime meter reading',

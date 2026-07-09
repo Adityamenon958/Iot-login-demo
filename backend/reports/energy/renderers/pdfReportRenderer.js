@@ -17,6 +17,7 @@ const SECTION_GAP = 10;
 const MINOR_GAP = 6;
 let LAYOUT_MANAGED_RENDER = false;
 const COVER_LOGO_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/GSN Solutions 2.png');
+const REPORT_TEMPLATE_PATH = path.resolve(__dirname, '../../../../frontend/src/assets/report_template.png');
 
 const HEALTH_FACTORS = [
   {
@@ -128,26 +129,38 @@ function ensureSpace(y, needed, { majorBreak = false, minOrphanRows = 0 } = {}) 
 
 function applyPage(doc, state, result) {
   if (LAYOUT_MANAGED_RENDER) {
-    if (result.newPage) doc.addPage();
+    if (result.newPage) addReportPage(doc);
     return result.newPage ? PAGE_TOP : result.y;
   }
-  if (result.newPage) doc.addPage();
+  if (result.newPage) addReportPage(doc);
   return result.y;
 }
 
 function maybeAddPage(doc) {
   if (LAYOUT_MANAGED_RENDER) return false;
-  doc.addPage();
+  addReportPage(doc);
   return true;
+}
+
+function drawPageTemplate(doc) {
+  if (!fs.existsSync(REPORT_TEMPLATE_PATH)) return;
+  doc.image(REPORT_TEMPLATE_PATH, 0, 0, {
+    width: PAGE_WIDTH,
+    height: PAGE_HEIGHT,
+  });
+}
+
+function addReportPage(doc) {
+  doc.addPage();
+  drawPageTemplate(doc);
 }
 
 function renderCoverPage(doc, payload) {
   const { meta } = payload;
-  const logoBox = { x: MARGIN, y: 72, w: CONTENT_WIDTH, h: 120 };
-  doc.rect(logoBox.x, logoBox.y, logoBox.w, logoBox.h).strokeColor('#dee2e6').lineWidth(1).stroke();
+  const logoBox = { x: MARGIN, y: 48, w: CONTENT_WIDTH, h: 155 };
   if (fs.existsSync(COVER_LOGO_PATH)) {
-    doc.image(COVER_LOGO_PATH, logoBox.x + 8, logoBox.y + 8, {
-      fit: [logoBox.w - 16, logoBox.h - 16],
+    doc.image(COVER_LOGO_PATH, logoBox.x, logoBox.y, {
+      fit: [logoBox.w, logoBox.h],
       align: 'center',
       valign: 'center',
     });
@@ -450,13 +463,18 @@ function defaultChartHeight(chart, variant = SECTION_VARIANTS.LARGE) {
   return 165;
 }
 
+function chartDescriptionText(chart) {
+  return (chart?.description || chart?.caption || '').trim();
+}
+
 function computeChartBlockHeight(chart, drawHeight) {
+  const description = chartDescriptionText(chart);
   const insightRows = Array.isArray(chart?.insightPanel) ? chart.insightPanel.length : 0;
   const insightHeight = insightRows ? 10 + insightRows * 19 + 8 : 0;
   if (insightRows && chart?.prefersTwoColumn) {
-    return Math.max(drawHeight, insightHeight + 8) + (chart.caption ? 14 : 0) + MINOR_GAP;
+    return Math.max(drawHeight, insightHeight + 8) + (description ? 14 : 0) + MINOR_GAP;
   }
-  return drawHeight + insightHeight + (chart.caption ? 14 : 0) + MINOR_GAP;
+  return drawHeight + insightHeight + (description ? 14 : 0) + MINOR_GAP;
 }
 
 function drawChartInsightPanel(doc, chart, x, y, width, height) {
@@ -534,7 +552,7 @@ function renderChartsSection(doc, charts, startY, variant = SECTION_VARIANTS.LAR
       }
       if (layoutManaged && y + blockH > PAGE_BOTTOM) {
         // Start a continuation page for charts and retry this same block.
-        doc.addPage();
+        addReportPage(doc);
         y = sectionTitle(doc, sectionHeading, PAGE_TOP);
       }
       const hasInsights = Array.isArray(chart?.insightPanel) && chart.insightPanel.length > 0;
@@ -557,9 +575,10 @@ function renderChartsSection(doc, charts, startY, variant = SECTION_VARIANTS.LAR
           y += panelHeight + 2;
         }
       }
-      if (chart.caption) {
+      const description = chartDescriptionText(chart);
+      if (description) {
         doc.fontSize(7.5).fillColor('#6c757d').font('Helvetica')
-          .text(chart.caption, MARGIN, y, { align: 'center', width: CONTENT_WIDTH });
+          .text(`Description: ${description}`, MARGIN, y, { align: 'center', width: CONTENT_WIDTH });
         y += 12;
       }
       y += MINOR_GAP;
@@ -1095,6 +1114,7 @@ async function renderPdfReport(payload) {
 
     const debugState = { enabled: isLayoutDebugEnabled(), events: [] };
 
+    drawPageTemplate(doc);
     renderCoverPage(doc, payload);
     const sections = buildSectionDescriptors(payload);
     const layoutContext = {
@@ -1113,13 +1133,13 @@ async function renderPdfReport(payload) {
 
     const renderablePages = pages.filter((page) => page.frames?.length);
     renderablePages.forEach((page, pageIdx) => {
-      doc.addPage();
+      addReportPage(doc);
       let flowY = PAGE_TOP;
       page.frames.forEach((frame, frameIndex) => {
         const section = sections.find((s) => s.id === frame.sectionId);
         if (!section) return;
         if (flowY > PAGE_BOTTOM - 48) {
-          doc.addPage();
+          addReportPage(doc);
           flowY = PAGE_TOP;
         }
         const flowFrame = { ...frame, y: flowY };
@@ -1134,7 +1154,7 @@ async function renderPdfReport(payload) {
         if (actualEnd > PAGE_BOTTOM) {
           flowY = PAGE_TOP;
           if (frameIndex < page.frames.length - 1) {
-            doc.addPage();
+            addReportPage(doc);
           }
         } else {
           flowY = actualEnd + SECTION_GAP;

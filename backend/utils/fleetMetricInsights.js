@@ -269,6 +269,54 @@ async function buildFleetMetricInsights(meters, metricKey, rangeKey = '24h') {
     rankings.bestPf = buildRankingRows(pfRankBest, 'value', '', RANKING_LIMIT);
   }
 
+  if (metricKey === 'current') {
+    const currentNow = perMeter
+      .map((m) => ({
+        meterId: m.meterId,
+        machineName: m.machineName,
+        siteName: m.siteName,
+        value: m.statistics.current,
+        unit: 'A',
+      }))
+      .filter((m) => m.value != null);
+    const mins = perMeter.map((m) => m.statistics.min).filter((v) => v != null);
+    const maxs = perMeter.map((m) => m.statistics.max).filter((v) => v != null);
+    const avgs = perMeter.map((m) => m.statistics.average).filter((v) => v != null);
+    const topNow = buildRankingRows(currentNow, 'value', 'A', 1)[0];
+    const peakCurrent = maxs.length ? Math.max(...maxs) : null;
+    const minCurrent = mins.length ? Math.min(...mins) : null;
+
+    summary = {
+      fleetAverageCurrent: averageFinite(avgs, 2),
+      currentFleetCurrent: averageFinite(currentNow.map((m) => m.value), 2),
+      topConsumerRightNow: topNow
+        ? { meterId: topNow.meterId, name: topNow.machineName, value: topNow.value, unit: 'A' }
+        : null,
+      peakFleetCurrent: peakCurrent != null ? roundTo(peakCurrent, 2) : null,
+      minFleetCurrent: minCurrent != null ? roundTo(minCurrent, 2) : null,
+      activeMeterCount: currentNow.length,
+    };
+
+    let peakAt = null;
+    let lowAt = null;
+    perMeter.forEach((m) => {
+      if (m.insights.peakCurrentAt) {
+        if (!peakAt || new Date(m.insights.peakCurrentAt) > new Date(peakAt)) {
+          peakAt = m.insights.peakCurrentAt;
+        }
+      }
+      if (m.insights.lowestCurrentAt) {
+        if (!lowAt || new Date(m.insights.lowestCurrentAt) < new Date(lowAt)) {
+          lowAt = m.insights.lowestCurrentAt;
+        }
+      }
+    });
+    insights.peakCurrentAt = peakAt;
+    insights.lowestCurrentAt = lowAt;
+
+    rankings.topCurrentMeters = buildRankingRows(currentNow, 'value', 'A', RANKING_LIMIT);
+  }
+
   if (metricKey === 'voltage') {
     const currents = perMeter.map((m) => m.statistics.current).filter((v) => v != null);
     const mins = perMeter.map((m) => m.statistics.min).filter((v) => v != null);

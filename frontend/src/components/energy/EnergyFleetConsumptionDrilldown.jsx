@@ -10,6 +10,7 @@ import EnergyFleetSnapshot from './EnergyFleetSnapshot';
 import EnergyFleetMeterRanking from './EnergyFleetMeterRanking';
 import { CONSUMPTION_PERIODS } from './meterParameterConfig';
 import { RANKING_LABELS, getFleetRankingKeys } from './fleetKpiConfig';
+import { buildConsumptionSummaryDateHints } from '../../utils/consumptionSummaryDateHints';
 
 export default function EnergyFleetConsumptionDrilldown({ show, kpiKey, onHide, refreshKey = 0 }) {
   const [period, setPeriod] = useState('7d');
@@ -41,11 +42,13 @@ export default function EnergyFleetConsumptionDrilldown({ show, kpiKey, onHide, 
   const insights = data?.insights || {};
   const rankings = data?.rankings || {};
 
-  const summaryItems = useMemo(
-    () => [
+  const summaryItems = useMemo(() => {
+    const dateHints = buildConsumptionSummaryDateHints(period);
+    return [
       {
         key: 'today',
         label: "Today's Consumption",
+        dateHint: dateHints.today,
         value: summary.todayKwh,
         unit: 'kWh',
         comparison: comparisons.todayVsYesterday,
@@ -54,12 +57,14 @@ export default function EnergyFleetConsumptionDrilldown({ show, kpiKey, onHide, 
       {
         key: 'yesterday',
         label: 'Yesterday',
+        dateHint: dateHints.yesterday,
         value: summary.yesterdayKwh,
         unit: 'kWh',
       },
       {
         key: 'week',
         label: 'This Week',
+        dateHint: dateHints.week,
         value: summary.weekKwh,
         unit: 'kWh',
         comparison: comparisons.weekVsPreviousWeek,
@@ -68,6 +73,7 @@ export default function EnergyFleetConsumptionDrilldown({ show, kpiKey, onHide, 
       {
         key: 'month',
         label: 'This Month',
+        dateHint: dateHints.month,
         value: summary.monthKwh,
         unit: 'kWh',
         comparison: comparisons.monthVsPreviousMonth,
@@ -76,24 +82,26 @@ export default function EnergyFleetConsumptionDrilldown({ show, kpiKey, onHide, 
       {
         key: 'periodTotal',
         label: period === '30d' ? '30-Day Total' : '7-Day Total',
+        dateHint: dateHints.periodTotal,
         value: summary.periodTotalKwh,
         unit: 'kWh',
       },
       {
         key: 'avgDaily',
         label: 'Avg Daily',
+        dateHint: dateHints.avgDaily,
         value: summary.avgDailyKwh,
         unit: 'kWh',
       },
       {
         key: 'projected',
         label: 'Projected Month End',
+        dateHint: dateHints.projected,
         value: summary.projectedMonthEndKwh,
         unit: 'kWh',
       },
-    ],
-    [summary, comparisons, period]
-  );
+    ];
+  }, [summary, comparisons, period]);
 
   const insightItems = useMemo(() => {
     const items = [];

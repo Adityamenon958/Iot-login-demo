@@ -4,6 +4,10 @@
   --kpi-card-min-height: 62px;
 }
 
+.kpiCol {
+  min-width: 0;
+}
+
 .kpiCard {
   position: relative;
   display: flex;
@@ -56,7 +60,7 @@
 }
 
 .kpiText {
-  font-size: 0.8125rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
@@ -109,4 +113,15 @@
   margin-top: auto;
   padding-top: 0.2rem;
   line-height: 1.2;
+}
+
+@media (min-width: 1200px) {
+  .kpiRow {
+    flex-wrap: nowrap;
+  }
+
+  .kpiCol {
+    flex: 1 1 0;
+    max-width: none;
+  }
 }

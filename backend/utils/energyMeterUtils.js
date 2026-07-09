@@ -313,11 +313,13 @@ function averageFinite(values, decimals) {
 function computeFleetReadingAverages(meterCards = []) {
   const powerFactors = [];
   const voltages = [];
+  const currents = [];
   const frequencies = [];
 
   meterCards.forEach((card) => {
     if (card.latestPowerFactor != null) powerFactors.push(card.latestPowerFactor);
     if (card.latestVoltage != null) voltages.push(card.latestVoltage);
+    if (card.latestCurrent != null) currents.push(card.latestCurrent);
     if (card.latestFrequency != null) frequencies.push(card.latestFrequency);
   });
 
@@ -325,6 +327,8 @@ function computeFleetReadingAverages(meterCards = []) {
     averagePowerFactor: averageFinite(powerFactors, 2),
     averageVoltage: averageFinite(voltages, 1),
     averageVoltageUnit: 'V',
+    averageCurrent: averageFinite(currents, 2),
+    averageCurrentUnit: 'A',
     averageFrequency: averageFinite(frequencies, 2),
     averageFrequencyUnit: 'Hz',
   };

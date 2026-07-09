@@ -124,7 +124,9 @@ export function computeChartYDomain(chartData, meterIds, referenceLines = []) {
 
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = Math.max(max - min, 1);
-  const pad = Math.max(span * 0.1, 1);
+  // Use adaptive padding so narrow-band metrics (e.g., power factor)
+  // stay zoomed instead of being expanded with a large fixed offset.
+  const effectiveSpan = Math.max(max - min, 0.0001);
+  const pad = Math.max(effectiveSpan * 0.12, effectiveSpan < 1 ? 0.02 : 0.2);
   return [min - pad, max + pad];
 }

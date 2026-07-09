@@ -22,7 +22,7 @@ const KPI_CONFIG = [
   },
   {
     key: 'todayEnergyConsumption',
-    label: "Today's Consumption",
+    label: 'Today kWh',
     icon: BatteryCharging,
     variant: 'energy',
     unitKey: 'todayEnergyUnit',
@@ -31,7 +31,7 @@ const KPI_CONFIG = [
   },
   {
     key: 'averagePowerFactor',
-    label: 'Avg Power Factor',
+    label: 'Avg PF',
     icon: Gauge,
     variant: 'pf',
     decimals: 2,
@@ -40,7 +40,7 @@ const KPI_CONFIG = [
   },
   {
     key: 'averageVoltage',
-    label: 'Avg Voltage',
+    label: 'Avg V',
     icon: Activity,
     variant: 'voltage',
     unitKey: 'averageVoltageUnit',
@@ -48,8 +48,17 @@ const KPI_CONFIG = [
     tooltip: 'Average latest voltage across visible meters.',
   },
   {
+    key: 'averageCurrent',
+    label: 'Avg A',
+    icon: Activity,
+    variant: 'voltage',
+    unitKey: 'averageCurrentUnit',
+    decimals: 2,
+    tooltip: 'Average latest current across visible meters.',
+  },
+  {
     key: 'averageFrequency',
-    label: 'Avg Frequency',
+    label: 'Avg Hz',
     icon: Radio,
     variant: 'frequency',
     unitKey: 'averageFrequencyUnit',
@@ -86,7 +95,7 @@ export default function EnergyKpiCards({ kpis, onKpiClick, trailingSlot }) {
         const pfBadge = cfg.showPfBadge ? getPfHealthBadge(kpis[cfg.key]) : null;
 
         return (
-          <Col key={cfg.key} xs={12} sm={6} lg={4} xl={2} className="d-flex">
+          <Col key={cfg.key} xs={12} sm={6} lg={4} xl className={`d-flex ${styles.kpiCol}`}>
             <div
               className={`${styles.kpiCard} ${styles[cfg.variant]} ${clickable ? styles.clickable : ''}`}
               role={clickable ? 'button' : undefined}

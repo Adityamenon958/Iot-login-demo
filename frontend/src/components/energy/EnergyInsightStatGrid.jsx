@@ -17,7 +17,10 @@ export default function EnergyInsightStatGrid({ items = [] }) {
       {items.map((item) => (
         <Col key={item.key} xs={6} md={4} lg={3}>
           <div className={styles.stat}>
-            <div className={styles.label}>{item.label}</div>
+            <div className={styles.labelRow}>
+              <div className={styles.label}>{item.label}</div>
+              {item.dateHint && <div className={styles.dateHint}>{item.dateHint}</div>}
+            </div>
             <div className={styles.value}>
               {formatValue(item.value, item.unit, item.decimals ?? 2)}
               {item.comparison && (

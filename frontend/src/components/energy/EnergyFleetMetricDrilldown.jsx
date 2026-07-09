@@ -23,13 +23,33 @@ function healthScoreVariant(score) {
   return 'critical';
 }
 
-function buildActivePowerSummary(summary) {
+function formatHintDate(value) {
+  if (!value) return null;
+  return new Date(value).toLocaleString('en-IN', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function buildRangeHint(chartMeta) {
+  if (!chartMeta) return null;
+  const from = chartMeta.dataStart || chartMeta.requestedSince;
+  const to = chartMeta.dataEnd || chartMeta.requestedUntil;
+  if (!from || !to) return null;
+  return `${formatHintDate(from)} - ${formatHintDate(to)} IST`;
+}
+
+function buildActivePowerSummary(summary, chartMeta) {
+  const rangeHint = buildRangeHint(chartMeta);
   const items = [
     {
       key: 'fleetPower',
       label: 'Current Fleet Power',
       value: summary.fleetCurrentPower,
       unit: 'kW',
+      dateHint: 'Now (IST)',
     },
   ];
   if (summary.topConsumerRightNow) {
@@ -38,7 +58,8 @@ function buildActivePowerSummary(summary) {
       label: 'Top Consumer Right Now',
       value: summary.topConsumerRightNow.value,
       unit: 'kW',
-      sublabel: summary.topConsumerRightNow.name,
+      sublabel: summary.topConsumerRightNow.meterId || '—',
+      dateHint: 'Now (IST)',
     });
   }
   if (summary.topConsumerToday) {
@@ -47,7 +68,8 @@ function buildActivePowerSummary(summary) {
       label: 'Top Consumer Today',
       value: summary.topConsumerToday.value,
       unit: 'kWh',
-      sublabel: summary.topConsumerToday.name,
+      sublabel: summary.topConsumerToday.meterId || '—',
+      dateHint: 'Today (IST)',
     });
   }
   items.push(
@@ -56,12 +78,14 @@ function buildActivePowerSummary(summary) {
       label: 'Peak Fleet Power Today',
       value: summary.peakFleetPowerToday,
       unit: 'kW',
+      dateHint: 'Today (IST)',
     },
     {
       key: 'avg',
       label: 'Average Fleet Power',
       value: summary.averageFleetPower,
       unit: 'kW',
+      dateHint: rangeHint,
     },
     {
       key: 'active',
@@ -69,6 +93,7 @@ function buildActivePowerSummary(summary) {
       value: summary.activeMeterCount,
       unit: '',
       decimals: 0,
+      dateHint: rangeHint,
     },
     {
       key: 'lf',
@@ -76,14 +101,23 @@ function buildActivePowerSummary(summary) {
       value: summary.fleetLoadFactor != null ? Math.round(summary.fleetLoadFactor * 100) : null,
       unit: '%',
       decimals: 0,
+      dateHint: rangeHint,
     }
   );
   return items;
 }
 
-function buildPfSummary(summary) {
+function buildPfSummary(summary, chartMeta) {
+  const rangeHint = buildRangeHint(chartMeta);
   return [
-    { key: 'avg', label: 'Fleet Avg PF', value: summary.fleetAveragePf, unit: '', decimals: 2 },
+    {
+      key: 'avg',
+      label: 'Fleet Avg PF',
+      value: summary.fleetAveragePf,
+      unit: '',
+      decimals: 2,
+      dateHint: rangeHint,
+    },
     {
       key: 'health',
       label: 'Fleet Health Score',
@@ -91,15 +125,31 @@ function buildPfSummary(summary) {
       unit: '/100',
       decimals: 0,
       sublabel: healthScoreVariant(summary.healthScore),
+      dateHint: rangeHint,
     },
-    { key: 'min', label: 'Fleet Min PF', value: summary.fleetMinPf, unit: '', decimals: 2 },
-    { key: 'max', label: 'Fleet Max PF', value: summary.fleetMaxPf, unit: '', decimals: 2 },
+    {
+      key: 'min',
+      label: 'Fleet Min PF',
+      value: summary.fleetMinPf,
+      unit: '',
+      decimals: 2,
+      dateHint: rangeHint,
+    },
+    {
+      key: 'max',
+      label: 'Fleet Max PF',
+      value: summary.fleetMaxPf,
+      unit: '',
+      decimals: 2,
+      dateHint: rangeHint,
+    },
     {
       key: 'compliance',
       label: 'PF Compliance',
       value: summary.fleetPfCompliancePercent,
       unit: '%',
       decimals: 1,
+      dateHint: rangeHint,
     },
     {
       key: 'below',
@@ -107,6 +157,7 @@ function buildPfSummary(summary) {
       value: summary.metersBelowThreshold,
       unit: '',
       decimals: 0,
+      dateHint: rangeHint,
     },
   ];
 }
@@ -156,6 +207,65 @@ function buildVoltageSummary(summary) {
       decimals: 1,
     },
   ];
+}
+
+function buildCurrentSummary(summary, chartMeta) {
+  const rangeHint = buildRangeHint(chartMeta);
+  const items = [
+    {
+      key: 'fleetCurrent',
+      label: 'Current Fleet Current',
+      value: summary.currentFleetCurrent,
+      unit: 'A',
+      decimals: 2,
+      dateHint: 'Now (IST)',
+    },
+  ];
+  if (summary.topConsumerRightNow) {
+    items.push({
+      key: 'topCurrentNow',
+      label: 'Top Consumer Right Now',
+      value: summary.topConsumerRightNow.value,
+      unit: 'A',
+      sublabel: summary.topConsumerRightNow.meterId || '—',
+      dateHint: 'Now (IST)',
+    });
+  }
+  items.push(
+    {
+      key: 'avgCurrent',
+      label: 'Average Fleet Current',
+      value: summary.fleetAverageCurrent,
+      unit: 'A',
+      decimals: 2,
+      dateHint: rangeHint,
+    },
+    {
+      key: 'peakCurrent',
+      label: 'Peak Fleet Current',
+      value: summary.peakFleetCurrent,
+      unit: 'A',
+      decimals: 2,
+      dateHint: rangeHint,
+    },
+    {
+      key: 'minCurrent',
+      label: 'Minimum Fleet Current',
+      value: summary.minFleetCurrent,
+      unit: 'A',
+      decimals: 2,
+      dateHint: rangeHint,
+    },
+    {
+      key: 'active',
+      label: 'Active Meter Count',
+      value: summary.activeMeterCount,
+      unit: '',
+      decimals: 0,
+      dateHint: rangeHint,
+    }
+  );
+  return items;
 }
 
 function buildFrequencySummary(summary) {
@@ -225,6 +335,12 @@ function buildInsightItems(metricKey, insights) {
       { key: 'low', label: 'Low Penalty Risk Meters', value: insights.penaltyRiskLow },
       { key: 'med', label: 'Medium Penalty Risk Meters', value: insights.penaltyRiskMedium },
       { key: 'high', label: 'High Penalty Risk Meters', value: insights.penaltyRiskHigh },
+    ];
+  }
+  if (metricKey === 'current') {
+    return [
+      { key: 'peakAt', label: 'Peak Current Time', type: 'timestamp', value: insights.peakCurrentAt },
+      { key: 'lowAt', label: 'Lowest Current Time', type: 'timestamp', value: insights.lowestCurrentAt },
     ];
   }
   if (metricKey === 'frequency') {
@@ -305,12 +421,13 @@ export default function EnergyFleetMetricDrilldown({
   const rankings = data?.rankings || {};
 
   const summaryItems = useMemo(() => {
-    if (metricKey === 'activePower') return buildActivePowerSummary(summary);
-    if (metricKey === 'powerFactor') return buildPfSummary(summary);
+    if (metricKey === 'activePower') return buildActivePowerSummary(summary, data?.charts);
+    if (metricKey === 'powerFactor') return buildPfSummary(summary, data?.charts);
     if (metricKey === 'voltage') return buildVoltageSummary(summary);
+    if (metricKey === 'current') return buildCurrentSummary(summary, data?.charts);
     if (metricKey === 'frequency') return buildFrequencySummary(summary);
     return [];
-  }, [metricKey, summary]);
+  }, [metricKey, summary, data?.charts]);
 
   const insightItems = useMemo(
     () => buildInsightItems(metricKey, insights),
