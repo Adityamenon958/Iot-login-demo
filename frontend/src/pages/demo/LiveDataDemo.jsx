@@ -5,7 +5,6 @@ import LiveDataTable from '../../components/demo/LiveDataTable';
 import styles from './LiveDataDemo.module.css';
 
 const POLL_MS = 1000;
-const SESSION_KEY = 'demoApiKey';
 
 const emptyStats = {
   totalPostRequests: 0,
@@ -106,27 +105,13 @@ export default function LiveDataDemo() {
   const connection = connectionFromStats(stats);
 
   const handleClear = async () => {
-    let key = sessionStorage.getItem(SESSION_KEY);
-    if (!key) {
-      key = window.prompt('Enter DEMO_API_KEY to clear the table:');
-      if (!key) return;
-      sessionStorage.setItem(SESSION_KEY, key);
-    }
-
     try {
-      await axios.post(
-        '/api/demo/live-data/clear',
-        {},
-        { headers: { 'x-demo-api-key': key } }
-      );
+      await axios.post('/api/demo/live-data/clear');
       setRows([]);
       setDevice(emptyDevice);
       setStats(emptyStats);
       setError(null);
     } catch (err) {
-      if (err?.response?.status === 401) {
-        sessionStorage.removeItem(SESSION_KEY);
-      }
       setError(err?.response?.data?.error || err.message || 'Clear failed');
     }
   };

@@ -3,29 +3,16 @@
  * ❗ Isolated under /api/demo — delete after the client demo.
  *
  * --- Desktop bridge contract (universal JSON) ---
- * POST  {base}/api/demo/live-data
- * Header: x-demo-api-key: <DEMO_API_KEY>
+ * POST  https://gsnsolnedge.com/api/demo/live-data
  * Content-Type: application/json
  *
- * Body: ANY JSON object. No required fields.
+ * Body: ANY JSON object. No required fields. No API key.
  *
  * Examples:
  *   { "weight": 1250.5, "temperature": 32.1 }
  *   { "gross": 1200, "net": 1180, "tare": 20 }
  *   { "device": { "status": "Running", "temperature": 34 } }
  *
- * Structured schema still works (deviceId + registers[]):
- * {
- *   "deviceId": "MINT-CP-01",
- *   "deviceName": "Masibus Mint CP",
- *   "sourceTs": "2026-07-14T05:30:00.000Z",
- *   "registers": [
- *     { "name": "Gross Weight", "address": "40001", "value": 1250.5, "unit": "kg", "quality": "good" }
- *   ]
- * }
- *
- * Env: DEMO_API_KEY (required for POST/clear)
- *      ENABLE_DEMO_LIVE_DATA=true (required in production)
  * Suggested push interval: on change or every 500ms–1s while demo is live.
  */
 
@@ -33,48 +20,6 @@ const express = require('express');
 const store = require('../services/demoLiveDataStore');
 
 const router = express.Router();
-
-const DEMO_ENABLED =
-  process.env.NODE_ENV === 'production'
-    ? process.env.ENABLE_DEMO_LIVE_DATA === 'true'
-    : process.env.ENABLE_DEMO_LIVE_DATA !== 'false' &&
-      process.env.ENABLE_DEMO_LIVE_DATA !== '0';
-
-function requireDemoEnabled(req, res, next) {
-  if (!DEMO_ENABLED) {
-    return res.status(404).json({ message: 'API route not found' });
-  }
-  next();
-}
-
-router.use(requireDemoEnabled);
-
-/**
- * ✅ Protects POST/clear — desktop bridge sends x-demo-api-key
- */
-function requireDemoApiKey(req, res, next) {
-  const configuredKey = process.env.DEMO_API_KEY;
-  if (!configuredKey) {
-    return res.status(503).json({
-      error: 'DEMO_API_KEY is not configured on the server',
-      details: ['Set DEMO_API_KEY in the environment before ingesting demo data'],
-    });
-  }
-
-  const provided =
-    req.get('x-demo-api-key') ||
-    req.get('X-Demo-Api-Key') ||
-    '';
-
-  if (!provided || provided !== configuredKey) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      details: ['Missing or invalid x-demo-api-key header'],
-    });
-  }
-
-  next();
-}
 
 /**
  * ✅ Only requirement: body is a non-null JSON object (not array / primitive).
@@ -100,8 +45,8 @@ router.get('/live-data/status', (req, res) => {
   res.json(store.getStatusResponse());
 });
 
-// ✅ Ingest — requires DEMO_API_KEY; accepts any JSON object
-router.post('/live-data', requireDemoApiKey, (req, res) => {
+// ✅ Public ingest — accepts any JSON object
+router.post('/live-data', (req, res) => {
   const result = validateIngestBody(req.body);
   if (!result.ok) {
     return res.status(400).json({ error: 'Validation failed', details: result.details });
@@ -116,13 +61,13 @@ router.post('/live-data', requireDemoApiKey, (req, res) => {
   });
 });
 
-// ✅ Clear buffer — requires DEMO_API_KEY
-router.post('/live-data/clear', requireDemoApiKey, (req, res) => {
+// ✅ Public clear
+router.post('/live-data/clear', (req, res) => {
   store.clear();
   res.json({ ok: true, cleared: true });
 });
 
-router.delete('/live-data', requireDemoApiKey, (req, res) => {
+router.delete('/live-data', (req, res) => {
   store.clear();
   res.json({ ok: true, cleared: true });
 });
