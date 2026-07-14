@@ -41,6 +41,8 @@ const ElevatorEvent = require("./backend/models/ElevatorEvent");
 const ElevatorZone = require("./backend/models/ElevatorZone");
 const EnergyMeterLog = require("./backend/models/EnergyMeterLog");
 const EnergyMeterParameterMap = require("./backend/models/EnergyMeterParameterMap");
+// ✅ Temporary Live Device Data Monitor — remove after demo
+const demoLiveDataRouter = require('./backend/routes/demoLiveData');
 const {
   parseSampleValueString,
   extractMeterEntries,
@@ -8708,6 +8710,9 @@ app.get("/api/elevator/timeseries-stats", authenticateToken, async (req, res) =>
     });
   }
 });
+
+// ✅ Temporary demo API — delete mount + backend/routes/demoLiveData.js + backend/services/demoLiveDataStore.js after demo
+app.use('/api/demo', demoLiveDataRouter);
 
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 

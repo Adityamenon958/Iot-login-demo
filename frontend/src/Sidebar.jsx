@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Col, Button, Nav, Spinner } from 'react-bootstrap';
-import { LayoutDashboard, FileText, Settings, LogOut, X, Activity } from 'lucide-react';
+import { LayoutDashboard, FileText, Settings, LogOut, X, Activity, Radio } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { googleLogout } from '@react-oauth/google';
 import styles from './Sidebar.module.css';
@@ -247,6 +247,15 @@ export default function Sidebar({ isOpen, closeSidebar }) {
               Simulator
             </Button>
           )}
+
+          {/* ❗ TEMPORARY demo — remove after client demo (with /demo/live-data feature) */}
+          <Button
+            className={`${styles.iconButton} ${location.pathname === '/demo/live-data' ? styles.active : ''}`}
+            onClick={() => navigate('/demo/live-data')}
+          >
+            <Radio size={20} className="me-2" />
+            Live Data Demo
+          </Button>
 
           {/* ✅ Add Users - Check access for non-superadmin OR allow superadmin */}
           {((role === "admin" && companyAccess.addUsers) || role === "superadmin") && (

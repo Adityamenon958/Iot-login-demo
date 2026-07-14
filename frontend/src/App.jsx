@@ -22,6 +22,7 @@ import EnergyOverview from './pages/EnergyOverview';
 import EnergyFleetAlarmSettings from './pages/EnergyFleetAlarmSettings';
 import Simulator from './pages/Simulator';
 import SimulatorRouteGuard from './components/SimulatorRouteGuard';
+import LiveDataDemo from './pages/demo/LiveDataDemo';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginCarousel />} />
+      {/* ✅ Temporary demo page — remove after client demo */}
+      <Route path="/demo/live-data" element={<LiveDataDemo />} />
 
 
       <Route path="/dashboard" element={<Dashboard />}>
