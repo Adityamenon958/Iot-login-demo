@@ -31,6 +31,22 @@ const deviceSchema = new mongoose.Schema({
   machineName: { type: String, default: '' },
   location: { type: String, default: '' },
   phaseType: { type: String, enum: ['single', 'three'], default: 'single' },
+
+  // ✅ Optional hardware IMEI for Teltonika / GPS trackers (separate from deviceId)
+  // Sparse unique: many devices may omit imei; each present imei must be unique
+  imei: {
+    type: String,
+    trim: true,
+    set: (v) => (v === '' || v == null ? undefined : String(v).trim()),
+  },
 }, { timestamps: true });
+
+deviceSchema.index(
+  { imei: 1 },
+  {
+    unique: true,
+    sparse: true,
+  }
+);
 
 module.exports = mongoose.model('Device', deviceSchema);
